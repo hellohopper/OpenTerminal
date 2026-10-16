@@ -121,7 +121,7 @@ async function vixHistory(rangeKey: string): Promise<yahoo.Candle[]> {
  * per-IP rate limit (see index.ts).
  */
 const FALLBACK_PER_SYMBOL_CAP = 20;
-async function getQuotes(symbols: string[]): Promise<yahoo.Quote[]> {
+export async function getQuotes(symbols: string[]): Promise<yahoo.Quote[]> {
   const fresh = new Map<string, yahoo.Quote>();
   const missing: string[] = [];
   for (const sym of symbols) {

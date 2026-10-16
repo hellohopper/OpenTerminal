@@ -36,6 +36,7 @@ No signup. No credit card. No rate‑limited demo tier. Clone it, `npm install`,
 ## ✨ Features
 
 - 🖥️ **Widget-based workspace** — drag, resize, add, and remove panels (`react-grid-layout`); your layout is saved locally and restored on reload
+- 💼 **Portfolio analytics** — record funding, dividends and splits; view cash-inclusive NAV, time-weighted returns, SPY price comparison, drawdown, holdings contribution and sector exposure. Long-only USD; incomplete funding or data is flagged.
 - 📝 **Research journal** — save and edit per-symbol research/trade notes in SQLite, attach images, filter entries, and capture charts directly into the journal.
 - 🧾 **Company financials** — quarterly/annual US GAAP statements from [SEC Company Facts](https://www.sec.gov/search-filings/edgar-application-programming-interfaces), with revenue growth, cash flow, margins and filing links.
 - 📊 **Asset comparison** — compare 2–5 symbols on common dates, normalized to 100, with returns, drawdown and daily-sample volatility.
