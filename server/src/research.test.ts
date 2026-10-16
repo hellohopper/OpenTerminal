@@ -3,7 +3,10 @@ import { gatherResearch, validateCitations } from "./research.js";
 import { researchOptionsSchema } from "./research-schema.js";
 import * as market from "./routes/market.js";
 import type { Quote } from "./providers/yahoo.js";
-const database = vi.hoisted(() => ({ prepare: vi.fn() }));
+const database = vi.hoisted(() => ({
+  prepare: vi.fn(),
+  transaction: (fn: any) => fn,
+}));
 vi.mock("./db.js", () => ({ db: database }));
 afterEach(() => vi.restoreAllMocks());
 describe("research evidence", () => {

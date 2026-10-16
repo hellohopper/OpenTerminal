@@ -28,7 +28,7 @@ Portfolio performance currently supports long-only USD assets and up to one year
 1. Use **WORKSPACE → Manage** to create a named daily, research, options or blank layout; duplicate, rename or import/export it. Workspaces save independently in this browser.
 2. Add **COMPARE** from the sidebar and enter 2–5 symbols. Comparisons use common dates and price returns, without FX or dividend adjustments.
 3. Add **FINANCIALS** for quarterly/annual USD US GAAP statements. Click reported values for the original filing. Derived quarters are marked with an asterisk.
-4. Use **JOURNAL** for research/trade notes, or **JOURNAL SNAPSHOT** inside a chart to capture it. Images and notes persist in SQLite.
+4. Use **JOURNAL** for research/trade notes, or **JOURNAL SNAPSHOT** inside a chart to capture it. Images and notes persist in the configured server database.
 5. Record trades (with UTC dates) in **PORTFOLIO**, then funding/dividend/split events in **PERFORMANCE**. Confirm historical price basis when using splits. Missing funding, prices or currencies withhold return metrics.
 6. Use **STRATEGY** to build up to eight option/stock legs, choose a template and inspect expiration P&L. Standard options assume 100 shares/contract. Early assignment, fees and margin are excluded.
 7. **MY BRIEFING** collects the first twelve watchlist symbols. Select a session label, save snapshots or export text. Reports are on demand; delivery is not scheduled.
@@ -63,3 +63,15 @@ Browser checks use fixture providers through the real API/web proxy. They verify
 Enable **OPTIONS → Show Greeks** for model price, Delta, Gamma, Theta, Vega and Rho. Rate/dividend assumptions are editable, IV provenance is shown per contract, and missing inputs withhold results. See [Greeks units, assumptions and limits](option-greeks.md).
 
 Browser validation uses fixture-backed API responses for midpoint IV and mocked option responses for provider IV, expired contracts and missing inputs. It verifies quote/Greek table switching, edits, reset, expiry selection, invalid-input withholding and no last-trade fallback. No browser runtime errors were observed. Live-provider/broker reconciliation was not performed.
+
+## Additional feature: PostgreSQL storage
+
+| # | Feature | Branch | Status |
+|---|---|---|---|
+| 12 | Optional PostgreSQL storage and SQLite import | codex/feature-12-postgresql | Complete; 126 tests across 31 files with real PostgreSQL enabled, full build and browser integration passed |
+
+SQLite remains the default; set DATABASE_URL for PostgreSQL. All server data uses the shared asynchronous interface. Transactions preserve ledger validation, alert caps and one-shot events across concurrent requests. The import command retains IDs/history/attachments, repairs destination sequences and refuses nonempty targets. See [setup, migration and verification](postgresql.md).
+
+Local verification used a disposable PostgreSQL 17 instance. Browser checks through the real API/web proxy covered journal CRUD/screenshots, funded portfolio analytics, strategy journal saves, briefings and private AI source previews. Restart retained data; the migration CLI preserved the source and refused a second import. Live market/model calls were fixtures. Docker Compose was unavailable locally; CI now provisions PostgreSQL for the automated suite.
+
+All items currently listed in the README roadmap are implemented and merged into local main after validation.

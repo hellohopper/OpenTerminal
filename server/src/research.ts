@@ -29,7 +29,10 @@ async function bounded<T>(task: () => Promise<T>): Promise<T> {
   }
 }
 export async function gatherResearch(options: ResearchOptions) {
-  const tasks: Array<{ name: string; load: () => Promise<InputSource[]> }> = [
+  const tasks: Array<{
+    name: string;
+    load: () => Promise<InputSource[]>;
+  }> = [
     {
       name: "Quote",
       load: async () => {
@@ -117,11 +120,11 @@ export async function gatherResearch(options: ResearchOptions) {
       name: "Research notes",
       load: async () => {
         const { db } = await import("./db.js");
-        const rows = db
+        const rows = (await db
           .prepare(
             "SELECT id,title,body,kind,updated_at FROM journal_entries WHERE symbol=? ORDER BY id DESC LIMIT 3",
           )
-          .all(options.symbol) as Array<{
+          .all(options.symbol)) as Array<{
           id: number;
           title: string;
           body: string;
@@ -147,18 +150,24 @@ export async function gatherResearch(options: ResearchOptions) {
       name: "Portfolio",
       load: async () => {
         const { db } = await import("./db.js");
-        const portfolio = db
+        const portfolio = (await db
           .prepare("SELECT name FROM portfolios WHERE id=?")
-          .get(options.portfolioId) as { name: string } | undefined;
+          .get(options.portfolioId)) as
+          | {
+              name: string;
+            }
+          | undefined;
         if (!portfolio) throw new Error("portfolio not found");
-        const state = replayLedger(
-          db
-            .prepare("SELECT * FROM transactions WHERE portfolio_id=?")
-            .all(options.portfolioId) as Trade[],
-          db
-            .prepare("SELECT * FROM portfolio_events WHERE portfolio_id=?")
-            .all(options.portfolioId) as CashEvent[],
-        );
+        const state = await db.transaction(async () =>
+          replayLedger(
+            (await db
+              .prepare("SELECT * FROM transactions WHERE portfolio_id=?")
+              .all(options.portfolioId)) as Trade[],
+            (await db
+              .prepare("SELECT * FROM portfolio_events WHERE portfolio_id=?")
+              .all(options.portfolioId)) as CashEvent[],
+          ),
+        )();
         return [
           {
             kind: "portfolio",
