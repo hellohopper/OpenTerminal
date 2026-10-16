@@ -6,6 +6,7 @@ import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 import { normalizeSymbol } from "../lib/symbol";
 import { useTerminal, type WidgetInstance } from "../store/terminal";
+import StrategyWidget from "./widgets/StrategyWidget";
 import PerformanceWidget from "./widgets/PerformanceWidget";
 import JournalWidget from "./widgets/JournalWidget";
 import FundamentalsWidget from "./widgets/FundamentalsWidget";
@@ -31,6 +32,7 @@ const Grid = WidthProvider(GridLayout);
 
 function WidgetBody({ widget }: { widget: WidgetInstance }) {
   switch (widget.type) {
+    case "strategy": return <StrategyWidget widget={widget} />;
     case "performance": return <PerformanceWidget />;
     case "journal": return <JournalWidget widget={widget} />;
     case "fundamentals": return <FundamentalsWidget widget={widget} />;
@@ -100,7 +102,7 @@ function SymbolTag({ widget, activeSymbol }: { widget: WidgetInstance; activeSym
 }
 
 const TITLES: Record<string, string> = {
-  performance: "Portfolio Performance / Risk", journal: "Research Journal", fundamentals: "Company Fundamentals", comparison: "Comparison", quote: "Quote", chart: "Chart", watchlist: "Watchlist", news: "News",
+  strategy: "Options Strategy", performance: "Portfolio Performance / Risk", journal: "Research Journal", fundamentals: "Company Fundamentals", comparison: "Comparison", quote: "Quote", chart: "Chart", watchlist: "Watchlist", news: "News",
   heatmap: "Heatmap", screener: "Screener", crypto: "Crypto",
   macro: "Macro / Indexes", options: "Option Chain", portfolio: "Portfolio", ai: "AI Assistant",
   calendar: "Calendar", insider: "Insider Transactions", tv: "Live TV", recap: "Market Recap",
@@ -114,7 +116,7 @@ export default function Workspace() {
   const toggleLinked = useTerminal((s) => s.toggleLinked);
   const activeSymbol = useTerminal((s) => s.activeSymbol);
 
-  const symbolAware = new Set(["quote", "chart", "news", "options", "insider", "fundamentals", "journal"]);
+  const symbolAware = new Set(["quote", "chart", "news", "options", "insider", "fundamentals", "journal", "strategy"]);
 
   return (
     <Grid
