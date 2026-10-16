@@ -1,40 +1,14 @@
 "use client";
 
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { persist, createJSONStorage, type StateStorage } from "zustand/middleware";
 import { normalizeSymbol } from "../lib/symbol";
+import { makeWorkspace, readWorkspace, restoreWorkspaces, workspaceName, newId, SIZE_BY_TYPE, MAX_WORKSPACES, type Preset, type SavedWorkspace, type WorkspaceData, type WidgetType, type LayoutItem } from "../lib/workspaces";
+export type { WidgetType, WidgetInstance, LayoutItem } from "../lib/workspaces";
 
-export type WidgetType =
-  | "quote"
-  | "chart"
-  | "watchlist"
-  | "news"
-  | "heatmap"
-  | "screener"
-  | "crypto"
-  | "macro"
-  | "options"
-  | "portfolio"
-  | "ai"
-  | "calendar"
-  | "insider"
-  | "tv"
-  | "recap";
-
-export type WidgetInstance = {
-  id: string;
-  type: WidgetType;
-  symbol?: string;
-  linked: boolean; // follows the globally active symbol
-};
-
-export type LayoutItem = { i: string; x: number; y: number; w: number; h: number };
-
-type TerminalState = {
-  activeSymbol: string;
-  widgets: WidgetInstance[];
-  layout: LayoutItem[];
-  watchlist: string[];
+type TerminalState = WorkspaceData & {
+  workspaces: SavedWorkspace[];
+  activeWorkspaceId: string;
   commandOpen: boolean;
   setActiveSymbol: (s: string) => void;
   setCommandOpen: (open: boolean) => void;
@@ -46,98 +20,67 @@ type TerminalState = {
   addToWatchlist: (s: string) => void;
   removeFromWatchlist: (s: string) => void;
   resetWorkspace: () => void;
+  createWorkspace: (name: string, preset?: Preset) => void;
+  switchWorkspace: (id: string) => void;
+  renameWorkspace: (name: string) => void;
+  duplicateWorkspace: () => void;
+  deleteWorkspace: () => void;
+  importWorkspace: (workspace: SavedWorkspace) => void;
 };
-
-const DEFAULT_WIDGETS: WidgetInstance[] = [
-  { id: "w-chart", type: "chart", linked: true },
-  { id: "w-quote", type: "quote", linked: true },
-  { id: "w-watchlist", type: "watchlist", linked: false },
-  { id: "w-news", type: "news", linked: true },
-  { id: "w-macro", type: "macro", linked: false },
-];
-
-const DEFAULT_LAYOUT: LayoutItem[] = [
-  { i: "w-chart", x: 0, y: 0, w: 7, h: 12 },
-  { i: "w-quote", x: 7, y: 0, w: 5, h: 6 },
-  { i: "w-watchlist", x: 7, y: 6, w: 5, h: 6 },
-  { i: "w-news", x: 0, y: 12, w: 7, h: 7 },
-  { i: "w-macro", x: 7, y: 12, w: 5, h: 7 },
-];
-
-const SIZE_BY_TYPE: Record<WidgetType, { w: number; h: number }> = {
-  quote: { w: 5, h: 6 },
-  chart: { w: 7, h: 12 },
-  watchlist: { w: 4, h: 7 },
-  news: { w: 5, h: 8 },
-  heatmap: { w: 7, h: 10 },
-  screener: { w: 12, h: 9 },
-  crypto: { w: 6, h: 9 },
-  macro: { w: 5, h: 7 },
-  options: { w: 12, h: 9 },
-  portfolio: { w: 7, h: 8 },
-  ai: { w: 5, h: 10 },
-  calendar: { w: 12, h: 11 },
-  insider: { w: 7, h: 9 },
-  tv: { w: 6, h: 11 },
-  recap: { w: 5, h: 12 },
-};
-
-export const useTerminal = create<TerminalState>()(
-  persist(
-    (set) => ({
-      activeSymbol: "AAPL",
-      widgets: DEFAULT_WIDGETS,
-      layout: DEFAULT_LAYOUT,
-      watchlist: ["AAPL", "MSFT", "NVDA", "TSLA", "AMZN", "GOOGL", "META", "SPY"],
-      commandOpen: false,
-      setActiveSymbol: (s) => {
-        const sym = normalizeSymbol(s);
-        if (sym) set({ activeSymbol: sym });
-      },
+function activePatch(st: TerminalState, patch: Partial<WorkspaceData>): Partial<TerminalState> {
+  return { ...patch, workspaces: st.workspaces.map((w) => w.id === st.activeWorkspaceId ? { ...w, ...patch } : w) };
+}
+export function createTerminalStore(storage?: StateStorage) {
+  const initial = makeWorkspace("My workspace");
+  return create<TerminalState>()(persist((set, get) => {
+    const addWorkspace = (workspace: SavedWorkspace) => {
+      if (get().workspaces.length >= MAX_WORKSPACES) throw new Error(`You can save up to ${MAX_WORKSPACES} workspaces.`);
+      set((st) => ({ ...workspace, workspaces: [...st.workspaces, workspace], activeWorkspaceId: workspace.id }));
+    };
+    return {
+      ...initial, workspaces: [initial], activeWorkspaceId: initial.id, commandOpen: false,
+      setActiveSymbol: (s) => { const sym = normalizeSymbol(s); if (sym) set((st) => activePatch(st, { activeSymbol: sym })); },
       setCommandOpen: (open) => set({ commandOpen: open }),
-      addWidget: (type, symbol) =>
-        set((st) => {
-          const id = `w-${type}-${Date.now()}`;
-          const size = SIZE_BY_TYPE[type];
-          const maxY = st.layout.reduce((m, l) => Math.max(m, l.y + l.h), 0);
-          return {
-            widgets: [...st.widgets, { id, type, symbol, linked: !symbol }],
-            layout: [...st.layout, { i: id, x: 0, y: maxY, ...size }],
-          };
-        }),
-      removeWidget: (id) =>
-        set((st) => ({
-          widgets: st.widgets.filter((w) => w.id !== id),
-          layout: st.layout.filter((l) => l.i !== id),
-        })),
-      setWidgetSymbol: (id, symbol) => {
-        const sym = normalizeSymbol(symbol);
-        if (!sym) return;
-        set((st) => ({
-          widgets: st.widgets.map((w) => (w.id === id ? { ...w, symbol: sym, linked: false } : w)),
-        }));
+      addWidget: (type, symbol) => set((st) => {
+        if (st.widgets.length >= 50) return st;
+        const id = newId();
+        const sym = symbol ? normalizeSymbol(symbol) : undefined;
+        const maxY = st.layout.reduce((m, l) => Math.max(m, l.y + l.h), 0);
+        return activePatch(st, { widgets: [...st.widgets, { id, type, ...(sym ? { symbol: sym } : {}), linked: !sym }], layout: [...st.layout, { i: id, x: 0, y: maxY, ...SIZE_BY_TYPE[type] }] });
+      }),
+      removeWidget: (id) => set((st) => activePatch(st, { widgets: st.widgets.filter((w) => w.id !== id), layout: st.layout.filter((l) => l.i !== id) })),
+      setWidgetSymbol: (id, symbol) => { const sym = normalizeSymbol(symbol); if (sym) set((st) => activePatch(st, { widgets: st.widgets.map((w) => w.id === id ? { ...w, symbol: sym, linked: false } : w) })); },
+      toggleLinked: (id) => set((st) => activePatch(st, { widgets: st.widgets.map((w) => w.id === id ? { ...w, linked: !w.linked } : w) })),
+      setLayout: (layout) => set((st) => activePatch(st, { layout })),
+      addToWatchlist: (s) => { const sym = normalizeSymbol(s); if (sym) set((st) => activePatch(st, { watchlist: st.watchlist.includes(sym) || st.watchlist.length >= 200 ? st.watchlist : [...st.watchlist, sym] })); },
+      removeFromWatchlist: (s) => set((st) => activePatch(st, { watchlist: st.watchlist.filter((x) => x !== s) })),
+      resetWorkspace: () => { const { widgets, layout } = makeWorkspace("Default"); set((st) => activePatch(st, { widgets, layout })); },
+      createWorkspace: (name, preset = "daily") => addWorkspace(makeWorkspace(name, preset)),
+      switchWorkspace: (id) => { const workspace = get().workspaces.find((w) => w.id === id); if (workspace) set({ ...workspace, activeWorkspaceId: id, commandOpen: false }); },
+      renameWorkspace: (name) => { const valid = workspaceName(name); set((st) => ({ workspaces: st.workspaces.map((w) => w.id === st.activeWorkspaceId ? { ...w, name: valid } : w) })); },
+      duplicateWorkspace: () => { const current = get().workspaces.find((w) => w.id === get().activeWorkspaceId)!; addWorkspace(readWorkspace({ ...current, name: `${current.name.slice(0, 57)} (copy)` })); },
+      deleteWorkspace: () => {
+        const st = get();
+        if (st.workspaces.length === 1) throw new Error("Keep at least one workspace.");
+        const remaining = st.workspaces.filter((w) => w.id !== st.activeWorkspaceId);
+        set({ ...remaining[0], workspaces: remaining, activeWorkspaceId: remaining[0].id });
       },
-      toggleLinked: (id) =>
-        set((st) => ({
-          widgets: st.widgets.map((w) => (w.id === id ? { ...w, linked: !w.linked } : w)),
-        })),
-      setLayout: (layout) => set({ layout }),
-      addToWatchlist: (s) => {
-        const sym = normalizeSymbol(s);
-        if (!sym) return;
-        set((st) => ({
-          watchlist: st.watchlist.includes(sym) ? st.watchlist : [...st.watchlist, sym],
-        }));
-      },
-      removeFromWatchlist: (s) => set((st) => ({ watchlist: st.watchlist.filter((x) => x !== s) })),
-      resetWorkspace: () => set({ widgets: DEFAULT_WIDGETS, layout: DEFAULT_LAYOUT }),
-    }),
-    { name: "openterminal-workspace" }
-  )
-);
-
-/** Symbol a widget should display: its own, or the active one when linked. */
-export function useWidgetSymbol(widget: WidgetInstance): string {
+      importWorkspace: (workspace) => addWorkspace(readWorkspace(workspace)),
+    };
+  }, {
+    name: "openterminal-workspace", version: 1,
+    storage: createJSONStorage(() => storage ?? localStorage),
+    partialize: (st) => ({ workspaces: st.workspaces, activeWorkspaceId: st.activeWorkspaceId }),
+    migrate: (value) => restoreWorkspaces(value),
+    merge: (persisted, current) => {
+      const restored = restoreWorkspaces(persisted);
+      const active = restored.workspaces.find((w) => w.id === restored.activeWorkspaceId)!;
+      return { ...current, ...active, ...restored, commandOpen: false };
+    },
+  }));
+}
+export const useTerminal = createTerminalStore();
+export function useWidgetSymbol(widget: import("../lib/workspaces").WidgetInstance): string {
   const active = useTerminal((s) => s.activeSymbol);
   return widget.linked ? active : widget.symbol ?? active;
 }
