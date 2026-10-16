@@ -36,6 +36,7 @@ No signup. No credit card. No rate‑limited demo tier. Clone it, `npm install`,
 ## ✨ Features
 
 - 🔔 **Price alerts** — persistent price/daily-change thresholds, pause/rearm controls, trigger history, in-app delivery and opt-in desktop notifications; checks run while the API is active. [Usage and limits](docs/price-alerts.md).
+- ✏️ **Chart tools** — saved horizontal/trend lines with undo/delete controls, plus normalized overlays for the chart symbol and up to three comparison assets. [Usage](docs/chart-tools.md).
 - 🖥️ **Widget-based workspace** — drag, resize, add, and remove panels (`react-grid-layout`); your layout is saved locally and restored on reload
 - 🗞️ **Personal briefings** — watchlist movers, recent headlines, upcoming earnings and economic events; save historical snapshots and export text without an AI key.
 - 🧮 **Options strategy builder** — editable multi-leg expiration payoffs, vertical/straddle/covered-call templates, break-even points and explicit unlimited-risk bounds; save scenarios to the journal.
@@ -203,7 +204,7 @@ Run tests with `npm test` (Vitest, no network calls). CI runs on every push — 
 
 ## 🗺️ Roadmap
 
-- [ ] Chart drawing tools & multi‑asset comparison overlay
+- [x] Chart drawing tools & multi‑asset comparison overlay
 - [ ] Black‑Scholes Greeks on the options chain
 - [x] Price alerts with desktop notifications
 - [ ] PostgreSQL as an alternative to SQLite
