@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   createChart,
@@ -11,14 +11,42 @@ import {
   BarSeries,
   type IChartApi,
   type UTCTimestamp,
+  type ISeriesApi,
+  type SeriesType,
+  type LogicalRange,
 } from "lightweight-charts";
 import { apiGet, apiPost, fmt, fmtBig, type Candle } from "../../lib/api";
-import { sma, ema, vwap, rsi, macd, bollinger, type Point } from "../../lib/indicators";
+import {
+  sma,
+  ema,
+  vwap,
+  rsi,
+  macd,
+  bollinger,
+  type Point,
+} from "../../lib/indicators";
 import { useWidgetSymbol, type WidgetInstance } from "../../store/terminal";
+
+import ChartTools, { useDrawings, type DrawTool } from "../ChartTools";
+import {
+  normalizedOverlay,
+  trendPoints,
+  type Anchor,
+} from "../../lib/chart-tools";
+import { normalizeSymbol } from "../../lib/symbol";
 
 const RANGES = ["1D", "5D", "1M", "6M", "YTD", "1Y", "5Y", "MAX"] as const;
 const CHART_TYPES = ["candles", "bars", "line", "area"] as const;
-const INDICATORS = ["SMA20", "SMA50", "SMA200", "EMA20", "VWAP", "BOLL", "RSI", "MACD"] as const;
+const INDICATORS = [
+  "SMA20",
+  "SMA50",
+  "SMA200",
+  "EMA20",
+  "VWAP",
+  "BOLL",
+  "RSI",
+  "MACD",
+] as const;
 
 type Range = (typeof RANGES)[number];
 type ChartType = (typeof CHART_TYPES)[number];
@@ -28,8 +56,14 @@ const ts = (t: number) => t as UTCTimestamp;
 const toMap = (pts: Point[]) => new Map(pts.map((p) => [p.time, p.value]));
 
 const INDICATOR_COLOR: Record<string, string> = {
-  SMA20: "#ffd966", SMA50: "#4fc3f7", SMA200: "#ba68c8", EMA20: "#ff8a65",
-  VWAP: "#80cbc4", RSI: "#ff9900", BOLL: "#ff9900", MACD: "#4fc3f7",
+  SMA20: "#ffd966",
+  SMA50: "#4fc3f7",
+  SMA200: "#ba68c8",
+  EMA20: "#ff8a65",
+  VWAP: "#80cbc4",
+  RSI: "#ff9900",
+  BOLL: "#ff9900",
+  MACD: "#4fc3f7",
 };
 
 export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
@@ -44,11 +78,75 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
 
+  const [overlayDraft, setOverlayDraft] = useState("SPY");
+  const [overlaySymbols, setOverlaySymbols] = useState<string[]>([]);
+  const [overlayError, setOverlayError] = useState("");
+  const [compareMode, setCompareMode] = useState(false);
+  const comparisonSymbols = overlaySymbols.filter((s) => s !== symbol);
+  const comparing = compareMode && comparisonSymbols.length > 0;
+  const { drawings, update, storageError } = useDrawings(
+    `openterminal-drawings-v1:${widget.id}:${symbol}:${range}`,
+  );
+  const [tool, setToolState] = useState<DrawTool>("navigate");
+  const [drawingMessage, setDrawingMessage] = useState("");
+  const pending = useRef<Anchor | null>(null);
+  const drawRef = useRef({ tool, update });
+  drawRef.current = { tool, update };
+  const viewport = useRef<{ key: string; range: LogicalRange | null } | null>(
+    null,
+  );
+  const setTool = (next: DrawTool) => {
+    pending.current = null;
+    setDrawingMessage("");
+    setToolState(next);
+  };
+  useEffect(() => {
+    setTool("navigate");
+  }, [symbol, range, comparing]);
+  useEffect(() => {
+    const cancel = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setTool("navigate");
+    };
+    window.addEventListener("keydown", cancel);
+    return () => window.removeEventListener("keydown", cancel);
+  }, []);
   const { data: candles, error } = useQuery({
     queryKey: ["history", symbol, range],
-    queryFn: () => apiGet<Candle[]>(`/api/history/${encodeURIComponent(symbol)}?range=${range}`),
+    queryFn: () =>
+      apiGet<Candle[]>(
+        `/api/history/${encodeURIComponent(symbol)}?range=${range}`,
+      ),
     refetchInterval: range === "1D" ? 8_000 : 60_000,
   });
+
+  const comparisons = useQueries({
+    queries: comparisonSymbols.map((s) => ({
+      queryKey: ["history", s, range],
+      queryFn: () =>
+        apiGet<Candle[]>(
+          `/api/history/${encodeURIComponent(s)}?range=${range}`,
+        ),
+      enabled: comparing,
+      refetchInterval: range === "1D" ? 8000 : 60000,
+    })),
+  });
+  const comparisonSignature = comparisons.map((q) => q.dataUpdatedAt).join(",");
+  const comparisonKey = comparisonSymbols.join(",");
+  const comparison = useMemo(
+    () =>
+      normalizedOverlay([
+        { symbol, candles: candles ?? [] },
+        ...comparisonSymbols.map((s, i) => ({
+          symbol: s,
+          candles: comparisons[i].data ?? [],
+        })),
+      ]),
+    [symbol, candles, comparisonKey, comparisonSignature],
+  ); // eslint-disable-line react-hooks/exhaustive-deps
+  const comparisonLoading = comparisons.some((q) => q.isLoading);
+  const comparisonFailed = comparisonSymbols.filter(
+    (_, i) => comparisons[i].isError,
+  );
 
   // Fast time -> candle lookup for the crosshair legend, independent of chart type.
   const byTime = useMemo(() => {
@@ -102,10 +200,16 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
     const rows: Array<{ label: string; value: string; color: string }> = [];
     for (const key of ["SMA20", "SMA50", "SMA200", "EMA20", "VWAP"] as const) {
       const v = get(key);
-      if (v !== undefined) rows.push({ label: key, value: fmt(v), color: INDICATOR_COLOR[key] });
+      if (v !== undefined)
+        rows.push({ label: key, value: fmt(v), color: INDICATOR_COLOR[key] });
     }
     const rsiV = get("RSI");
-    if (rsiV !== undefined) rows.push({ label: "RSI", value: fmt(rsiV, 1), color: INDICATOR_COLOR.RSI });
+    if (rsiV !== undefined)
+      rows.push({
+        label: "RSI",
+        value: fmt(rsiV, 1),
+        color: INDICATOR_COLOR.RSI,
+      });
     const bollM = get("BOLL_M");
     if (bollM !== undefined) {
       rows.push({
@@ -126,7 +230,9 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
   }, [legend, indicatorMaps]);
 
   useEffect(() => {
-    setLegend(candles && candles.length > 0 ? candles[candles.length - 1] : null);
+    setLegend(
+      candles && candles.length > 0 ? candles[candles.length - 1] : null,
+    );
   }, [candles]);
 
   useEffect(() => {
@@ -134,83 +240,256 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
     if (!el || !candles || candles.length === 0) return;
 
     const chart = createChart(el, {
-      layout: { background: { color: "#0a0a0a" }, textColor: "#808080", fontSize: 10, attributionLogo: false },
-      grid: { vertLines: { color: "#1a1a1a" }, horzLines: { color: "#1a1a1a" } },
+      layout: {
+        background: { color: "#0a0a0a" },
+        textColor: "#808080",
+        fontSize: 10,
+        attributionLogo: false,
+      },
+      grid: {
+        vertLines: { color: "#1a1a1a" },
+        horzLines: { color: "#1a1a1a" },
+      },
       crosshair: { mode: 0 },
-      timeScale: { borderColor: "#262626", timeVisible: range === "1D" || range === "5D" },
+      timeScale: {
+        borderColor: "#262626",
+        timeVisible: range === "1D" || range === "5D",
+      },
       rightPriceScale: { borderColor: "#262626" },
       autoSize: true,
       // Mouse-wheel is left free for page scrolling — zoom via drag, pinch, or the range buttons instead.
-      handleScroll: { mouseWheel: false, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: true },
-      handleScale: { mouseWheel: false, pinch: true, axisPressedMouseMove: true },
+      handleScroll: {
+        mouseWheel: false,
+        pressedMouseMove: true,
+        horzTouchDrag: true,
+        vertTouchDrag: true,
+      },
+      handleScale: {
+        mouseWheel: false,
+        pinch: true,
+        axisPressedMouseMove: true,
+      },
     });
     chartRef.current = chart;
 
     const upColor = "#00c853";
     const downColor = "#ff3d3d";
 
-    if (chartType === "candles") {
-      chart
-        .addSeries(CandlestickSeries, {
-          upColor, downColor, borderUpColor: upColor, borderDownColor: downColor,
-          wickUpColor: upColor, wickDownColor: downColor,
-        })
-        .setData(candles.map((c) => ({ time: ts(c.time), open: c.open, high: c.high, low: c.low, close: c.close })));
+    let mainSeries: ISeriesApi<SeriesType>;
+    if (comparing) {
+      const colors = ["#ff9900", "#4fc3f7", "#b39ddb", "#00c853"];
+      for (const [i, series] of comparison.series.entries()) {
+        const line = chart.addSeries(LineSeries, {
+          color: colors[i],
+          lineWidth: 2,
+          title: series.symbol,
+          priceLineVisible: false,
+        });
+        line.setData(
+          series.points.map((p) => ({ time: ts(p.time), value: p.value })),
+        );
+      }
+    } else if (chartType === "candles") {
+      (mainSeries = chart.addSeries(CandlestickSeries, {
+        upColor,
+        downColor,
+        borderUpColor: upColor,
+        borderDownColor: downColor,
+        wickUpColor: upColor,
+        wickDownColor: downColor,
+      })).setData(
+        candles.map((c) => ({
+          time: ts(c.time),
+          open: c.open,
+          high: c.high,
+          low: c.low,
+          close: c.close,
+        })),
+      );
     } else if (chartType === "bars") {
-      chart
-        .addSeries(BarSeries, { upColor, downColor })
-        .setData(candles.map((c) => ({ time: ts(c.time), open: c.open, high: c.high, low: c.low, close: c.close })));
+      (mainSeries = chart.addSeries(BarSeries, { upColor, downColor })).setData(
+        candles.map((c) => ({
+          time: ts(c.time),
+          open: c.open,
+          high: c.high,
+          low: c.low,
+          close: c.close,
+        })),
+      );
     } else if (chartType === "line") {
-      chart
-        .addSeries(LineSeries, { color: "#ff9900", lineWidth: 1 })
-        .setData(candles.map((c) => ({ time: ts(c.time), value: c.close })));
+      (mainSeries = chart.addSeries(LineSeries, {
+        color: "#ff9900",
+        lineWidth: 1,
+      })).setData(candles.map((c) => ({ time: ts(c.time), value: c.close })));
     } else {
-      chart
-        .addSeries(AreaSeries, { lineColor: "#ff9900", topColor: "rgba(255,153,0,0.25)", bottomColor: "rgba(255,153,0,0)" })
-        .setData(candles.map((c) => ({ time: ts(c.time), value: c.close })));
+      (mainSeries = chart.addSeries(AreaSeries, {
+        lineColor: "#ff9900",
+        topColor: "rgba(255,153,0,0.25)",
+        bottomColor: "rgba(255,153,0,0)",
+      })).setData(candles.map((c) => ({ time: ts(c.time), value: c.close })));
     }
 
-    // volume histogram on its own scale at the bottom of the main pane
-    const vol = chart.addSeries(HistogramSeries, { priceScaleId: "vol", priceFormat: { type: "volume" } });
-    vol.priceScale().applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
-    vol.setData(
-      candles.map((c) => ({ time: ts(c.time), value: c.volume, color: c.close >= c.open ? "rgba(0,200,83,0.4)" : "rgba(255,61,61,0.4)" }))
-    );
+    let removeDrawingListeners = () => {};
+    if (!comparing) {
+      for (const [i, drawing] of drawings.entries()) {
+        if (drawing.kind === "horizontal")
+          mainSeries!.createPriceLine({
+            price: drawing.price,
+            color: "#4fc3f7",
+            lineWidth: 1,
+            lineStyle: 2,
+            axisLabelVisible: true,
+            title: `H${i + 1}`,
+          });
+        else
+          chart
+            .addSeries(LineSeries, {
+              color: "#4fc3f7",
+              lineWidth: 2,
+              priceLineVisible: false,
+              lastValueVisible: false,
+              autoscaleInfoProvider: () => null,
+            })
+            .setData(
+              trendPoints(drawing).map((p) => ({
+                time: ts(p.time),
+                value: p.value,
+              })),
+            );
+      }
+      // Native clicks keep rapid two-point drawing reliable: the library suppresses
+      // its second subscribeClick callback within its double-click interval.
+      let pointerDown: { x: number; y: number } | null = null;
+      const onDown = (event: PointerEvent) => {
+        pointerDown = { x: event.clientX, y: event.clientY };
+      };
+      const onClick = (event: MouseEvent) => {
+        const { tool, update } = drawRef.current;
+        if (
+          tool === "navigate" ||
+          !pointerDown ||
+          Math.hypot(
+            event.clientX - pointerDown.x,
+            event.clientY - pointerDown.y,
+          ) > 4
+        )
+          return;
+        const pane = chart.panes()[0];
+        const rect = pane.getHTMLElement()?.getBoundingClientRect();
+        if (!rect) return;
+        const x = event.clientX - rect.left,
+          y = event.clientY - rect.top;
+        const size = chart.paneSize(0);
+        if (x < 0 || x >= size.width || y < 0 || y >= size.height) return;
+        const time = chart.timeScale().coordinateToTime(x);
+        const price = mainSeries!.coordinateToPrice(y);
+        if (price === null || !Number.isFinite(price)) return;
 
-    const overlay = (points: Point[], color: string) =>
-      chart.addSeries(LineSeries, { color, lineWidth: 1, priceLineVisible: false, lastValueVisible: false })
-        .setData(points.map((p) => ({ time: ts(p.time), value: p.value })));
-
-    if (indicatorData?.SMA20) overlay(indicatorData.SMA20, INDICATOR_COLOR.SMA20);
-    if (indicatorData?.SMA50) overlay(indicatorData.SMA50, INDICATOR_COLOR.SMA50);
-    if (indicatorData?.SMA200) overlay(indicatorData.SMA200, INDICATOR_COLOR.SMA200);
-    if (indicatorData?.EMA20) overlay(indicatorData.EMA20, INDICATOR_COLOR.EMA20);
-    if (indicatorData?.VWAP) overlay(indicatorData.VWAP, INDICATOR_COLOR.VWAP);
-    if (indicatorData?.BOLL) {
-      overlay(indicatorData.BOLL.upper, "rgba(255,153,0,0.5)");
-      overlay(indicatorData.BOLL.middle, "rgba(255,153,0,0.8)");
-      overlay(indicatorData.BOLL.lower, "rgba(255,153,0,0.5)");
-    }
-
-    let paneIdx = 1;
-    if (indicatorData?.RSI) {
-      const s = chart.addSeries(LineSeries, { color: INDICATOR_COLOR.RSI, lineWidth: 1 }, paneIdx++);
-      s.setData(indicatorData.RSI.map((p) => ({ time: ts(p.time), value: p.value })));
-    }
-    if (indicatorData?.MACD) {
-      const m = indicatorData.MACD;
-      const pane = paneIdx++;
-      chart.addSeries(HistogramSeries, { color: "#4fc3f7" }, pane).setData(
-        m.histogram.map((p) => ({ time: ts(p.time), value: p.value, color: p.value >= 0 ? "rgba(0,200,83,0.6)" : "rgba(255,61,61,0.6)" }))
+        if (tool === "horizontal") {
+          update((rows) => [
+            ...rows,
+            { id: crypto.randomUUID(), kind: "horizontal", price },
+          ]);
+          setTool("navigate");
+        } else if (typeof time !== "number") {
+          setDrawingMessage("Click a plotted candle to anchor the trend line.");
+        } else if (!pending.current) {
+          pending.current = { time: time, price };
+          setDrawingMessage(
+            "First point selected. Click a different time to finish the trend line.",
+          );
+        } else if (pending.current.time === time) {
+          setDrawingMessage("Choose a different time for the second point.");
+        } else {
+          const start = pending.current;
+          update((rows) => [
+            ...rows,
+            {
+              id: crypto.randomUUID(),
+              kind: "trend",
+              start,
+              end: { time: time as number, price },
+            },
+          ]);
+          setTool("navigate");
+        }
+      };
+      el.addEventListener("pointerdown", onDown);
+      el.addEventListener("click", onClick);
+      removeDrawingListeners = () => {
+        el.removeEventListener("pointerdown", onDown);
+        el.removeEventListener("click", onClick);
+      };
+      // volume histogram on its own scale at the bottom of the main pane
+      const vol = chart.addSeries(HistogramSeries, {
+        priceScaleId: "vol",
+        priceFormat: { type: "volume" },
+      });
+      vol.priceScale().applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
+      vol.setData(
+        candles.map((c) => ({
+          time: ts(c.time),
+          value: c.volume,
+          color:
+            c.close >= c.open ? "rgba(0,200,83,0.4)" : "rgba(255,61,61,0.4)",
+        })),
       );
-      chart.addSeries(LineSeries, { color: "#ff9900", lineWidth: 1 }, pane).setData(
-        m.macd.map((p) => ({ time: ts(p.time), value: p.value }))
-      );
-      chart.addSeries(LineSeries, { color: "#ffffff", lineWidth: 1 }, pane).setData(
-        m.signal.map((p) => ({ time: ts(p.time), value: p.value }))
-      );
-    }
 
+      const overlay = (points: Point[], color: string) =>
+        chart
+          .addSeries(LineSeries, {
+            color,
+            lineWidth: 1,
+            priceLineVisible: false,
+            lastValueVisible: false,
+          })
+          .setData(points.map((p) => ({ time: ts(p.time), value: p.value })));
+
+      if (indicatorData?.SMA20)
+        overlay(indicatorData.SMA20, INDICATOR_COLOR.SMA20);
+      if (indicatorData?.SMA50)
+        overlay(indicatorData.SMA50, INDICATOR_COLOR.SMA50);
+      if (indicatorData?.SMA200)
+        overlay(indicatorData.SMA200, INDICATOR_COLOR.SMA200);
+      if (indicatorData?.EMA20)
+        overlay(indicatorData.EMA20, INDICATOR_COLOR.EMA20);
+      if (indicatorData?.VWAP)
+        overlay(indicatorData.VWAP, INDICATOR_COLOR.VWAP);
+      if (indicatorData?.BOLL) {
+        overlay(indicatorData.BOLL.upper, "rgba(255,153,0,0.5)");
+        overlay(indicatorData.BOLL.middle, "rgba(255,153,0,0.8)");
+        overlay(indicatorData.BOLL.lower, "rgba(255,153,0,0.5)");
+      }
+
+      let paneIdx = 1;
+      if (indicatorData?.RSI) {
+        const s = chart.addSeries(
+          LineSeries,
+          { color: INDICATOR_COLOR.RSI, lineWidth: 1 },
+          paneIdx++,
+        );
+        s.setData(
+          indicatorData.RSI.map((p) => ({ time: ts(p.time), value: p.value })),
+        );
+      }
+      if (indicatorData?.MACD) {
+        const m = indicatorData.MACD;
+        const pane = paneIdx++;
+        chart.addSeries(HistogramSeries, { color: "#4fc3f7" }, pane).setData(
+          m.histogram.map((p) => ({
+            time: ts(p.time),
+            value: p.value,
+            color: p.value >= 0 ? "rgba(0,200,83,0.6)" : "rgba(255,61,61,0.6)",
+          })),
+        );
+        chart
+          .addSeries(LineSeries, { color: "#ff9900", lineWidth: 1 }, pane)
+          .setData(m.macd.map((p) => ({ time: ts(p.time), value: p.value })));
+        chart
+          .addSeries(LineSeries, { color: "#ffffff", lineWidth: 1 }, pane)
+          .setData(m.signal.map((p) => ({ time: ts(p.time), value: p.value })));
+      }
+    }
     chart.subscribeCrosshairMove((param) => {
       if (!param.time) {
         setLegend(candles[candles.length - 1]);
@@ -220,12 +499,29 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
       if (hit) setLegend(hit);
     });
 
-    chart.timeScale().fitContent();
+    const viewportKey = `${symbol}:${range}:${comparing}`;
+    if (viewport.current?.key === viewportKey && viewport.current.range)
+      chart.timeScale().setVisibleLogicalRange(viewport.current.range);
+    else chart.timeScale().fitContent();
+    chart.timeScale().subscribeVisibleLogicalRangeChange((visible) => {
+      if (visible) viewport.current = { key: viewportKey, range: visible };
+    });
     return () => {
+      removeDrawingListeners();
       chart.remove();
       chartRef.current = null;
     };
-  }, [candles, chartType, indicatorData, range, byTime]);
+  }, [
+    candles,
+    chartType,
+    indicatorData,
+    range,
+    byTime,
+    symbol,
+    drawings,
+    comparing,
+    comparison,
+  ]);
 
   const toggleIndicator = (ind: Indicator) =>
     setActive((prev) => {
@@ -238,44 +534,183 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
   return (
     <div className="flex flex-col h-full">
       <div className="flex gap-1 p-1 flex-wrap shrink-0">
-        <button className="term-btn" disabled={!candles?.length || savingSnapshot} onClick={async () => {
-          if (!chartRef.current) return;
-          setSavingSnapshot(true);
-          try {
-            const image = chartRef.current.takeScreenshot().toDataURL("image/jpeg", 0.8);
-            await apiPost("/api/journal", { symbol, title: `${symbol} chart — ${range}`, kind: "research", body: `Captured ${new Date().toISOString()}. Chart: ${chartType}. Indicators: ${[...active].join(", ")}.`, image });
-            qc.invalidateQueries({ queryKey: ["journal"] }); setSnapshotStatus("Saved to journal");
-          } catch (err) { setSnapshotStatus((err as Error).message); } finally { setSavingSnapshot(false); }
-        }}>JOURNAL SNAPSHOT</button>
+        <button
+          className="term-btn"
+          disabled={
+            !candles?.length ||
+            savingSnapshot ||
+            (comparing &&
+              (comparisonLoading ||
+                comparisonFailed.length > 0 ||
+                comparison.times.length < 2))
+          }
+          onClick={async () => {
+            if (!chartRef.current) return;
+            setSavingSnapshot(true);
+            try {
+              const image = chartRef.current
+                .takeScreenshot()
+                .toDataURL("image/jpeg", 0.8);
+              await apiPost("/api/journal", {
+                symbol,
+                title: `${symbol} chart — ${range}`,
+                kind: "research",
+                body: `Captured ${new Date().toISOString()}. Chart: ${comparing ? "normalized comparison " + [symbol, ...comparisonSymbols].join(", ") : chartType}. Indicators: ${comparing ? "none" : [...active].join(", ")}. Drawings: ${comparing ? 0 : drawings.length}.`,
+                image,
+              });
+              qc.invalidateQueries({ queryKey: ["journal"] });
+              setSnapshotStatus("Saved to journal");
+            } catch (err) {
+              setSnapshotStatus((err as Error).message);
+            } finally {
+              setSavingSnapshot(false);
+            }
+          }}
+        >
+          JOURNAL SNAPSHOT
+        </button>
         {RANGES.map((r) => (
-          <button key={r} className={`term-btn ${range === r ? "active" : ""}`} onClick={() => setRange(r)}>
+          <button
+            key={r}
+            className={`term-btn ${range === r ? "active" : ""}`}
+            onClick={() => setRange(r)}
+          >
             {r}
           </button>
         ))}
         <span className="w-2" />
         {CHART_TYPES.map((t) => (
-          <button key={t} className={`term-btn ${chartType === t ? "active" : ""}`} onClick={() => setChartType(t)}>
+          <button
+            key={t}
+            disabled={comparing}
+            className={`term-btn ${chartType === t ? "active" : ""}`}
+            onClick={() => setChartType(t)}
+          >
             {t.toUpperCase()}
           </button>
         ))}
         <span className="w-2" />
         {INDICATORS.map((ind) => (
-          <button key={ind} className={`term-btn ${active.has(ind) ? "active" : ""}`} onClick={() => toggleIndicator(ind)}>
+          <button
+            key={ind}
+            disabled={comparing}
+            className={`term-btn ${active.has(ind) ? "active" : ""}`}
+            onClick={() => toggleIndicator(ind)}
+          >
             {ind}
           </button>
         ))}
       </div>
-      {snapshotStatus && <p role="status" className="p-1 dim">{snapshotStatus}</p>}
-      {error && <div className="p-2 down">Error: {(error as Error).message}</div>}
+      <form
+        className="flex gap-1 p-1 flex-wrap shrink-0"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const parsed = [
+            ...new Set(overlayDraft.split(",").map(normalizeSymbol)),
+          ];
+          if (
+            parsed.some((s) => !s) ||
+            parsed.length > 3 ||
+            parsed.filter((s) => s !== symbol).length === 0
+          ) {
+            setOverlayError(
+              "Enter 1–3 distinct comparison symbols, including at least one different from the chart symbol.",
+            );
+            return;
+          }
+          setOverlaySymbols(parsed as string[]);
+          setCompareMode(true);
+          setOverlayError("");
+        }}
+      >
+        <input
+          aria-label="Chart comparison symbols"
+          value={overlayDraft}
+          onChange={(e) => setOverlayDraft(e.target.value)}
+          placeholder="SPY,MSFT"
+          className="w-40"
+        />
+        <button className="term-btn">Overlay comparison</button>
+        <button
+          type="button"
+          className={`term-btn ${!comparing ? "active" : ""}`}
+          onClick={() => setCompareMode(false)}
+        >
+          Price mode
+        </button>
+        {comparing && (
+          <span className="dim">
+            {[symbol, ...comparisonSymbols].join(" / ")} · start = 100 ·{" "}
+            {comparison.times.length} shared timestamps
+          </span>
+        )}
+      </form>
+      {overlayError && (
+        <p role="alert" className="down p-1">
+          {overlayError}
+        </p>
+      )}
+      {comparing && (
+        <p className="dim p-1 text-[10px]">
+          Normalized closes at exact shared timestamps; price returns in each
+          quote currency, without FX or dividend adjustment. Sources may differ
+          in split adjustment. Price drawings and indicators resume in price
+          mode.
+        </p>
+      )}
+      {comparing &&
+        (comparisonLoading ||
+          comparisonFailed.length > 0 ||
+          comparison.times.length < 2) && (
+          <p role="status" className="amber p-1">
+            {comparisonLoading
+              ? "Loading comparison…"
+              : comparisonFailed.length
+                ? `Comparison history unavailable: ${comparisonFailed.join(", ")}`
+                : "Not enough shared timestamps to compare these assets."}
+          </p>
+        )}
+      <ChartTools
+        tool={tool}
+        setTool={setTool}
+        drawings={drawings}
+        update={update}
+        message={storageError || drawingMessage}
+        disabled={comparing}
+      />
+      {snapshotStatus && (
+        <p role="status" className="p-1 dim">
+          {snapshotStatus}
+        </p>
+      )}
+      {error && (
+        <div className="p-2 down">Error: {(error as Error).message}</div>
+      )}
       <div className="relative flex-1 min-h-0">
-        {legend && (
+        {legend && !comparing && (
           <div className="absolute top-1 left-2 z-10 flex flex-col gap-0.5 text-[11px] pointer-events-none bg-[rgba(10,10,10,0.7)] px-2 py-1 rounded max-w-[95%]">
             <div className="flex gap-3">
-              <span className="dim">O <span className="text-[var(--text)]">{fmt(legend.open)}</span></span>
-              <span className="dim">H <span className="up">{fmt(legend.high)}</span></span>
-              <span className="dim">L <span className="down">{fmt(legend.low)}</span></span>
-              <span className="dim">C <span className={legend.close >= legend.open ? "up" : "down"}>{fmt(legend.close)}</span></span>
-              <span className="dim">Vol <span className="text-[var(--text)]">{fmtBig(legend.volume)}</span></span>
+              <span className="dim">
+                O <span className="text-[var(--text)]">{fmt(legend.open)}</span>
+              </span>
+              <span className="dim">
+                H <span className="up">{fmt(legend.high)}</span>
+              </span>
+              <span className="dim">
+                L <span className="down">{fmt(legend.low)}</span>
+              </span>
+              <span className="dim">
+                C{" "}
+                <span className={legend.close >= legend.open ? "up" : "down"}>
+                  {fmt(legend.close)}
+                </span>
+              </span>
+              <span className="dim">
+                Vol{" "}
+                <span className="text-[var(--text)]">
+                  {fmtBig(legend.volume)}
+                </span>
+              </span>
             </div>
             {indicatorRows.length > 0 && (
               <div className="flex gap-3 flex-wrap">
@@ -288,7 +723,15 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
             )}
           </div>
         )}
-        <div ref={containerRef} className="w-full h-full" />
+        <div
+          ref={containerRef}
+          aria-label={
+            comparing
+              ? "Normalized comparison chart"
+              : "Price chart drawing area"
+          }
+          className="w-full h-full"
+        />
       </div>
     </div>
   );

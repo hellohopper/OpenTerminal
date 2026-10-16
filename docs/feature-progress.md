@@ -43,3 +43,13 @@ Portfolio performance currently supports long-only USD assets and up to one year
 Add **ALERTS** to create, edit, pause and rearm rules. The API checks enabled symbols every 15 seconds; each trigger is recorded atomically and disarms its rule. Global in-app notifications and opt-in desktop notifications share a browser delivery cursor. See [price-alert usage and limits](price-alerts.md).
 
 Browser integration uses an isolated database, fixture quotes and a simulated Notification API. It verifies threshold and percentage triggers, one-shot/rearm behavior, reload persistence, cross-tab deduplication, stale-cache rejection, provider recovery, browser-closed catch-up and denied-permission fallback. No operating-system desktop notification or live-provider acceptance test was performed.
+
+## Additional feature: chart tools and overlays
+
+| # | Feature | Branch | Status |
+|---|---|---|---|
+| 10 | Chart drawing tools and multi-asset overlay | codex/feature-10-chart-tools | Complete; 107 tests across 27 files, full build and browser integration passed |
+
+Horizontal levels and two-point trend segments are saved per chart widget, symbol and range in browser storage. Undo, individual deletion, clear and Escape cancellation are available. Normalized overlays compare up to four assets at exact shared timestamps and can be captured in the journal. See [chart tools usage and limits](chart-tools.md).
+
+Browser checks use fixture providers through the real API/web proxy. They verify rapid two-point drawing in reverse time order, reload persistence, range isolation, Escape, undo/delete/clear, normalized comparison and price-mode restoration, journal snapshots, invalid symbols and missing history. No browser runtime errors were observed; live provider availability was not tested.
