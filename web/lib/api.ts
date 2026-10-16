@@ -76,3 +76,10 @@ export function pctClass(n: number | null | undefined): string {
   if (n === null || n === undefined) return "dim";
   return n >= 0 ? "up" : "down";
 }
+
+export async function apiPut<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(path, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error ?? `HTTP ${response.status}`);
+  return data;
+}

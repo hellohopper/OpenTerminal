@@ -116,6 +116,7 @@ table.data-table tbody tr:hover {
 }
 
 input,
+textarea,
 select {
   background: var(--panel-2);
   border: 1px solid var(--border);
@@ -125,6 +126,7 @@ select {
   font-family: inherit;
   outline: none;
 }
+textarea:focus,
 input:focus,
 select:focus {
   border-color: var(--amber);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   createChart,
@@ -12,7 +12,7 @@ import {
   type IChartApi,
   type UTCTimestamp,
 } from "lightweight-charts";
-import { apiGet, fmt, fmtBig, type Candle } from "../../lib/api";
+import { apiGet, apiPost, fmt, fmtBig, type Candle } from "../../lib/api";
 import { sma, ema, vwap, rsi, macd, bollinger, type Point } from "../../lib/indicators";
 import { useWidgetSymbol, type WidgetInstance } from "../../store/terminal";
 
@@ -34,6 +34,9 @@ const INDICATOR_COLOR: Record<string, string> = {
 
 export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
   const symbol = useWidgetSymbol(widget);
+  const qc = useQueryClient();
+  const [snapshotStatus, setSnapshotStatus] = useState("");
+  const [savingSnapshot, setSavingSnapshot] = useState(false);
   const [range, setRange] = useState<Range>("6M");
   const [chartType, setChartType] = useState<ChartType>("candles");
   const [active, setActive] = useState<Set<Indicator>>(new Set(["SMA20"]));
@@ -235,6 +238,15 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
   return (
     <div className="flex flex-col h-full">
       <div className="flex gap-1 p-1 flex-wrap shrink-0">
+        <button className="term-btn" disabled={!candles?.length || savingSnapshot} onClick={async () => {
+          if (!chartRef.current) return;
+          setSavingSnapshot(true);
+          try {
+            const image = chartRef.current.takeScreenshot().toDataURL("image/jpeg", 0.8);
+            await apiPost("/api/journal", { symbol, title: `${symbol} chart — ${range}`, kind: "research", body: `Captured ${new Date().toISOString()}. Chart: ${chartType}. Indicators: ${[...active].join(", ")}.`, image });
+            qc.invalidateQueries({ queryKey: ["journal"] }); setSnapshotStatus("Saved to journal");
+          } catch (err) { setSnapshotStatus((err as Error).message); } finally { setSavingSnapshot(false); }
+        }}>JOURNAL SNAPSHOT</button>
         {RANGES.map((r) => (
           <button key={r} className={`term-btn ${range === r ? "active" : ""}`} onClick={() => setRange(r)}>
             {r}
@@ -253,6 +265,7 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
           </button>
         ))}
       </div>
+      {snapshotStatus && <p role="status" className="p-1 dim">{snapshotStatus}</p>}
       {error && <div className="p-2 down">Error: {(error as Error).message}</div>}
       <div className="relative flex-1 min-h-0">
         {legend && (
