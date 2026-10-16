@@ -3,6 +3,7 @@
 import { useTerminal, type WidgetType } from "../store/terminal";
 
 const ITEMS: Array<{ type: WidgetType; label: string; key: string }> = [
+  { type: "fundamentals", label: "FINANCIALS", key: "" },
   { type: "comparison", label: "COMPARE", key: "" },
   { type: "chart", label: "CHART", key: "⌥1" },
   { type: "quote", label: "QUOTE", key: "⌥2" },

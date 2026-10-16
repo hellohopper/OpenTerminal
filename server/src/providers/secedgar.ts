@@ -11,8 +11,8 @@ import { mapWithConcurrency } from "../concurrency.js";
 const UA = `OpenTerminal ${process.env.SEC_EDGAR_CONTACT ?? "ertassellireplay@gmail.com"}`;
 const parser = new XMLParser({ ignoreAttributes: false });
 
-async function edgarFetch(url: string): Promise<any> {
-  const res = await fetch(url, { headers: { "User-Agent": UA, Accept: "application/json" } });
+export async function edgarFetch(url: string): Promise<any> {
+  const res = await fetch(url, { headers: { "User-Agent": UA, Accept: "application/json" }, signal: AbortSignal.timeout(10000) });
   if (!res.ok) throw new Error(`sec edgar ${res.status} for ${url}`);
   return res.json();
 }
@@ -20,7 +20,7 @@ async function edgarFetch(url: string): Promise<any> {
 let tickerMap: Map<string, string> | null = null;
 
 /** Ticker -> zero-padded 10-digit CIK, from SEC's full company list (cached in-process). */
-async function resolveCik(symbol: string): Promise<string | null> {
+export async function resolveCik(symbol: string): Promise<string | null> {
   if (!tickerMap) {
     const data = await edgarFetch("https://www.sec.gov/files/company_tickers.json");
     tickerMap = new Map();

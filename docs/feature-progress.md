@@ -6,7 +6,7 @@ Each feature is developed on its own branch, validated, then merged into local m
 |---|---|---|---|
 | 1 | Workspaces and layout presets | codex/feature-01-workspaces | Complete; 52 tests, web build, browser create/reload/duplicate/import/export passed |
 | 2 | Multi-symbol comparison | codex/feature-02-comparison | Complete; 55 tests and web build passed |
-| 3 | Company fundamentals | codex/feature-03-fundamentals | Planned |
+| 3 | Company fundamentals | codex/feature-03-fundamentals | Complete; 58 tests and full build passed |
 | 4 | Research notes and trading journal | codex/feature-04-journal | Planned |
 | 5 | Portfolio performance and risk | codex/feature-05-performance | Planned |
 | 6 | Options strategy builder | codex/feature-06-option-strategies | Planned |
