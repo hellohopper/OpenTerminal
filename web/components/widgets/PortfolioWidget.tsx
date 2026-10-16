@@ -13,7 +13,8 @@ export default function PortfolioWidget() {
   const qc = useQueryClient();
   const [portfolioId, setPortfolioId] = useState<number | null>(null);
   const [showTx, setShowTx] = useState(false);
-  const [form, setForm] = useState({ symbol: "", side: "BUY", quantity: "", price: "" });
+  const [deleteError, setDeleteError] = useState("");
+  const [form, setForm] = useState({ symbol: "", side: "BUY", quantity: "", price: "", date: new Date().toISOString().slice(0, 10) });
 
   const { data: portfolios = [] } = useQuery({
     queryKey: ["portfolios"],
@@ -21,7 +22,7 @@ export default function PortfolioWidget() {
   });
   const pid = portfolioId ?? portfolios[0]?.id;
 
-  const { data: positions = [] } = useQuery({
+  const { data: positions = [], error: positionsError } = useQuery({
     queryKey: ["positions", pid],
     queryFn: () => apiGet<Position[]>(`/api/portfolios/${pid}/positions`),
     enabled: !!pid,
@@ -48,12 +49,13 @@ export default function PortfolioWidget() {
         side: form.side,
         quantity: Number(form.quantity),
         price: Number(form.price),
-        executed_at: new Date().toISOString(),
+        executed_at: `${form.date}T00:00:00Z`,
       }),
     onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["performance", pid] });
       qc.invalidateQueries({ queryKey: ["positions", pid] });
       qc.invalidateQueries({ queryKey: ["transactions", pid] });
-      setForm({ symbol: "", side: "BUY", quantity: "", price: "" });
+      setForm({ symbol: "", side: "BUY", quantity: "", price: "", date: new Date().toISOString().slice(0, 10) });
     },
   });
 
@@ -72,6 +74,7 @@ export default function PortfolioWidget() {
 
   return (
     <div>
+      {(deleteError || positionsError) && <p role="alert" className="down p-1">{deleteError || (positionsError as Error)?.message}</p>}
       <div className="flex gap-2 p-1 items-center flex-wrap">
         <select value={pid ?? ""} onChange={(e) => setPortfolioId(Number(e.target.value))}>
           {portfolios.map((p) => (
@@ -101,6 +104,7 @@ export default function PortfolioWidget() {
         </select>
         <input className="w-20" placeholder="Qty" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} />
         <input className="w-24" placeholder="Price" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} />
+        <input type="date" aria-label="Trade date UTC" value={form.date} max={new Date().toISOString().slice(0,10)} onChange={(e) => setForm({ ...form, date: e.target.value })} />
         <button className="term-btn" type="submit">ADD</button>
         {addTx.error && <span className="down">{(addTx.error as Error).message}</span>}
       </form>
@@ -147,9 +151,13 @@ export default function PortfolioWidget() {
                   <button
                     className="dim hover:text-[var(--down)]"
                     onClick={async () => {
-                      await apiDelete(`/api/portfolios/${pid}/transactions/${t.id}`);
-                      qc.invalidateQueries({ queryKey: ["positions", pid] });
-                      qc.invalidateQueries({ queryKey: ["transactions", pid] });
+                      try {
+                        await apiDelete(`/api/portfolios/${pid}/transactions/${t.id}`);
+                        qc.invalidateQueries({ queryKey: ["performance", pid] });
+                        qc.invalidateQueries({ queryKey: ["positions", pid] });
+                        qc.invalidateQueries({ queryKey: ["transactions", pid] });
+                        setDeleteError("");
+                      } catch (err) { setDeleteError((err as Error).message); }
                     }}
                   >
                     ✕
