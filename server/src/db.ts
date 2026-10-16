@@ -15,6 +15,7 @@ db.pragma("journal_mode = WAL");
 db.pragma("foreign_keys = ON");
 
 db.exec(`
+CREATE TABLE IF NOT EXISTS briefings (id INTEGER PRIMARY KEY AUTOINCREMENT, generated_at TEXT NOT NULL, content TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS journal_entries (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   symbol TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL,
