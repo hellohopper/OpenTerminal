@@ -1,4 +1,5 @@
-import express from "express";
+import express, { type ErrorRequestHandler } from "express";
+import { db } from "./db.js";
 import cors from "cors";
 import { alertsRouter } from "./routes/alerts.js";
 import { alertMonitor } from "./alerts.js";
@@ -31,10 +32,20 @@ if (process.env.TRUST_PROXY === "1") {
 // origin.
 const webOrigin = process.env.WEB_ORIGIN ?? "http://localhost:3000";
 app.use(cors({ origin: webOrigin }));
-app.use("/api/journal", requireApiKey, express.json({ limit: "1500kb" }), journalRouter);
+app.use(
+  "/api/journal",
+  requireApiKey,
+  express.json({ limit: "1500kb" }),
+  journalRouter,
+);
 app.use(express.json());
 app.use("/api/alerts", requireApiKey, alertsRouter);
-app.use("/api/briefings", requireApiKey, rateLimit({ windowMs: 60000, max: 10 }), briefingsRouter);
+app.use(
+  "/api/briefings",
+  requireApiKey,
+  rateLimit({ windowMs: 60000, max: 10 }),
+  briefingsRouter,
+);
 
 // No API key here by design (market.ts routes proxy free, keyless public data),
 // but still bounded per-IP: unlike /api/ai and /api/portfolios, an unauthenticated
@@ -48,7 +59,7 @@ app.use(
   "/api/ai",
   requireApiKey,
   rateLimit({ windowMs: 60_000, max: 10 }),
-  aiRouter
+  aiRouter,
 );
 
 app.get("/api/status", (_req, res) => {
@@ -57,15 +68,39 @@ app.get("/api/status", (_req, res) => {
     time: new Date().toISOString(),
     providers: allStats(),
     ai: Boolean(process.env.ANTHROPIC_API_KEY),
+    database: db.kind,
   });
 });
+
+const databaseError: ErrorRequestHandler = (_error, _req, res, _next) => {
+  res
+    .status(503)
+    .json({ error: "The request could not be completed. Please retry." });
+};
+app.use(databaseError);
 
 const PORT = Number(process.env.API_PORT ?? 4000);
 // Bind to localhost by default so cloning and running this never exposes an
 // unauthenticated-by-default API to the network. Set API_HOST=0.0.0.0 (and
 // API_KEY + WEB_ORIGIN) to intentionally expose it beyond this machine.
 const HOST = process.env.API_HOST ?? "127.0.0.1";
-app.listen(PORT, HOST, () => {
+const server = app.listen(PORT, HOST, () => {
   alertMonitor.start();
   console.log(`OpenTerminal API listening on http://${HOST}:${PORT}`);
 });
+
+let stopping = false;
+async function shutdown() {
+  if (stopping) return;
+  stopping = true;
+  const deadline = setTimeout(() => process.exit(1), 15000);
+  deadline.unref();
+  await alertMonitor.stop();
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  await db.close();
+  clearTimeout(deadline);
+}
+for (const signal of ["SIGINT", "SIGTERM"] as const)
+  process.on(signal, () => {
+    void shutdown().catch(() => process.exit(1));
+  });

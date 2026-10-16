@@ -14,6 +14,7 @@ services:
       - API_HOST=0.0.0.0 # safe: still only published to 127.0.0.1 above
       - WEB_ORIGIN=${WEB_ORIGIN:-http://localhost:3000}
       - DATA_DIR=/app/data
+      - DATABASE_URL=${DATABASE_URL:-}
       # Leave unset unless you put your own trusted reverse proxy in front of
       # the web service (see README > Security defaults) — otherwise a caller
       # could forge X-Forwarded-For to dodge the /api/ai rate limit.

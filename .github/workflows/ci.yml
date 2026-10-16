@@ -8,6 +8,20 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: openterminal
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: openterminal_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U openterminal -d openterminal_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -16,5 +30,7 @@ jobs:
           cache: npm
       - run: npm install
       - run: npm run test -w server
+        env:
+          TEST_DATABASE_URL: postgresql://openterminal:test@127.0.0.1:5432/openterminal_test
       - run: npm run build -w server
       - run: npm run build -w web

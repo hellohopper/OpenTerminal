@@ -1,6 +1,6 @@
 # Price alerts
 
-Add **ALERTS** from the sidebar. Enter a symbol, choose a condition and threshold, optionally add a label, then select **Create alert**. Rules are shared across workspaces and saved in the server's SQLite database.
+Add **ALERTS** from the sidebar. Enter a symbol, choose a condition and threshold, optionally add a label, then select **Create alert**. Rules are shared across workspaces and saved in the server's configured database (SQLite by default, or optional PostgreSQL).
 
 Supported conditions include equality:
 

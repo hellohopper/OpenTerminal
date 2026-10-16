@@ -1,8 +1,7 @@
 import { db } from "./db.js";
 import { getQuotes } from "./routes/market.js";
 import type { Quote } from "./providers/yahoo.js";
-
-export const ALERT_INTERVAL_MS = 15_000;
+export const ALERT_INTERVAL_MS = 15000;
 export const MAX_ALERTS = 100;
 export const MAX_ALERT_SYMBOLS = 20;
 export type AlertCondition =
@@ -37,10 +36,10 @@ export type AlertEvent = {
   observed_at: string | null;
   created_at: string;
 };
-export const activeAlerts = () =>
-  db
+export const activeAlerts = async () =>
+  (await db
     .prepare("SELECT * FROM price_alerts WHERE armed=1 ORDER BY id")
-    .all() as AlertRule[];
+    .all()) as AlertRule[];
 export function alertValue(
   rule: Pick<AlertRule, "condition">,
   quote: Quote,
@@ -66,13 +65,13 @@ export function matchesAlert(
     : null;
 }
 /** Disarm and append the immutable delivery event atomically; old in-flight revisions cannot fire. */
-export function evaluateAlerts(
+export async function evaluateAlerts(
   rules: AlertRule[],
   quotes: Quote[],
   now = new Date(),
-): number {
+): Promise<number> {
   const bySymbol = new Map(quotes.map((q) => [q.symbol, q]));
-  return db.transaction(() => {
+  return await db.transaction(async () => {
     let fired = 0;
     for (const rule of rules) {
       const quote = bySymbol.get(rule.symbol);
@@ -80,9 +79,9 @@ export function evaluateAlerts(
       const value = alertValue(rule, quote);
       if (value === null) continue;
       const triggered = matchesAlert(rule, quote) !== null;
-      const changed = db
+      const changed = await db
         .prepare(
-          "UPDATE price_alerts SET last_checked_at=?,last_value=?,armed=?,last_triggered_at=CASE WHEN ? THEN ? ELSE last_triggered_at END,revision=revision+? WHERE id=? AND armed=1 AND revision=?",
+          "UPDATE price_alerts SET last_checked_at=?,last_value=?,armed=?,last_triggered_at=CASE WHEN ?=1 THEN ? ELSE last_triggered_at END,revision=revision+? WHERE id=? AND armed=1 AND revision=?",
         )
         .run(
           now.toISOString(),
@@ -96,23 +95,25 @@ export function evaluateAlerts(
         );
       if (!changed.changes || !triggered) continue;
       const observed = quote.time === null ? null : new Date(quote.time * 1000);
-      db.prepare(
-        "INSERT INTO price_alert_events (alert_id,symbol,condition,threshold,label,value,price,currency,source,observed_at,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-      ).run(
-        rule.id,
-        rule.symbol,
-        rule.condition,
-        rule.threshold,
-        rule.label,
-        value,
-        quote.price,
-        quote.currency,
-        quote.source,
-        observed && Number.isFinite(observed.getTime())
-          ? observed.toISOString()
-          : null,
-        now.toISOString(),
-      );
+      await db
+        .prepare(
+          "INSERT INTO price_alert_events (alert_id,symbol,condition,threshold,label,value,price,currency,source,observed_at,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        )
+        .run(
+          rule.id,
+          rule.symbol,
+          rule.condition,
+          rule.threshold,
+          rule.label,
+          value,
+          quote.price,
+          quote.currency,
+          quote.source,
+          observed && Number.isFinite(observed.getTime())
+            ? observed.toISOString()
+            : null,
+          now.toISOString(),
+        );
       fired++;
     }
     return fired;
@@ -124,7 +125,10 @@ export function createAlertMonitor(
 ) {
   let timer: ReturnType<typeof setInterval> | undefined;
   let controller: AbortController | undefined;
-  let inFlight: Promise<{ triggered: number; deferred: boolean }> | null = null;
+  let inFlight: Promise<{
+    triggered: number;
+    deferred: boolean;
+  }> | null = null;
   let lastStarted = 0;
   let lastCheckedAt: string | null = null;
   let lastError: string | null = null;
@@ -142,19 +146,20 @@ export function createAlertMonitor(
   });
   function check(): Promise<{ triggered: number; deferred: boolean }> {
     if (inFlight) return inFlight;
-    const rules = activeAlerts();
-    if (!rules.length)
-      return Promise.resolve({ triggered: 0, deferred: false });
-    if (lastStarted && Date.now() - lastStarted < intervalMs)
-      return Promise.resolve({ triggered: 0, deferred: true });
-    lastStarted = Date.now();
     controller = new AbortController();
     const signal = AbortSignal.any([
       controller.signal,
-      AbortSignal.timeout(20_000),
+      AbortSignal.timeout(20000),
     ]);
     inFlight = Promise.resolve().then(async () => {
+      let checked = false;
       try {
+        const rules = await activeAlerts();
+        if (!rules.length) return { triggered: 0, deferred: false };
+        if (lastStarted && Date.now() - lastStarted < intervalMs)
+          return { triggered: 0, deferred: true };
+        lastStarted = Date.now();
+        checked = true;
         const symbols = [...new Set(rules.map((r) => r.symbol))];
         const quotes = await loadQuotes(symbols, signal);
         signal.throwIfAborted();
@@ -162,21 +167,22 @@ export function createAlertMonitor(
           const quote = quotes.find((q) => q.symbol === s);
           return (
             !quote ||
-            rules.some(
-              (rule) => rule.symbol === s && alertValue(rule, quote) === null,
-            )
+            rules.some((r) => r.symbol === s && alertValue(r, quote) === null)
           );
         });
         lastError = missingSymbols.length
           ? `Fresh quotes unavailable for ${missingSymbols.join(", ")}.`
           : null;
-        return { triggered: evaluateAlerts(rules, quotes), deferred: false };
+        return {
+          triggered: await evaluateAlerts(rules, quotes),
+          deferred: false,
+        };
       } catch {
         lastError =
-          "Quote refresh failed or timed out. Active alerts will be retried.";
+          "Quote refresh or database check failed. Active alerts will be retried.";
         return { triggered: 0, deferred: false };
       } finally {
-        lastCheckedAt = new Date().toISOString();
+        if (checked) lastCheckedAt = new Date().toISOString();
         inFlight = null;
         controller = undefined;
       }
@@ -198,6 +204,7 @@ export function createAlertMonitor(
       clearInterval(timer);
       timer = undefined;
       controller?.abort();
+      return inFlight;
     },
   };
 }

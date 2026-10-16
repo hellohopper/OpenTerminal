@@ -24,15 +24,15 @@ beforeAll(async () => {
   db = (await import("./db.js")).db;
   alerts = await import("./alerts.js");
 });
-beforeEach(() => {
-  db.exec("DELETE FROM price_alert_events; DELETE FROM price_alerts;");
+beforeEach(async () => {
+  await db.exec("DELETE FROM price_alert_events; DELETE FROM price_alerts;");
 });
 afterEach(() => {
   monitors.splice(0).forEach((m) => m.stop());
   vi.restoreAllMocks();
 });
-afterAll(() => {
-  db.close();
+afterAll(async () => {
+  await db.close();
   rmSync(directory, { recursive: true, force: true });
   delete process.env.DATA_DIR;
 });
@@ -45,14 +45,18 @@ const quote = (price = 100, changePercent: number | null = 2): Quote =>
     currency: "USD",
     time: null,
   }) as Quote;
-function create(condition = "PRICE_ABOVE", threshold = 100) {
-  db.prepare(
-    "INSERT INTO price_alerts (symbol,condition,threshold,label,created_at) VALUES ('AAPL',?,?,'Target',?)",
-  ).run(condition, threshold, new Date().toISOString());
-  return alerts.activeAlerts();
+async function create(condition = "PRICE_ABOVE", threshold = 100) {
+  await db
+    .prepare(
+      "INSERT INTO price_alerts (symbol,condition,threshold,label,created_at) VALUES ('AAPL',?,?,'Target',?)",
+    )
+    .run(condition, threshold, new Date().toISOString());
+  return await alerts.activeAlerts();
 }
-const history = () =>
-  db.prepare("SELECT * FROM price_alert_events ORDER BY id").all() as any[];
+const history = async () =>
+  (await db
+    .prepare("SELECT * FROM price_alert_events ORDER BY id")
+    .all()) as any[];
 describe("price alert evaluation", () => {
   it("includes threshold equality for both prices and daily percentage moves", () => {
     for (const [condition, threshold, sample] of [
@@ -92,55 +96,61 @@ describe("price alert evaluation", () => {
         ),
       ).toBeNull();
   });
-  it("fires once atomically, persists its event and allows explicit rearming", () => {
-    const snapshot = create();
-    expect(alerts.evaluateAlerts(snapshot, [quote()])).toBe(1);
-    expect(alerts.evaluateAlerts(snapshot, [quote()])).toBe(0);
-    expect(alerts.activeAlerts()).toHaveLength(0);
-    expect(history()).toHaveLength(1);
-    expect(history()[0]).toMatchObject({
+  it("fires once atomically, persists its event and allows explicit rearming", async () => {
+    const snapshot = await create();
+    expect(await alerts.evaluateAlerts(snapshot, [quote()])).toBe(1);
+    expect(await alerts.evaluateAlerts(snapshot, [quote()])).toBe(0);
+    expect(await alerts.activeAlerts()).toHaveLength(0);
+    expect(await history()).toHaveLength(1);
+    expect((await history())[0]).toMatchObject({
       value: 100,
       price: 100,
       observed_at: null,
       source: "test",
     });
-    db.prepare("UPDATE price_alerts SET armed=1,revision=revision+1").run();
-    expect(alerts.evaluateAlerts(alerts.activeAlerts(), [quote()])).toBe(1);
-    expect(history()).toHaveLength(2);
+    await db
+      .prepare("UPDATE price_alerts SET armed=1,revision=revision+1")
+      .run();
+    expect(
+      await alerts.evaluateAlerts(await alerts.activeAlerts(), [quote()]),
+    ).toBe(1);
+    expect(await history()).toHaveLength(2);
   });
-  it("does not fire a stale rule snapshot after an edit, pause or delete", () => {
-    const snapshot = create();
-    db.prepare(
-      "UPDATE price_alerts SET threshold=200,revision=revision+1",
-    ).run();
-    expect(alerts.evaluateAlerts(snapshot, [quote(300)])).toBe(0);
-    const edited = alerts.activeAlerts();
-    db.prepare("UPDATE price_alerts SET armed=0,revision=revision+1").run();
-    expect(alerts.evaluateAlerts(edited, [quote(300)])).toBe(0);
-    db.prepare("DELETE FROM price_alerts").run();
-    expect(alerts.evaluateAlerts(snapshot, [quote(300)])).toBe(0);
-    expect(history()).toHaveLength(0);
+  it("does not fire a stale rule snapshot after an edit, pause or delete", async () => {
+    const snapshot = await create();
+    await db
+      .prepare("UPDATE price_alerts SET threshold=200,revision=revision+1")
+      .run();
+    expect(await alerts.evaluateAlerts(snapshot, [quote(300)])).toBe(0);
+    const edited = await alerts.activeAlerts();
+    await db
+      .prepare("UPDATE price_alerts SET armed=0,revision=revision+1")
+      .run();
+    expect(await alerts.evaluateAlerts(edited, [quote(300)])).toBe(0);
+    await db.prepare("DELETE FROM price_alerts").run();
+    expect(await alerts.evaluateAlerts(snapshot, [quote(300)])).toBe(0);
+    expect(await history()).toHaveLength(0);
   });
-  it("rolls back disarming if history cannot be written", () => {
-    const snapshot = create();
-    db.exec(
+  it("rolls back disarming if history cannot be written", async () => {
+    const snapshot = await create();
+    await db.exec(
       "CREATE TRIGGER fail_alert_event BEFORE INSERT ON price_alert_events BEGIN SELECT RAISE(ABORT, 'event write failed'); END;",
     );
     try {
-      expect(() => alerts.evaluateAlerts(snapshot, [quote()])).toThrow(
+      await expect(alerts.evaluateAlerts(snapshot, [quote()])).rejects.toThrow(
         "event write failed",
       );
-      expect(alerts.activeAlerts()).toHaveLength(1);
-      expect(history()).toHaveLength(0);
+      expect(await alerts.activeAlerts()).toHaveLength(1);
+      expect(await history()).toHaveLength(0);
     } finally {
-      db.exec("DROP TRIGGER fail_alert_event;");
+      await db.exec("DROP TRIGGER fail_alert_event;");
     }
   });
-  it("retains event snapshots when a rule is deleted", () => {
-    const snapshot = create();
-    alerts.evaluateAlerts(snapshot, [quote()]);
-    db.prepare("DELETE FROM price_alerts").run();
-    expect(history()[0]).toMatchObject({
+  it("retains event snapshots when a rule is deleted", async () => {
+    const snapshot = await create();
+    await alerts.evaluateAlerts(snapshot, [quote()]);
+    await db.prepare("DELETE FROM price_alerts").run();
+    expect((await history())[0]).toMatchObject({
       alert_id: null,
       symbol: "AAPL",
       threshold: 100,
@@ -160,18 +170,18 @@ describe("background alert monitor", () => {
     monitors.push(monitor);
     await monitor.check();
     expect(load).not.toHaveBeenCalled();
-    create();
+    await create();
     const first = monitor.check(),
       second = monitor.check();
     expect(first).toBe(second);
-    await Promise.resolve();
+    await vi.waitFor(() => expect(load).toHaveBeenCalledTimes(1));
     expect(load).toHaveBeenCalledTimes(1);
     resolve([quote()]);
     expect((await first).triggered).toBe(1);
-    expect(history()).toHaveLength(1);
+    expect(await history()).toHaveLength(1);
   });
   it("keeps rules armed through failures and recovers on the next check", async () => {
-    create();
+    await create();
     let clock = Date.now();
     vi.spyOn(Date, "now").mockImplementation(() => clock);
     const load = vi
@@ -181,29 +191,29 @@ describe("background alert monitor", () => {
     const monitor = alerts.createAlertMonitor(load);
     monitors.push(monitor);
     await monitor.check();
-    expect(alerts.activeAlerts()).toHaveLength(1);
+    expect(await alerts.activeAlerts()).toHaveLength(1);
     expect(monitor.status().lastError).toContain("failed");
     expect((await monitor.check()).deferred).toBe(true);
     expect(load).toHaveBeenCalledTimes(1);
     clock += 15001;
     await monitor.check();
-    expect(history()).toHaveLength(1);
+    expect(await history()).toHaveLength(1);
     expect(monitor.status().lastError).toBeNull();
   });
   it("reports missing daily-change fields without firing", async () => {
-    create("CHANGE_ABOVE", 1);
+    await create("CHANGE_ABOVE", 1);
     const monitor = alerts.createAlertMonitor(async () => [quote(100, null)]);
     monitors.push(monitor);
     await monitor.check();
-    expect(history()).toHaveLength(0);
+    expect(await history()).toHaveLength(0);
     expect(monitor.status().missingSymbols).toEqual(["AAPL"]);
   });
   it("loads persisted rules when started after a restart", async () => {
-    create();
+    await create();
     const monitor = alerts.createAlertMonitor(async () => [quote()]);
     monitors.push(monitor);
     monitor.start();
-    await vi.waitFor(() => expect(history()).toHaveLength(1));
+    await vi.waitFor(async () => expect(await history()).toHaveLength(1));
     expect(monitor.status().running).toBe(true);
     monitor.stop();
     expect(monitor.status().running).toBe(false);

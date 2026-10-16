@@ -41,7 +41,7 @@ No signup. No credit card. No rate‑limited demo tier. Clone it, `npm install`,
 - 🗞️ **Personal briefings** — watchlist movers, recent headlines, upcoming earnings and economic events; save historical snapshots and export text without an AI key.
 - 🧮 **Options strategy builder** — editable multi-leg expiration payoffs, vertical/straddle/covered-call templates, break-even points and explicit unlimited-risk bounds; save scenarios to the journal.
 - 💼 **Portfolio analytics** — record funding, dividends and splits; view cash-inclusive NAV, time-weighted returns, SPY price comparison, drawdown, holdings contribution and sector exposure. Long-only USD; incomplete funding or data is flagged.
-- 📝 **Research journal** — save and edit per-symbol research/trade notes in SQLite, attach images, filter entries, and capture charts directly into the journal.
+- 📝 **Research journal** — save and edit per-symbol research/trade notes in the selected database, attach images, filter entries, and capture charts directly into the journal.
 - 🧾 **Company financials** — quarterly/annual US GAAP statements from [SEC Company Facts](https://www.sec.gov/search-filings/edgar-application-programming-interfaces), with revenue growth, cash flow, margins and filing links.
 - 📊 **Asset comparison** — compare 2–5 symbols on common dates, normalized to 100, with returns, drawdown and daily-sample volatility.
 - 🗂️ **Multiple workspaces** — create named layouts from daily-market, research, options, or blank presets; switch, rename, duplicate, and import/export JSON. Existing layouts migrate automatically.
@@ -54,7 +54,7 @@ No signup. No credit card. No rate‑limited demo tier. Clone it, `npm install`,
 - ⛓️ **Options chain** — calls and puts side‑by‑side with strike, bid/ask, volume, open interest, and ITM highlighting; optional Black-Scholes Greeks with editable assumptions and labeled provider/midpoint/user IV. [Usage and model limits](docs/option-greeks.md).
 - 🪙 **Crypto board** — top assets with 7‑day sparklines, BTC/ETH dominance, and full OHLCV charting for any listed coin
 - 🏦 **Macro dashboard** — live US Treasury yield curve, VIX, and major index/commodity proxies
-- 💼 **Portfolio tracker** — log buy/sell transactions, track average cost, realized & unrealized P&L (persisted in SQLite)
+- 💼 **Portfolio tracker** — log buy/sell transactions, track average cost, realized & unrealized P&L (persisted in the selected database)
 - 📅 **Calendar** — economic events (Fed, ECB, CPI, NFP and more) with consensus forecast, previous reading and, for the major US/EU releases, the actual outcome; plus a per‑watchlist earnings calendar with click‑through history showing forecast vs. actual EPS for the last several quarters and the stock's next‑day price move
 - 🤖 **AI research assistant** (optional) — server-collected quotes, SEC financials and headlines with numbered source citations and inspectable data; personal notes/holdings are opt-in. Source preview works without an AI key.
 - ⚡ **Near real‑time updates** — quotes and indexes refresh every second with a subtle flash on change, so you always know what just moved
@@ -151,6 +151,10 @@ Two optional knobs for the assistant, both standard for the Anthropic SDK:
 - `ANTHROPIC_BASE_URL` — point the assistant at an Anthropic-compatible endpoint (a self-hosted gateway, an EU-hosted relay, etc.) instead of api.anthropic.com.
 - `ANTHROPIC_MODEL` — override the model sent in requests (default: `claude-opus-4-8`). Required when the endpoint behind `ANTHROPIC_BASE_URL` serves models under different ids.
 
+### Optional: PostgreSQL
+
+SQLite is the default. Set `DATABASE_URL` on the API to use PostgreSQL for server-side data. [Setup, Docker and SQLite import instructions](docs/postgresql.md) include the `db:migrate` command; existing data is not moved automatically.
+
 ### Security defaults
 
 - The API binds to `127.0.0.1` and only accepts browser requests from `http://localhost:3000` by default — nothing else on your network can reach it out of the box.
@@ -166,7 +170,7 @@ Two optional knobs for the assistant, both standard for the Anthropic SDK:
 docker compose up --build
 ```
 
-Portfolio data persists in the `terminal-data` volume (SQLite, WAL mode). Ports are published on `127.0.0.1` only by default; see [Security defaults](#security-defaults) to expose it deliberately.
+Server data persists in the `terminal-data` volume by default (SQLite, WAL mode). For PostgreSQL, use the [Compose override and migration guide](docs/postgresql.md). Ports are published on `127.0.0.1` only by default; see [Security defaults](#security-defaults) to expose it deliberately.
 
 <br/>
 
@@ -177,7 +181,7 @@ Portfolio data persists in the `terminal-data` volume (SQLite, WAL mode). Ports 
 | Frontend | Next.js 15 · React 19 · TypeScript · Tailwind CSS 4 · Zustand · TanStack Query |
 | Charts | `lightweight-charts` (candles/indicators) · D3 (heatmap treemap) · Recharts (yield curve) |
 | Backend | Node.js · Express · TypeScript |
-| Database | SQLite (`better-sqlite3`, WAL mode) |
+| Database | SQLite (`better-sqlite3`, WAL mode), or optional PostgreSQL (`pg`) |
 | AI | Anthropic Claude (optional) |
 
 <br/>
@@ -207,7 +211,7 @@ Run tests with `npm test` (Vitest, no network calls). CI runs on every push — 
 - [x] Chart drawing tools & multi‑asset comparison overlay
 - [x] Black‑Scholes Greeks on the options chain
 - [x] Price alerts with desktop notifications
-- [ ] PostgreSQL as an alternative to SQLite
+- [x] PostgreSQL as an alternative to SQLite
 
 Have an idea? [Open an issue](../../issues) — contributions are very welcome.
 
