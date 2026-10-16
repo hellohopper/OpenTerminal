@@ -6,6 +6,7 @@ import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 import { normalizeSymbol } from "../lib/symbol";
 import { useTerminal, type WidgetInstance } from "../store/terminal";
+import FundamentalsWidget from "./widgets/FundamentalsWidget";
 import ComparisonWidget from "./widgets/ComparisonWidget";
 import QuoteWidget from "./widgets/QuoteWidget";
 import ChartWidget from "./widgets/ChartWidget";
@@ -28,6 +29,7 @@ const Grid = WidthProvider(GridLayout);
 
 function WidgetBody({ widget }: { widget: WidgetInstance }) {
   switch (widget.type) {
+    case "fundamentals": return <FundamentalsWidget widget={widget} />;
     case "comparison": return <ComparisonWidget />;
     case "quote": return <QuoteWidget widget={widget} />;
     case "chart": return <ChartWidget widget={widget} />;
@@ -94,7 +96,7 @@ function SymbolTag({ widget, activeSymbol }: { widget: WidgetInstance; activeSym
 }
 
 const TITLES: Record<string, string> = {
-  comparison: "Comparison", quote: "Quote", chart: "Chart", watchlist: "Watchlist", news: "News",
+  fundamentals: "Company Fundamentals", comparison: "Comparison", quote: "Quote", chart: "Chart", watchlist: "Watchlist", news: "News",
   heatmap: "Heatmap", screener: "Screener", crypto: "Crypto",
   macro: "Macro / Indexes", options: "Option Chain", portfolio: "Portfolio", ai: "AI Assistant",
   calendar: "Calendar", insider: "Insider Transactions", tv: "Live TV", recap: "Market Recap",
@@ -108,7 +110,7 @@ export default function Workspace() {
   const toggleLinked = useTerminal((s) => s.toggleLinked);
   const activeSymbol = useTerminal((s) => s.activeSymbol);
 
-  const symbolAware = new Set(["quote", "chart", "news", "options", "insider"]);
+  const symbolAware = new Set(["quote", "chart", "news", "options", "insider", "fundamentals"]);
 
   return (
     <Grid

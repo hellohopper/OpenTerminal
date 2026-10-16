@@ -36,6 +36,7 @@ No signup. No credit card. No rate‑limited demo tier. Clone it, `npm install`,
 ## ✨ Features
 
 - 🖥️ **Widget-based workspace** — drag, resize, add, and remove panels (`react-grid-layout`); your layout is saved locally and restored on reload
+- 🧾 **Company financials** — quarterly/annual US GAAP statements from [SEC Company Facts](https://www.sec.gov/search-filings/edgar-application-programming-interfaces), with revenue growth, cash flow, margins and filing links.
 - 📊 **Asset comparison** — compare 2–5 symbols on common dates, normalized to 100, with returns, drawdown and daily-sample volatility.
 - 🗂️ **Multiple workspaces** — create named layouts from daily-market, research, options, or blank presets; switch, rename, duplicate, and import/export JSON. Existing layouts migrate automatically.
 - ⌘K **global command palette** — instantly search stocks, ETFs, and crypto and jump straight to them

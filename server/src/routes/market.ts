@@ -13,10 +13,18 @@ import * as news from "../providers/news.js";
 import * as econcalendar from "../providers/econcalendar.js";
 import * as finra from "../providers/finra.js";
 import * as secedgar from "../providers/secedgar.js";
+import { fundamentals } from "../providers/fundamentals.js";
 import { dayAfterEarningsChange } from "../earnings.js";
 import { normalizeExpiry } from "../expiry.js";
 
 export const marketRouter = Router();
+
+marketRouter.get("/fundamentals/:symbol", async (req, res) => {
+  const symbol = req.params.symbol.toUpperCase();
+  if (!/^[A-Z0-9.-]{1,20}$/.test(symbol)) return res.status(400).json({ error: "invalid symbol" });
+  const frequency = req.query.frequency === "annual" ? "annual" : "quarterly";
+  try { res.json(await cached(`fundamentals:${symbol}:${frequency}`, 3600000, () => fundamentals(symbol, frequency))); } catch (err) { fail(req, res, err); }
+});
 
 const QUOTE_TTL = 1_000;
 const HISTORY_TTL = 20_000;

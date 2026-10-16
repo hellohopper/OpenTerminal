@@ -1,6 +1,6 @@
 import { normalizeSymbol } from "./symbol";
 
-export const WIDGET_TYPES = ["quote", "chart", "watchlist", "news", "heatmap", "screener", "crypto", "macro", "options", "portfolio", "ai", "calendar", "insider", "tv", "recap", "comparison"] as const;
+export const WIDGET_TYPES = ["quote", "chart", "watchlist", "news", "heatmap", "screener", "crypto", "macro", "options", "portfolio", "ai", "calendar", "insider", "tv", "recap", "comparison", "fundamentals"] as const;
 export type WidgetType = typeof WIDGET_TYPES[number];
 export type WidgetInstance = { id: string; type: WidgetType; symbol?: string; linked: boolean };
 export type LayoutItem = { i: string; x: number; y: number; w: number; h: number };
@@ -13,7 +13,7 @@ export const SIZE_BY_TYPE: Record<WidgetType, { w: number; h: number }> = {
   quote: { w: 5, h: 6 }, chart: { w: 7, h: 12 }, watchlist: { w: 4, h: 7 }, news: { w: 5, h: 8 },
   heatmap: { w: 7, h: 10 }, screener: { w: 12, h: 9 }, crypto: { w: 6, h: 9 }, macro: { w: 5, h: 7 },
   options: { w: 12, h: 9 }, portfolio: { w: 7, h: 8 }, ai: { w: 5, h: 10 }, calendar: { w: 12, h: 11 },
-  insider: { w: 7, h: 9 }, tv: { w: 6, h: 11 }, recap: { w: 5, h: 12 }, comparison: { w: 8, h: 13 },
+  insider: { w: 7, h: 9 }, tv: { w: 6, h: 11 }, recap: { w: 5, h: 12 }, comparison: { w: 8, h: 13 }, fundamentals: { w: 9, h: 15 },
 };
 export const newId = () => crypto.randomUUID();
 export function workspaceName(name: string): string {
