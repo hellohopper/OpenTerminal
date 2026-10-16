@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import TopBar from "./TopBar";
+import WorkspaceBar from "./WorkspaceBar";
 import Sidebar from "./Sidebar";
 import Workspace from "./Workspace";
 import CommandPalette from "./CommandPalette";
@@ -10,6 +11,7 @@ import { useTerminal } from "../store/terminal";
 export default function Terminal() {
   const setCommandOpen = useTerminal((s) => s.setCommandOpen);
   const addWidget = useTerminal((s) => s.addWidget);
+  const workspaceId = useTerminal((s) => s.activeWorkspaceId);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -44,10 +46,11 @@ export default function Terminal() {
   return (
     <div className="flex flex-col h-screen">
       <TopBar />
+      <WorkspaceBar />
       <div className="flex flex-1 overflow-hidden">
         <Sidebar />
         <main className="flex-1 overflow-auto">
-          <Workspace />
+          <Workspace key={workspaceId} />
         </main>
       </div>
       <CommandPalette />

@@ -36,6 +36,7 @@ No signup. No credit card. No rate‑limited demo tier. Clone it, `npm install`,
 ## ✨ Features
 
 - 🖥️ **Widget-based workspace** — drag, resize, add, and remove panels (`react-grid-layout`); your layout is saved locally and restored on reload
+- 🗂️ **Multiple workspaces** — create named layouts from daily-market, research, options, or blank presets; switch, rename, duplicate, and import/export JSON. Existing layouts migrate automatically.
 - ⌘K **global command palette** — instantly search stocks, ETFs, and crypto and jump straight to them
 - 📈 **Professional charting** (via [`lightweight-charts`](https://github.com/tradingview/lightweight-charts)) — candlesticks, bars, line, area, volume, 8 timeframes (1D → MAX), and SMA / EMA / VWAP / Bollinger Bands / RSI / MACD indicators, each with a live hover legend showing OHLC, volume, and every active indicator's value under your cursor
 - 💹 **Quote panel** — last / bid / ask / OHLC, volume, market cap, P/E, EPS, dividend yield, 52‑week range, beta, shares outstanding
