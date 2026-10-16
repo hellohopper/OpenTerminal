@@ -44,8 +44,8 @@ function isVix(symbol: string): boolean {
   return symbol.toUpperCase() === "^VIX" || symbol.toUpperCase() === "VIX";
 }
 
-async function vixQuote(): Promise<yahoo.Quote> {
-  const points = await fred.series("VIXCLS", 5);
+async function vixQuote(signal?: AbortSignal): Promise<yahoo.Quote> {
+  const points = await fred.series("VIXCLS", 5, signal);
   if (points.length === 0) throw new Error("fred: no VIX data");
   const last = points[points.length - 1];
   const prev = points.length > 1 ? points[points.length - 2] : null;
@@ -122,7 +122,8 @@ async function vixHistory(rangeKey: string): Promise<yahoo.Candle[]> {
  * per-IP rate limit (see index.ts).
  */
 const FALLBACK_PER_SYMBOL_CAP = 20;
-export async function getQuotes(symbols: string[]): Promise<yahoo.Quote[]> {
+export async function getQuotes(symbols: string[], options: { allowStale?: boolean; includeFundamentals?: boolean; signal?: AbortSignal } = {}): Promise<yahoo.Quote[]> {
+  options.signal?.throwIfAborted();
   const fresh = new Map<string, yahoo.Quote>();
   const missing: string[] = [];
   for (const sym of symbols) {
@@ -137,23 +138,23 @@ export async function getQuotes(symbols: string[]): Promise<yahoo.Quote[]> {
 
   const cryptoSymbols = remaining.filter((s) => binance.CRYPTO_SYMBOLS.has(s));
   if (cryptoSymbols.length > 0) {
-    const results = await Promise.allSettled(cryptoSymbols.map((s) => binance.quote(s)));
+    const results = await Promise.allSettled(cryptoSymbols.map((s) => binance.quote(s, options.signal)));
     results.forEach((r, i) => {
       if (r.status === "fulfilled") fetched.set(cryptoSymbols[i], r.value);
     });
-    remaining = remaining.filter((s) => !fetched.has(s));
+    remaining = remaining.filter((s) => !binance.CRYPTO_SYMBOLS.has(s));
   }
 
   const vixSymbols = remaining.filter((s) => isVix(s));
   if (vixSymbols.length > 0) {
-    const results = await Promise.allSettled(vixSymbols.map(() => vixQuote()));
+    const results = await Promise.allSettled(vixSymbols.map(() => vixQuote(options.signal)));
     results.forEach((r, i) => {
       if (r.status === "fulfilled") fetched.set(vixSymbols[i], r.value);
     });
-    remaining = remaining.filter((s) => !fetched.has(s));
+    remaining = remaining.filter((s) => !isVix(s));
   }
 
-  const nasdaqResults = await Promise.allSettled(remaining.map((s) => nasdaq.quote(s)));
+  const nasdaqResults = await Promise.allSettled(remaining.map((s) => nasdaq.quote(s, options.signal)));
   nasdaqResults.forEach((r, i) => {
     if (r.status === "fulfilled") fetched.set(remaining[i], r.value);
   });
@@ -161,7 +162,7 @@ export async function getQuotes(symbols: string[]): Promise<yahoo.Quote[]> {
 
   if (remaining.length > 0) {
     try {
-      const rows = await yahoo.quotes(remaining);
+      const rows = await yahoo.quotes(remaining, options.signal);
       for (const q of rows) fetched.set(q.symbol, q);
       remaining = remaining.filter((s) => !fetched.has(s));
     } catch {
@@ -171,7 +172,7 @@ export async function getQuotes(symbols: string[]): Promise<yahoo.Quote[]> {
 
   if (remaining.length > 0) {
     const batch = remaining.slice(0, FALLBACK_PER_SYMBOL_CAP);
-    const results = await Promise.allSettled(batch.map((s) => yahoo.quoteFromChart(s)));
+    const results = await Promise.allSettled(batch.map((s) => yahoo.quoteFromChart(s, options.signal)));
     results.forEach((r, i) => {
       if (r.status === "fulfilled") fetched.set(batch[i], r.value);
     });
@@ -180,7 +181,7 @@ export async function getQuotes(symbols: string[]): Promise<yahoo.Quote[]> {
 
   if (remaining.length > 0) {
     const batch = remaining.slice(0, FALLBACK_PER_SYMBOL_CAP);
-    const results = await Promise.allSettled(batch.map((s) => stooq.quote(s)));
+    const results = await Promise.allSettled(batch.map((s) => stooq.quote(s, options.signal)));
     results.forEach((r, i) => {
       if (r.status === "fulfilled") fetched.set(batch[i], r.value);
     });
@@ -190,7 +191,7 @@ export async function getQuotes(symbols: string[]): Promise<yahoo.Quote[]> {
   // yield, beta, shares outstanding) from TradingView's public scanner API,
   // in one batched request for every quote that resolved an exchange.
   const needsFundamentals = [...fetched.values()].filter((q) => q.exchange && q.pe === null);
-  if (needsFundamentals.length > 0) {
+  if (options.includeFundamentals !== false && needsFundamentals.length > 0) {
     try {
       const fundamentals = await tradingview.scanFundamentals(
         needsFundamentals.map((q) => ({ symbol: q.symbol, exchange: q.exchange }))
@@ -210,11 +211,15 @@ export async function getQuotes(symbols: string[]): Promise<yahoo.Quote[]> {
     }
   }
 
-  for (const [sym, q] of fetched) cacheStore(`quote:${sym}`, q, QUOTE_TTL);
+  options.signal?.throwIfAborted();
+  // Price-only monitor reads must not replace enriched dashboard quotes.
+  if (options.includeFundamentals !== false) {
+    for (const [sym, q] of fetched) cacheStore(`quote:${sym}`, q, QUOTE_TTL);
+  }
 
   const out: yahoo.Quote[] = [];
   for (const sym of symbols) {
-    const q = fresh.get(sym) ?? fetched.get(sym) ?? staleGet<yahoo.Quote>(`quote:${sym}`);
+    const q = fresh.get(sym) ?? fetched.get(sym) ?? (options.allowStale === false ? undefined : staleGet<yahoo.Quote>(`quote:${sym}`));
     if (q) out.push(q);
   }
   return out;

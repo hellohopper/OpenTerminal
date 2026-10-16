@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import AlertNotifier from "./AlertNotifier";
 import TopBar from "./TopBar";
 import WorkspaceBar from "./WorkspaceBar";
 import Sidebar from "./Sidebar";
@@ -54,6 +55,7 @@ export default function Terminal() {
         </main>
       </div>
       <CommandPalette />
+      <AlertNotifier />
     </div>
   );
 }

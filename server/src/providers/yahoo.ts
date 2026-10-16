@@ -1,3 +1,4 @@
+import { providerFetch } from "./http.js";
 // A single hardcoded User-Agent makes every self-hosted install share one
 // fingerprint: when the app's traffic grows, providers can throttle the whole
 // fleet by blocking that one string (observed: sustained HTTP 429 from Yahoo
@@ -58,22 +59,22 @@ export type Candle = { time: number; open: number; high: number; low: number; cl
 let session: { cookie: string; crumb: string; fetched: number } | null = null;
 let sessionFailedUntil = 0;
 
-async function getSession(): Promise<{ cookie: string; crumb: string }> {
+async function getSession(signal?: AbortSignal): Promise<{ cookie: string; crumb: string }> {
   if (session && Date.now() - session.fetched < 30 * 60 * 1000) return session;
   if (Date.now() < sessionFailedUntil) throw new Error("yahoo: crumb fetch failed (cached failure)");
   try {
-    const res = await fetch("https://fc.yahoo.com/", { headers: { "User-Agent": UA }, redirect: "manual" });
+    const res = await providerFetch("https://fc.yahoo.com/", { headers: { "User-Agent": UA }, redirect: "manual", signal });
     const cookie = (res.headers.get("set-cookie") ?? "").split(";")[0];
     if (!cookie) throw new Error("yahoo: no session cookie");
-    const crumbRes = await fetch("https://query2.finance.yahoo.com/v1/test/getcrumb", {
-      headers: { "User-Agent": UA, Cookie: cookie },
+    const crumbRes = await providerFetch("https://query2.finance.yahoo.com/v1/test/getcrumb", {
+      headers: { "User-Agent": UA, Cookie: cookie }, signal,
     });
     const crumb = (await crumbRes.text()).trim();
     if (!crumbRes.ok || !crumb || crumb.includes("<")) throw new Error("yahoo: crumb fetch failed");
     session = { cookie, crumb, fetched: Date.now() };
     return session;
   } catch (err) {
-    sessionFailedUntil = Date.now() + 60_000;
+    if (!signal?.aborted) sessionFailedUntil = Date.now() + 60_000;
     throw err;
   }
 }
@@ -108,7 +109,7 @@ function release(): void {
   waiters.shift()?.();
 }
 
-async function yfetch(url: string, withCrumb = false): Promise<any> {
+async function yfetch(url: string, withCrumb = false, signal?: AbortSignal): Promise<any> {
   if (Date.now() < cooldownUntil) {
     throw new Error("yahoo rate-limited (cooling down)");
   }
@@ -116,12 +117,13 @@ async function yfetch(url: string, withCrumb = false): Promise<any> {
   let full = url;
   await acquire();
   try {
+    signal?.throwIfAborted();
     if (withCrumb) {
-      const s = await getSession();
+      const s = await getSession(signal);
       headers.Cookie = s.cookie;
       full += (url.includes("?") ? "&" : "?") + "crumb=" + encodeURIComponent(s.crumb);
     }
-    const res = await fetch(full, { headers });
+    const res = await providerFetch(full, { headers, signal });
     if (!res.ok) {
       if (res.status === 429) {
         consecutive429s++;
@@ -131,7 +133,7 @@ async function yfetch(url: string, withCrumb = false): Promise<any> {
       throw new Error(`yahoo ${res.status} for ${url}`);
     }
     consecutive429s = 0;
-    return res.json();
+    return await res.json();
   } finally {
     release();
   }
@@ -141,10 +143,10 @@ const n = (v: unknown): number | null => (typeof v === "number" && isFinite(v) ?
 
 // ---- quotes ----
 
-export async function quotes(symbols: string[]): Promise<Quote[]> {
+export async function quotes(symbols: string[], signal?: AbortSignal): Promise<Quote[]> {
   const url =
     "https://query1.finance.yahoo.com/v7/finance/quote?symbols=" + encodeURIComponent(symbols.join(","));
-  const json = await yfetch(url, true);
+  const json = await yfetch(url, true, signal);
   const rows: any[] = json?.quoteResponse?.result ?? [];
   return rows.map((r) => ({
     symbol: r.symbol,
@@ -178,9 +180,9 @@ export async function quotes(symbols: string[]): Promise<Quote[]> {
 }
 
 /** Quote fallback that works without crumb, using the chart endpoint's metadata. */
-export async function quoteFromChart(symbol: string): Promise<Quote> {
+export async function quoteFromChart(symbol: string, signal?: AbortSignal): Promise<Quote> {
   const json = await yfetch(
-    `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=1d&interval=1d`
+    `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=1d&interval=1d`, false, signal
   );
   const meta = json?.chart?.result?.[0]?.meta;
   if (!meta) throw new Error("yahoo chart: no meta for " + symbol);

@@ -16,10 +16,10 @@ Each feature is developed on its own branch, validated, then merged into local m
 Portfolio performance currently supports long-only USD assets and up to one year of provider history. Funding gaps, missing prices, unverified currencies or unverified split price basis withhold return metrics. Record cash events in PERFORMANCE and trades in PORTFOLIO.
 
 
-## Final verification
+## Eight-feature checkpoint verification
 
 - All eight feature branches were implemented sequentially and merged into local main after validation.
-- Final automated suite: 82 passing tests across 22 files. Server and production web builds pass.
+- Automated suite at the eight-feature checkpoint: 82 passing tests across 22 files. Server and production web builds pass.
 - Browser integration used an isolated SQLite database and fixture providers through the real web proxy and Express API. Verified workspace management/persistence/import/export, comparison metrics, financial filing links, journal persistence and chart snapshots, funded portfolio returns, strategy payoffs and journal save, briefing generation/history, and AI source previews/private-data controls/missing-key handling. No browser runtime errors.
 - Model calls are mocked in tests. No live paid AI request or live provider-availability acceptance test was performed.
 
@@ -33,3 +33,13 @@ Portfolio performance currently supports long-only USD assets and up to one year
 6. Use **STRATEGY** to build up to eight option/stock legs, choose a template and inspect expiration P&L. Standard options assume 100 shares/contract. Early assignment, fees and margin are excluded.
 7. **MY BRIEFING** collects the first twelve watchlist symbols. Select a session label, save snapshots or export text. Reports are on demand; delivery is not scheduled.
 8. **AI ASSIST → Preview sources** works without a model key. With ANTHROPIC_API_KEY configured, responses cite server-collected sources. Notes/holdings are opt-in; changing personal-data selections clears the chat so old private text is not resent. Headlines are not full-article evidence; retrieval time is distinct from market observation time.
+
+## Additional feature: price alerts
+
+| # | Feature | Branch | Status |
+|---|---|---|---|
+| 9 | Persistent price and daily-change alerts | codex/feature-09-price-alerts | Complete; 103 tests across 26 files and full production build passed |
+
+Add **ALERTS** to create, edit, pause and rearm rules. The API checks enabled symbols every 15 seconds; each trigger is recorded atomically and disarms its rule. Global in-app notifications and opt-in desktop notifications share a browser delivery cursor. See [price-alert usage and limits](price-alerts.md).
+
+Browser integration uses an isolated database, fixture quotes and a simulated Notification API. It verifies threshold and percentage triggers, one-shot/rearm behavior, reload persistence, cross-tab deduplication, stale-cache rejection, provider recovery, browser-closed catch-up and denied-permission fallback. No operating-system desktop notification or live-provider acceptance test was performed.

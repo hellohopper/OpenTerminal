@@ -1,5 +1,7 @@
 import express from "express";
 import cors from "cors";
+import { alertsRouter } from "./routes/alerts.js";
+import { alertMonitor } from "./alerts.js";
 import { briefingsRouter } from "./routes/briefings.js";
 import { journalRouter } from "./routes/journal.js";
 import { marketRouter } from "./routes/market.js";
@@ -31,6 +33,7 @@ const webOrigin = process.env.WEB_ORIGIN ?? "http://localhost:3000";
 app.use(cors({ origin: webOrigin }));
 app.use("/api/journal", requireApiKey, express.json({ limit: "1500kb" }), journalRouter);
 app.use(express.json());
+app.use("/api/alerts", requireApiKey, alertsRouter);
 app.use("/api/briefings", requireApiKey, rateLimit({ windowMs: 60000, max: 10 }), briefingsRouter);
 
 // No API key here by design (market.ts routes proxy free, keyless public data),
@@ -63,5 +66,6 @@ const PORT = Number(process.env.API_PORT ?? 4000);
 // API_KEY + WEB_ORIGIN) to intentionally expose it beyond this machine.
 const HOST = process.env.API_HOST ?? "127.0.0.1";
 app.listen(PORT, HOST, () => {
+  alertMonitor.start();
   console.log(`OpenTerminal API listening on http://${HOST}:${PORT}`);
 });
