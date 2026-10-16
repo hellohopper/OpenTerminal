@@ -53,3 +53,13 @@ Browser integration uses an isolated database, fixture quotes and a simulated No
 Horizontal levels and two-point trend segments are saved per chart widget, symbol and range in browser storage. Undo, individual deletion, clear and Escape cancellation are available. Normalized overlays compare up to four assets at exact shared timestamps and can be captured in the journal. See [chart tools usage and limits](chart-tools.md).
 
 Browser checks use fixture providers through the real API/web proxy. They verify rapid two-point drawing in reverse time order, reload persistence, range isolation, Escape, undo/delete/clear, normalized comparison and price-mode restoration, journal snapshots, invalid symbols and missing history. No browser runtime errors were observed; live provider availability was not tested.
+
+## Additional feature: options Greeks
+
+| # | Feature | Branch | Status |
+|---|---|---|---|
+| 11 | Black-Scholes Greeks on the options chain | codex/feature-11-option-greeks | Complete; 115 tests across 28 files, full build and browser integration passed |
+
+Enable **OPTIONS → Show Greeks** for model price, Delta, Gamma, Theta, Vega and Rho. Rate/dividend assumptions are editable, IV provenance is shown per contract, and missing inputs withhold results. See [Greeks units, assumptions and limits](option-greeks.md).
+
+Browser validation uses fixture-backed API responses for midpoint IV and mocked option responses for provider IV, expired contracts and missing inputs. It verifies quote/Greek table switching, edits, reset, expiry selection, invalid-input withholding and no last-trade fallback. No browser runtime errors were observed. Live-provider/broker reconciliation was not performed.

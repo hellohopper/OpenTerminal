@@ -51,7 +51,7 @@ No signup. No credit card. No rate‑limited demo tier. Clone it, `npm install`,
 - 📰 **News feed** — aggregated and de‑duplicated from multiple RSS sources, per‑symbol or global
 - 🔎 **Full‑market screener** — filter by sector, market cap, % change, and volume across the entire US equity market, sortable on every column
 - 🗺️ **Live sector heatmap** — treemap sized by market cap, colored by daily % change, refreshing every few seconds
-- ⛓️ **Options chain** — calls and puts side‑by‑side with strike, bid/ask, volume, open interest, and ITM highlighting
+- ⛓️ **Options chain** — calls and puts side‑by‑side with strike, bid/ask, volume, open interest, and ITM highlighting; optional Black-Scholes Greeks with editable assumptions and labeled provider/midpoint/user IV. [Usage and model limits](docs/option-greeks.md).
 - 🪙 **Crypto board** — top assets with 7‑day sparklines, BTC/ETH dominance, and full OHLCV charting for any listed coin
 - 🏦 **Macro dashboard** — live US Treasury yield curve, VIX, and major index/commodity proxies
 - 💼 **Portfolio tracker** — log buy/sell transactions, track average cost, realized & unrealized P&L (persisted in SQLite)
@@ -205,7 +205,7 @@ Run tests with `npm test` (Vitest, no network calls). CI runs on every push — 
 ## 🗺️ Roadmap
 
 - [x] Chart drawing tools & multi‑asset comparison overlay
-- [ ] Black‑Scholes Greeks on the options chain
+- [x] Black‑Scholes Greeks on the options chain
 - [x] Price alerts with desktop notifications
 - [ ] PostgreSQL as an alternative to SQLite
 
