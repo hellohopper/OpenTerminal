@@ -54,7 +54,7 @@ No signup. No credit card. No rate‑limited demo tier. Clone it, `npm install`,
 - 🏦 **Macro dashboard** — live US Treasury yield curve, VIX, and major index/commodity proxies
 - 💼 **Portfolio tracker** — log buy/sell transactions, track average cost, realized & unrealized P&L (persisted in SQLite)
 - 📅 **Calendar** — economic events (Fed, ECB, CPI, NFP and more) with consensus forecast, previous reading and, for the major US/EU releases, the actual outcome; plus a per‑watchlist earnings calendar with click‑through history showing forecast vs. actual EPS for the last several quarters and the stock's next‑day price move
-- 🤖 **AI assistant** (optional) — ask questions about the symbol you're looking at, powered by Claude, fully context‑aware of the terminal's current data
+- 🤖 **AI research assistant** (optional) — server-collected quotes, SEC financials and headlines with numbered source citations and inspectable data; personal notes/holdings are opt-in. Source preview works without an AI key.
 - ⚡ **Near real‑time updates** — quotes and indexes refresh every second with a subtle flash on change, so you always know what just moved
 - ⌨️ **Keyboard shortcuts** everywhere — `⌘K` to search, `⌥1`–`⌥9` to add any widget
 
@@ -140,7 +140,9 @@ export ANTHROPIC_API_KEY=sk-ant-...
 npm run dev
 ```
 
-Without a key, everything else still works — the AI widget just shows a friendly "unavailable" message instead of failing.
+Without a key, all other features and **Preview sources** still work; model-backed answers show an unavailable message. Enable **My notes** or **My portfolio** only when you want that data included in requests to the configured AI provider. Changing personal-data selections starts a fresh conversation.
+
+See [the feature guide](docs/feature-progress.md#using-the-features) for workspaces, comparison, financials, journals, portfolio analytics, option strategies and personal briefings.
 
 Two optional knobs for the assistant, both standard for the Anthropic SDK:
 

@@ -80,6 +80,7 @@ async function vixQuote(): Promise<yahoo.Quote> {
     marketState: null,
     time: null,
     source: "fred",
+    sourceUrl: "https://fred.stlouisfed.org/series/VIXCLS",
   };
 }
 

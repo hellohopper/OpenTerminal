@@ -62,5 +62,6 @@ export async function quote(symbol: string): Promise<Quote> {
     marketState: null,
     time: null,
     source: "stooq",
+    sourceUrl: `https://stooq.com/q/?s=${encodeURIComponent(stooqSymbol(symbol))}`,
   };
 }
