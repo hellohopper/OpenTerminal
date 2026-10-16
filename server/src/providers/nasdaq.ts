@@ -1,3 +1,4 @@
+import { providerFetch } from "./http.js";
 import type { Quote, Candle } from "./yahoo.js";
 import { normalizeExpiry } from "../expiry.js";
 
@@ -19,10 +20,11 @@ function release(): void {
   waiters.shift()?.();
 }
 
-async function nfetch(url: string): Promise<any> {
+async function nfetch(url: string, signal?: AbortSignal): Promise<any> {
   await acquire();
   try {
-    const res = await fetch(url, { headers: HEADERS });
+    signal?.throwIfAborted();
+    const res = await providerFetch(url, { headers: HEADERS, signal });
     if (!res.ok) throw new Error(`nasdaq ${res.status} for ${url}`);
     const json = await res.json();
     if (!json?.data) throw new Error(`nasdaq: no data in response for ${url}`);
@@ -51,13 +53,13 @@ const KNOWN_ETFS = new Set([
 // the process lifetime to avoid a lookup on every quote/history request.
 const assetClassCache = new Map<string, "stocks" | "etf">();
 
-async function resolveAssetClass(symbol: string): Promise<"stocks" | "etf"> {
+async function resolveAssetClass(symbol: string, signal?: AbortSignal): Promise<"stocks" | "etf"> {
   const sym = symbol.toUpperCase();
   const cached = assetClassCache.get(sym);
   if (cached) return cached;
   try {
     const rows: any[] = await nfetch(
-      `https://api.nasdaq.com/api/autocomplete/slookup/10?search=${encodeURIComponent(symbol)}&limit=10`
+      `https://api.nasdaq.com/api/autocomplete/slookup/10?search=${encodeURIComponent(symbol)}&limit=10`, signal
     );
     const match = rows.find((r) => String(r.symbol).toUpperCase() === sym);
     if (match) {
@@ -71,11 +73,11 @@ async function resolveAssetClass(symbol: string): Promise<"stocks" | "etf"> {
   return KNOWN_ETFS.has(sym) ? "etf" : "stocks";
 }
 
-export async function quote(symbol: string): Promise<Quote> {
-  const assetclass = await resolveAssetClass(symbol);
+export async function quote(symbol: string, signal?: AbortSignal): Promise<Quote> {
+  const assetclass = await resolveAssetClass(symbol, signal);
   const [info, summary] = await Promise.all([
-    nfetch(`https://api.nasdaq.com/api/quote/${encodeURIComponent(symbol)}/info?assetclass=${assetclass}`),
-    nfetch(`https://api.nasdaq.com/api/quote/${encodeURIComponent(symbol)}/summary?assetclass=${assetclass}`).catch(() => null),
+    nfetch(`https://api.nasdaq.com/api/quote/${encodeURIComponent(symbol)}/info?assetclass=${assetclass}`, signal),
+    nfetch(`https://api.nasdaq.com/api/quote/${encodeURIComponent(symbol)}/summary?assetclass=${assetclass}`, signal).catch(() => null),
   ]);
 
   const price = money(info.primaryData?.lastSalePrice);

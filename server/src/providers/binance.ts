@@ -1,3 +1,4 @@
+import { providerFetch } from "./http.js";
 import type { CryptoRow } from "./coingecko.js";
 import type { Quote, Candle } from "./yahoo.js";
 
@@ -15,7 +16,7 @@ export async function markets(): Promise<CryptoRow[]> {
   const symbols = Object.keys(NAMES);
   const url =
     "https://api.binance.com/api/v3/ticker/24hr?symbols=" + encodeURIComponent(JSON.stringify(symbols));
-  const res = await fetch(url);
+  const res = await providerFetch(url);
   if (!res.ok) throw new Error(`binance ${res.status}`);
   const rows: any[] = await res.json();
   return rows
@@ -35,16 +36,16 @@ export async function markets(): Promise<CryptoRow[]> {
 
 export async function orderBook(symbol: string, limit = 20): Promise<{ bids: [string, string][]; asks: [string, string][] }> {
   const pair = encodeURIComponent(symbol.toUpperCase() + "USDT");
-  const res = await fetch(`https://api.binance.com/api/v3/depth?symbol=${pair}&limit=${limit}`);
+  const res = await providerFetch(`https://api.binance.com/api/v3/depth?symbol=${pair}&limit=${limit}`);
   if (!res.ok) throw new Error(`binance ${res.status}`);
   const d = await res.json();
   return { bids: d.bids ?? [], asks: d.asks ?? [] };
 }
 
 /** Single-symbol quote so crypto tickers can flow through the same /api/quotes path as stocks. */
-export async function quote(symbol: string): Promise<Quote> {
+export async function quote(symbol: string, signal?: AbortSignal): Promise<Quote> {
   const pair = symbol.toUpperCase() + "USDT";
-  const res = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${encodeURIComponent(pair)}`);
+  const res = await providerFetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${encodeURIComponent(pair)}`, { signal });
   if (!res.ok) throw new Error(`binance ticker ${res.status}`);
   const d = await res.json();
   return {
@@ -69,7 +70,7 @@ export async function quote(symbol: string): Promise<Quote> {
     week52Low: null,
     beta: null,
     sharesOutstanding: null,
-    currency: "USD",
+    currency: "USDT",
     exchange: "Binance",
     marketState: "Open",
     time: null,
@@ -92,7 +93,7 @@ const RANGE_TO_KLINE: Record<string, { interval: string; limit: number }> = {
 export async function history(symbol: string, rangeKey: string): Promise<Candle[]> {
   const { interval, limit } = RANGE_TO_KLINE[rangeKey] ?? RANGE_TO_KLINE["6M"];
   const pair = symbol.toUpperCase() + "USDT";
-  const res = await fetch(
+  const res = await providerFetch(
     `https://api.binance.com/api/v3/klines?symbol=${encodeURIComponent(pair)}&interval=${interval}&limit=${limit}`
   );
   if (!res.ok) throw new Error(`binance klines ${res.status}`);
