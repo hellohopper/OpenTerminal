@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import { journalRouter } from "./routes/journal.js";
 import { marketRouter } from "./routes/market.js";
 import { portfolioRouter } from "./routes/portfolio.js";
 import { aiRouter } from "./routes/ai.js";
@@ -27,6 +28,7 @@ if (process.env.TRUST_PROXY === "1") {
 // origin.
 const webOrigin = process.env.WEB_ORIGIN ?? "http://localhost:3000";
 app.use(cors({ origin: webOrigin }));
+app.use("/api/journal", requireApiKey, express.json({ limit: "1500kb" }), journalRouter);
 app.use(express.json());
 
 // No API key here by design (market.ts routes proxy free, keyless public data),
