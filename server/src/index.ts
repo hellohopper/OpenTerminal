@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import { briefingsRouter } from "./routes/briefings.js";
 import { journalRouter } from "./routes/journal.js";
 import { marketRouter } from "./routes/market.js";
 import { portfolioRouter } from "./routes/portfolio.js";
@@ -30,6 +31,7 @@ const webOrigin = process.env.WEB_ORIGIN ?? "http://localhost:3000";
 app.use(cors({ origin: webOrigin }));
 app.use("/api/journal", requireApiKey, express.json({ limit: "1500kb" }), journalRouter);
 app.use(express.json());
+app.use("/api/briefings", requireApiKey, rateLimit({ windowMs: 60000, max: 10 }), briefingsRouter);
 
 // No API key here by design (market.ts routes proxy free, keyless public data),
 // but still bounded per-IP: unlike /api/ai and /api/portfolios, an unauthenticated
