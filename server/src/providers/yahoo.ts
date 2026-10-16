@@ -48,6 +48,7 @@ export type Quote = {
   marketState: string | null;
   time: number | null;
   source: string;
+  sourceUrl?: string;
 };
 
 export type Candle = { time: number; open: number; high: number; low: number; close: number; volume: number };
@@ -172,6 +173,7 @@ export async function quotes(symbols: string[]): Promise<Quote[]> {
     marketState: r.marketState ?? null,
     time: n(r.regularMarketTime),
     source: "yahoo",
+    sourceUrl: `https://finance.yahoo.com/quote/${encodeURIComponent(r.symbol)}/`,
   }));
 }
 
@@ -211,6 +213,7 @@ export async function quoteFromChart(symbol: string): Promise<Quote> {
     marketState: null,
     time: n(meta.regularMarketTime),
     source: "yahoo-chart",
+    sourceUrl: `https://finance.yahoo.com/quote/${encodeURIComponent(symbol)}/`,
   };
 }
 

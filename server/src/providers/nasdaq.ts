@@ -119,6 +119,7 @@ export async function quote(symbol: string): Promise<Quote> {
     marketState: info.marketStatus ?? null,
     time: null,
     source: "nasdaq",
+    sourceUrl: `https://www.nasdaq.com/market-activity/${assetclass === "etf" ? "etf" : "stocks"}/${encodeURIComponent(symbol.toLowerCase())}`,
   };
 }
 

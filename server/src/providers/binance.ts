@@ -74,6 +74,7 @@ export async function quote(symbol: string): Promise<Quote> {
     marketState: "Open",
     time: null,
     source: "binance",
+    sourceUrl: `https://www.binance.com/en/trade/${encodeURIComponent(symbol.toUpperCase())}_USDT`,
   };
 }
 

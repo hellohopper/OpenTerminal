@@ -11,6 +11,25 @@ Each feature is developed on its own branch, validated, then merged into local m
 | 5 | Portfolio performance and risk | codex/feature-05-performance | Complete; 68 tests, full build and final type check passed |
 | 6 | Options strategy builder | codex/feature-06-option-strategies | Complete; 72 tests and web build passed |
 | 7 | Personal daily briefing | codex/feature-07-briefing | Complete; 74 tests, full build and final provider-error checks passed |
-| 8 | AI research with sources | codex/feature-08-research-assistant | Planned |
+| 8 | AI research with sources | codex/feature-08-research-assistant | Complete; 82 tests across 22 suites, full build and browser integration passed |
 
 Portfolio performance currently supports long-only USD assets and up to one year of provider history. Funding gaps, missing prices, unverified currencies or unverified split price basis withhold return metrics. Record cash events in PERFORMANCE and trades in PORTFOLIO.
+
+
+## Final verification
+
+- All eight feature branches were implemented sequentially and merged into local main after validation.
+- Final automated suite: 82 passing tests across 22 files. Server and production web builds pass.
+- Browser integration used an isolated SQLite database and fixture providers through the real web proxy and Express API. Verified workspace management/persistence/import/export, comparison metrics, financial filing links, journal persistence and chart snapshots, funded portfolio returns, strategy payoffs and journal save, briefing generation/history, and AI source previews/private-data controls/missing-key handling. No browser runtime errors.
+- Model calls are mocked in tests. No live paid AI request or live provider-availability acceptance test was performed.
+
+## Using the features
+
+1. Use **WORKSPACE → Manage** to create a named daily, research, options or blank layout; duplicate, rename or import/export it. Workspaces save independently in this browser.
+2. Add **COMPARE** from the sidebar and enter 2–5 symbols. Comparisons use common dates and price returns, without FX or dividend adjustments.
+3. Add **FINANCIALS** for quarterly/annual USD US GAAP statements. Click reported values for the original filing. Derived quarters are marked with an asterisk.
+4. Use **JOURNAL** for research/trade notes, or **JOURNAL SNAPSHOT** inside a chart to capture it. Images and notes persist in SQLite.
+5. Record trades (with UTC dates) in **PORTFOLIO**, then funding/dividend/split events in **PERFORMANCE**. Confirm historical price basis when using splits. Missing funding, prices or currencies withhold return metrics.
+6. Use **STRATEGY** to build up to eight option/stock legs, choose a template and inspect expiration P&L. Standard options assume 100 shares/contract. Early assignment, fees and margin are excluded.
+7. **MY BRIEFING** collects the first twelve watchlist symbols. Select a session label, save snapshots or export text. Reports are on demand; delivery is not scheduled.
+8. **AI ASSIST → Preview sources** works without a model key. With ANTHROPIC_API_KEY configured, responses cite server-collected sources. Notes/holdings are opt-in; changing personal-data selections clears the chat so old private text is not resent. Headlines are not full-article evidence; retrieval time is distinct from market observation time.
