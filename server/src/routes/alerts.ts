@@ -11,6 +11,15 @@ import {
 } from "../alerts.js";
 export const alertsRouter = Router();
 const fields = z.object({
+  metric: z.enum(["native", "volume"]).default("native"),
+  repeat_seconds: z
+    .number()
+    .int()
+    .refine(
+      (n) => n === 0 || (n >= 60 && n <= 86400),
+      "Use 0 or a cooldown from 60 to 86400 seconds.",
+    )
+    .default(0),
   symbol: z
     .string()
     .trim()
@@ -28,11 +37,13 @@ const fields = z.object({
 });
 const schema = fields.refine(
   (r) =>
-    r.condition.startsWith("PRICE_")
-      ? r.threshold > 0
-      : r.condition === "CHANGE_ABOVE"
-        ? r.threshold >= 0 && r.threshold <= 1e6
-        : r.threshold <= 0,
+    r.metric === "volume"
+      ? r.condition.startsWith("PRICE_") && r.threshold > 0
+      : r.condition.startsWith("PRICE_")
+        ? r.threshold > 0
+        : r.condition === "CHANGE_ABOVE"
+          ? r.threshold >= 0 && r.threshold <= 1e6
+          : r.threshold <= 0,
   "Price thresholds must be positive; daily rises use nonnegative percentages and daily falls use -100 to 0%.",
 );
 async function checkSymbolLimit(symbol: string, armed: boolean, except = -1) {
@@ -135,7 +146,7 @@ alertsRouter.post(
             (
               await db
                 .prepare(
-                  "INSERT INTO price_alerts (symbol,condition,threshold,label,armed,created_at) VALUES (?,?,?,?,?,?)",
+                  "INSERT INTO price_alerts (symbol,condition,threshold,label,armed,created_at,metric,repeat_seconds) VALUES (?,?,?,?,?,?,?,?)",
                 )
                 .run(
                   r.symbol,
@@ -144,6 +155,8 @@ alertsRouter.post(
                   r.label,
                   r.armed ? 1 : 0,
                   new Date().toISOString(),
+                  r.metric,
+                  r.repeat_seconds,
                 )
             ).lastInsertRowid,
           );
@@ -183,7 +196,7 @@ alertsRouter.put(
           await checkSymbolLimit(r.symbol, r.armed, current.id);
           await db
             .prepare(
-              "UPDATE price_alerts SET symbol=?,condition=?,threshold=?,label=?,armed=?,revision=revision+1,last_checked_at=NULL,last_value=NULL WHERE id=?",
+              "UPDATE price_alerts SET symbol=?,condition=?,threshold=?,label=?,armed=?,revision=revision+1,last_checked_at=NULL,last_value=NULL,metric=?,repeat_seconds=? WHERE id=?",
             )
             .run(
               r.symbol,
@@ -191,6 +204,8 @@ alertsRouter.put(
               r.threshold,
               r.label,
               r.armed ? 1 : 0,
+              r.metric,
+              r.repeat_seconds,
               req.params.id,
             );
           return true;

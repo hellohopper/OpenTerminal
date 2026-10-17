@@ -15,6 +15,8 @@ import {
 import { useTerminal } from "../../store/terminal";
 
 type Form = {
+  metric?: "native" | "volume";
+  repeat_seconds?: number;
   id?: number;
   symbol: string;
   condition: AlertCondition;
@@ -24,6 +26,8 @@ type Form = {
 };
 const blank = (symbol: string): Form => ({
   symbol,
+  metric: "native",
+  repeat_seconds: 0,
   condition: "PRICE_ABOVE",
   threshold: "",
   label: "",
@@ -83,6 +87,8 @@ export default function AlertsWidget() {
         threshold: Number(form.threshold),
         label: form.label,
         armed: form.armed,
+        metric: form.metric ?? "native",
+        repeat_seconds: form.repeat_seconds ?? 0,
       };
       return form.id
         ? apiPut(`/api/alerts/${form.id}`, body)
@@ -92,7 +98,7 @@ export default function AlertsWidget() {
       refresh();
       setForm(blank(symbol));
       setMessage(
-        "Alert saved. Enabled rules trigger once, then stop until rearmed.",
+        "Alert saved. One-shot rules stop after firing; repeating rules respect their cooldown.",
       );
     },
     onError: (err) => setMessage(err.message),
@@ -226,6 +232,21 @@ export default function AlertsWidget() {
             Use {symbol}
           </button>
           <select
+            aria-label="Alert metric"
+            value={form.metric ?? "native"}
+            onChange={(e) =>
+              setForm({
+                ...form,
+                metric: e.target.value as "native" | "volume",
+                condition: "PRICE_ABOVE",
+                threshold: "",
+              })
+            }
+          >
+            <option value="native">Price / day change</option>
+            <option value="volume">Volume</option>
+          </select>
+          <select
             aria-label="Alert condition"
             value={form.condition}
             onChange={(e) =>
@@ -236,12 +257,18 @@ export default function AlertsWidget() {
               })
             }
           >
-            {Object.entries(ALERT_CONDITIONS).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-                {value.startsWith("CHANGE_") ? " (%)" : ""}
-              </option>
-            ))}
+            {Object.entries(ALERT_CONDITIONS)
+              .filter(
+                ([key]) => form.metric !== "volume" || key.startsWith("PRICE_"),
+              )
+              .map(([value, label]) => (
+                <option key={value} value={value}>
+                  {form.metric === "volume"
+                    ? label.replace("Price", "Volume")
+                    : label}
+                  {value.startsWith("CHANGE_") ? " (%)" : ""}
+                </option>
+              ))}
           </select>
           <input
             aria-label="Alert threshold"
@@ -269,6 +296,19 @@ export default function AlertsWidget() {
             onChange={(e) => setForm({ ...form, threshold: e.target.value })}
           />
         </div>
+        <label>
+          Repeat cooldown (seconds, 0 = once)
+          <input
+            aria-label="Alert repeat seconds"
+            type="number"
+            min="0"
+            max="86400"
+            value={form.repeat_seconds ?? 0}
+            onChange={(e) =>
+              setForm({ ...form, repeat_seconds: Number(e.target.value) })
+            }
+          />
+        </label>
         <div className="flex gap-2 flex-wrap">
           <input
             aria-label="Alert label"
@@ -341,7 +381,12 @@ export default function AlertsWidget() {
                 {rule.symbol}
                 {rule.label && <div className="dim">{rule.label}</div>}
               </td>
-              <td>{ALERT_CONDITIONS[rule.condition]}</td>
+              <td>
+                {rule.metric === "volume"
+                  ? ALERT_CONDITIONS[rule.condition].replace("Price", "Volume")
+                  : ALERT_CONDITIONS[rule.condition]}
+                {rule.repeat_seconds ? ` · repeat ${rule.repeat_seconds}s` : ""}
+              </td>
               <td>
                 {alertNumber(rule.threshold)}
                 {rule.condition.startsWith("CHANGE_") ? "%" : ""}
