@@ -46,7 +46,7 @@ npm run db:migrate -w server -- --sqlite /absolute/path/to/terminal.db
 
 4. The command prints imported counts per table. Start the API and verify your portfolios, journal and history.
 
-For the production Docker image, the equivalent command is `node dist/migrate-sqlite.js --sqlite /path/to/terminal.db`, with DATABASE_URL set and the source file mounted. Use a one-off API container before bringing up the normal API service; the PostgreSQL service must already be healthy.
+For the production Docker image, the equivalent command is `node server/dist/migrate-sqlite.js --sqlite /path/to/terminal.db`, with DATABASE_URL set and the source file mounted. Use a one-off API container before bringing up the normal API service; the PostgreSQL service must already be healthy.
 
 The source is opened read-only and checked for broken foreign keys. The importer reads a consistent source snapshot into memory, so provide enough memory for the database, including images. It does not overwrite destination rows. An insert failure rolls back the imported rows; a second successful import into the same populated destination is refused. PostgreSQL sequences are advanced to the imported maximum IDs so later inserts work normally. Browser-local layouts and annotations are not part of this database import.
 
