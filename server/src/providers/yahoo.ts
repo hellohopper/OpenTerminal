@@ -23,6 +23,8 @@ function selectUserAgent(): string {
 const UA = selectUserAgent();
 
 export type Quote = {
+  retrievedAt?: string;
+  stale?: boolean;
   symbol: string;
   name: string | null;
   price: number | null;

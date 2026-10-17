@@ -26,6 +26,9 @@ export async function apiDelete(path: string): Promise<void> {
 }
 
 export type Quote = {
+  retrievedAt?: string;
+  time?: number|null;
+  stale?: boolean;
   symbol: string;
   name: string | null;
   price: number | null;
