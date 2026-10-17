@@ -14,6 +14,8 @@ Requested workflow: separate reviewable PRs, followed by eight features in order
 | 5. Cross-device workspace sync | codex/feature-17-sync | Complete: 143 tests including PostgreSQL concurrency, production build and two-device browser workflow pass |
 | 6. Repeat/conditional alerts and scheduled briefings | codex/feature-18-delivery | Complete: 147 tests, production build and repeating alert/scheduled briefing browser workflow pass |
 | 7. Option strategy risk scenarios | codex/feature-19-strategy-risk | Complete: 149 tests, production build and signed Greeks/scenario/journal browser workflow pass |
-| 8. Holdings event center | codex/feature-20-events | Planned |
+| 8. Holdings event center | codex/feature-20-events | Complete: 151 tests including real PostgreSQL, production build and all 10 browser workflows pass |
 
 New frontend workflows will be exercised by repository-owned browser tests and included in CI as the round progresses. Production secrets and user databases are not used by test fixtures.
+
+Final local acceptance: all eight features implemented; 151 tests and ten authenticated browser workflows pass. Each feature has its own branch and draft PR, with local merges. The economic feed is current-week only; upcoming dividend/split dates are explicitly unavailable.

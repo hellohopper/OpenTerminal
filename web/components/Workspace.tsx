@@ -10,6 +10,7 @@ import QualityWidget from "./widgets/QualityWidget";
 import BackupWidget from "./widgets/BackupWidget";
 import SyncWidget from "./widgets/SyncWidget";
 import DeliveryWidget from "./widgets/DeliveryWidget";
+import EventsWidget from "./widgets/EventsWidget";
 import AlertsWidget from "./widgets/AlertsWidget";
 import BriefingWidget from "./widgets/BriefingWidget";
 import StrategyWidget from "./widgets/StrategyWidget";
@@ -42,6 +43,7 @@ function WidgetBody({ widget }: { widget: WidgetInstance }) {
     case "backup": return <BackupWidget />;
     case "sync": return <SyncWidget />;
     case "delivery": return <DeliveryWidget />;
+    case "events": return <EventsWidget />;
     case "alerts": return <AlertsWidget />;
     case "briefing": return <BriefingWidget />;
     case "strategy": return <StrategyWidget widget={widget} />;
