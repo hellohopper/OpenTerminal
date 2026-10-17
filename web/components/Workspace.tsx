@@ -6,6 +6,7 @@ import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 import { normalizeSymbol } from "../lib/symbol";
 import { useTerminal, type WidgetInstance } from "../store/terminal";
+import QualityWidget from "./widgets/QualityWidget";
 import AlertsWidget from "./widgets/AlertsWidget";
 import BriefingWidget from "./widgets/BriefingWidget";
 import StrategyWidget from "./widgets/StrategyWidget";
@@ -34,6 +35,7 @@ const Grid = WidthProvider(GridLayout);
 
 function WidgetBody({ widget }: { widget: WidgetInstance }) {
   switch (widget.type) {
+    case "quality": return <QualityWidget />;
     case "alerts": return <AlertsWidget />;
     case "briefing": return <BriefingWidget />;
     case "strategy": return <StrategyWidget widget={widget} />;
@@ -106,7 +108,7 @@ function SymbolTag({ widget, activeSymbol }: { widget: WidgetInstance; activeSym
 }
 
 const TITLES: Record<string, string> = {
-  alerts: "Price Alerts", briefing: "Personal Daily Briefing", strategy: "Options Strategy", performance: "Portfolio Performance / Risk", journal: "Research Journal", fundamentals: "Company Fundamentals", comparison: "Comparison", quote: "Quote", chart: "Chart", watchlist: "Watchlist", news: "News",
+  quality: "Data Quality", alerts: "Price Alerts", briefing: "Personal Daily Briefing", strategy: "Options Strategy", performance: "Portfolio Performance / Risk", journal: "Research Journal", fundamentals: "Company Fundamentals", comparison: "Comparison", quote: "Quote", chart: "Chart", watchlist: "Watchlist", news: "News",
   heatmap: "Heatmap", screener: "Screener", crypto: "Crypto",
   macro: "Macro / Indexes", options: "Option Chain", portfolio: "Portfolio", ai: "AI Assistant",
   calendar: "Calendar", insider: "Insider Transactions", tv: "Live TV", recap: "Market Recap",
