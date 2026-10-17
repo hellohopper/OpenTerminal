@@ -5,6 +5,7 @@ import { useState } from "react";
 import { apiGet, fmt, fmtBig, pctClass, type Quote } from "../../lib/api";
 import { normalizeSymbol, symbolsParam } from "../../lib/symbol";
 import { useTerminal } from "../../store/terminal";
+import {quoteQuality} from "../../lib/valuation";
 import Flash from "../Flash";
 
 export default function WatchlistWidget() {
@@ -61,7 +62,7 @@ export default function WatchlistWidget() {
             return (
               <tr key={sym} onClick={() => setActiveSymbol(sym)}>
                 <td className="font-bold">{sym}</td>
-                <td><Flash value={q?.price}>{fmt(q?.price)}</Flash></td>
+                <td title={quoteQuality(q)??`Retrieved ${q?.retrievedAt}; indicative feed`}><Flash value={q?.price}>{fmt(q?.price)}</Flash>{quoteQuality(q)&&<span className="amber"> ⚠</span>}</td>
                 <td className={pctClass(q?.changePercent)}>
                   <Flash value={q?.changePercent}>{fmt(q?.changePercent)}%</Flash>
                 </td>

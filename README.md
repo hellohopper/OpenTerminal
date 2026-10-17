@@ -37,6 +37,7 @@ No signup. No credit card. No rate‑limited demo tier. Clone it, `npm install`,
 
 - 🔔 **Price alerts** — persistent price/daily-change thresholds, pause/rearm controls, trigger history, in-app delivery and opt-in desktop notifications; checks run while the API is active. [Usage and limits](docs/price-alerts.md).
 - ✏️ **Chart tools** — saved horizontal/trend lines with undo/delete controls, plus normalized overlays for the chart symbol and up to three comparison assets. [Usage](docs/chart-tools.md).
+- 📡 **Data quality panel** — inspect watchlist retrieval age, provider observation times, stale fallbacks and request counters. Portfolio totals withhold incomplete valuations.
 - 🖥️ **Widget-based workspace** — drag, resize, add, and remove panels (`react-grid-layout`); your layout is saved locally and restored on reload
 - 🗞️ **Personal briefings** — watchlist movers, recent headlines, upcoming earnings and economic events; save historical snapshots and export text without an AI key.
 - 🧮 **Options strategy builder** — editable multi-leg expiration payoffs, vertical/straddle/covered-call templates, break-even points and explicit unlimited-risk bounds; save scenarios to the journal.
