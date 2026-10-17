@@ -9,6 +9,7 @@ import { useTerminal, type WidgetInstance } from "../store/terminal";
 import QualityWidget from "./widgets/QualityWidget";
 import BackupWidget from "./widgets/BackupWidget";
 import SyncWidget from "./widgets/SyncWidget";
+import DeliveryWidget from "./widgets/DeliveryWidget";
 import AlertsWidget from "./widgets/AlertsWidget";
 import BriefingWidget from "./widgets/BriefingWidget";
 import StrategyWidget from "./widgets/StrategyWidget";
@@ -40,6 +41,7 @@ function WidgetBody({ widget }: { widget: WidgetInstance }) {
     case "quality": return <QualityWidget />;
     case "backup": return <BackupWidget />;
     case "sync": return <SyncWidget />;
+    case "delivery": return <DeliveryWidget />;
     case "alerts": return <AlertsWidget />;
     case "briefing": return <BriefingWidget />;
     case "strategy": return <StrategyWidget widget={widget} />;

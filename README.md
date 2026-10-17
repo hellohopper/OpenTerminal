@@ -270,3 +270,9 @@ Watchlist groups and screener presets can be saved, loaded, renamed and deleted 
 ### Device sync
 
 DEVICE SYNC stores one manual owner-wide snapshot on this server. Upload includes all workspaces, watchlist groups, screener presets and chart drawings. On another signed-in browser, explicitly replace that device with Download. Concurrent or outdated uploads return a conflict; download the latest version before editing further. Database restore invalidates existing sync versions. Deployment secrets, sessions and notification permissions are excluded. This remains a single-owner deployment.
+
+### Repeating alerts and scheduled briefings
+
+ALERTS supports price, daily percentage change and volume conditions. Set repeat cooldown to 0 for a one-shot rule, or 60–86400 seconds for repeating notifications while the condition remains met. Each trigger is persisted atomically; stale fallback quotes never trigger a rule.
+
+SCHEDULES generates source-based reports into MY BRIEFING history while the API is running. Configure 1–12 symbols, local time, IANA timezone and calendar weekdays (including exchange holidays). Up to ten schedules are supported. A missed time catches up later on the same local date; older dates are not backfilled. Database claims prevent duplicate reports, failed runs retry up to three times with a delay, and abandoned claims become eligible after five minutes. Pause/resume or delete schedules in the panel. No external email/webhook is sent and no paid AI generation is used.

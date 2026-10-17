@@ -1,3 +1,4 @@
+import {deliveryRouter,briefingScheduler} from "./routes/delivery.js";
 import {syncRouter} from "./routes/sync.js";
 import {dataRouter} from "./routes/data.js";
 import {tradeCsvRouter} from "./routes/trade-csv.js";
@@ -45,6 +46,7 @@ app.use("/api/data",requireApiKey,express.json({limit:"34mb"}),dataRouter);
 app.use("/api/portfolios/:id/import",requireApiKey,express.json({limit:"2mb"}),tradeCsvRouter);
 app.use("/api/sync",requireApiKey,express.json({limit:"2300kb"}),syncRouter);
 app.use(express.json());
+app.use("/api/delivery",requireApiKey,rateLimit({windowMs:60000,max:20}),deliveryRouter);
 app.use("/api/alerts", requireApiKey, alertsRouter);
 app.use(
   "/api/briefings",
@@ -92,6 +94,7 @@ const PORT = Number(process.env.API_PORT ?? 4000);
 const HOST = process.env.API_HOST ?? "127.0.0.1";
 const server = app.listen(PORT, HOST, () => {
   alertMonitor.start();
+  briefingScheduler.start();
   console.log(`OpenTerminal API listening on http://${HOST}:${PORT}`);
 });
 
@@ -101,7 +104,7 @@ async function shutdown() {
   stopping = true;
   const deadline = setTimeout(() => process.exit(1), 15000);
   deadline.unref();
-  await alertMonitor.stop();
+  await Promise.all([alertMonitor.stop(),briefingScheduler.stop()]);
   await new Promise<void>((resolve) => server.close(() => resolve()));
   await db.close();
   clearTimeout(deadline);

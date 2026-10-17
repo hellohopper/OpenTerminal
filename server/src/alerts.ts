@@ -10,6 +10,8 @@ export type AlertCondition =
   | "CHANGE_ABOVE"
   | "CHANGE_BELOW";
 export type AlertRule = {
+  metric?: "native" | "volume";
+  repeat_seconds?: number;
   id: number;
   symbol: string;
   condition: AlertCondition;
@@ -25,6 +27,7 @@ export type AlertRule = {
 };
 export type AlertEvent = {
   id: number;
+  metric?: "native" | "volume";
   alert_id: number | null;
   symbol: string;
   condition: AlertCondition;
@@ -42,17 +45,24 @@ export const activeAlerts = async () =>
     .prepare("SELECT * FROM price_alerts WHERE armed=1 ORDER BY id")
     .all()) as AlertRule[];
 export function alertValue(
-  rule: Pick<AlertRule, "condition">,
+  rule: Pick<AlertRule, "condition" | "metric">,
   quote: Quote,
 ): number | null {
   if (!Number.isFinite(quote.price) || quote.price! <= 0) return null;
-  const value = rule.condition.startsWith("PRICE_")
-    ? quote.price
-    : quote.changePercent;
-  return value !== null && Number.isFinite(value) ? value : null;
+  const value =
+    rule.metric === "volume"
+      ? quote.volume
+      : rule.condition.startsWith("PRICE_")
+        ? quote.price
+        : quote.changePercent;
+  return value != null &&
+    Number.isFinite(value) &&
+    (rule.metric !== "volume" || value >= 0)
+    ? value
+    : null;
 }
 export function matchesAlert(
-  rule: Pick<AlertRule, "condition" | "threshold">,
+  rule: Pick<AlertRule, "condition" | "threshold" | "metric">,
   quote: Quote,
 ): number | null {
   const value = alertValue(rule, quote);
@@ -75,6 +85,13 @@ export async function evaluateAlerts(
   return await db.transaction(async () => {
     let fired = 0;
     for (const rule of rules) {
+      if (
+        rule.repeat_seconds &&
+        rule.last_triggered_at &&
+        now.getTime() - Date.parse(rule.last_triggered_at) <
+          rule.repeat_seconds * 1000
+      )
+        continue;
       const quote = bySymbol.get(rule.symbol);
       if (!quote) continue;
       const value = alertValue(rule, quote);
@@ -87,19 +104,19 @@ export async function evaluateAlerts(
         .run(
           now.toISOString(),
           value,
-          triggered ? 0 : 1,
+          triggered && !rule.repeat_seconds ? 0 : 1,
           triggered ? 1 : 0,
           now.toISOString(),
           triggered ? 1 : 0,
           rule.id,
           rule.revision,
-          rule.generation??"legacy",
+          rule.generation ?? "legacy",
         );
       if (!changed.changes || !triggered) continue;
       const observed = quote.time === null ? null : new Date(quote.time * 1000);
       await db
         .prepare(
-          "INSERT INTO price_alert_events (alert_id,symbol,condition,threshold,label,value,price,currency,source,observed_at,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+          "INSERT INTO price_alert_events (alert_id,symbol,condition,threshold,label,value,price,currency,source,observed_at,created_at,metric) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
         )
         .run(
           rule.id,
@@ -115,6 +132,7 @@ export async function evaluateAlerts(
             ? observed.toISOString()
             : null,
           now.toISOString(),
+          rule.metric ?? "native",
         );
       fired++;
     }
