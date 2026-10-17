@@ -4,6 +4,7 @@ import { useTerminal, type WidgetType } from "../store/terminal";
 
 const ITEMS: Array<{ type: WidgetType; label: string; key: string }> = [
   { type: "quality", label: "DATA QUALITY", key: "" },
+  { type: "backup", label: "BACKUP", key: "" },
   { type: "alerts", label: "ALERTS", key: "" },
   { type: "briefing", label: "MY BRIEFING", key: "" },
   { type: "strategy", label: "STRATEGY", key: "" },
