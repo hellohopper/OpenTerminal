@@ -7,6 +7,7 @@ const ITEMS: Array<{ type: WidgetType; label: string; key: string }> = [
   { type: "backup", label: "BACKUP", key: "" },
   { type: "sync", label: "DEVICE SYNC", key: "" },
   { type: "delivery", label: "SCHEDULES", key: "" },
+  { type: "events", label: "HOLDING EVENTS", key: "" },
   { type: "alerts", label: "ALERTS", key: "" },
   { type: "briefing", label: "MY BRIEFING", key: "" },
   { type: "strategy", label: "STRATEGY", key: "" },

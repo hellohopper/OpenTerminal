@@ -280,3 +280,9 @@ SCHEDULES generates source-based reports into MY BRIEFING history while the API 
 ### Strategy risk scenarios
 
 STRATEGY now aggregates signed position delta, gamma, theta, vega and rho across stock and standard option legs. Set common IV, continuous rate/dividend yield, spot and expiration assumptions, then vary spot, volatility and calendar days. The grid reports modeled P&L relative to entry premiums and uses intrinsic value after expiration. Save the complete assumptions, legs and scenario results to the journal. These are European Black–Scholes estimates; early assignment, margin, discrete dividends, fees and volatility skew are excluded.
+
+### Holdings event center
+
+HOLDING EVENTS combines expected earnings for up to 30 symbols (held names first) with high/medium impact macro events. Select a portfolio and optionally include the workspace watchlist. Related shares, fresh USD market values and cash-excluded portfolio weights are shown; incomplete valuations suppress all weights. Export the visible events as an iCalendar file with an optional 24-hour reminder, then import it into your calendar application.
+
+Earnings sessions are unverified and exported as all-day dates. The economic source covers the current week, even when the 30-day view is selected. Missing provider data is reported rather than inferred. The latest 20 recorded dividend/split entries are historical only; upcoming corporate-action dates are unavailable. The event center supports up to 200 open holdings and 50000 trades/events per selected portfolio.
