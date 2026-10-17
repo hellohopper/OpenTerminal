@@ -1,0 +1,19 @@
+# Second development round
+
+Requested workflow: separate reviewable PRs, followed by eight features in order. The earlier local roadmap is published as a baseline PR. Follow-up PRs are stacked against the preceding branch, with local merges after verification. Remote PRs stay open for review.
+
+| Work | Branch | State |
+|---|---|---|
+| Fix valuation and quote metadata | codex/fix-valuation-quality | Complete: 123 tests pass (6 PostgreSQL tests skipped); full build passes |
+| Web authentication and access control | codex/fix-web-auth | Planned |
+| Dependency maintenance | codex/fix-dependency-advisories | Planned |
+| 1. Quote quality dashboard | codex/feature-13-quote-quality | Planned |
+| 2. Trade CSV import/export | codex/feature-14-trade-csv | Planned |
+| 3. Backup/restore and versioned schema migrations | codex/feature-15-backups | Planned |
+| 4. Watchlist groups and saved screeners | codex/feature-16-watchlists | Planned |
+| 5. Cross-device workspace sync | codex/feature-17-sync | Planned |
+| 6. Repeat/conditional alerts and scheduled briefings | codex/feature-18-delivery | Planned |
+| 7. Option strategy risk scenarios | codex/feature-19-strategy-risk | Planned |
+| 8. Holdings event center | codex/feature-20-events | Planned |
+
+New frontend workflows will be exercised by repository-owned browser tests and included in CI as the round progresses. Production secrets and user databases are not used by test fixtures.

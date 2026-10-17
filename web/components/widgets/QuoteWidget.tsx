@@ -54,6 +54,7 @@ export default function QuoteWidget({ widget }: { widget: WidgetInstance }) {
         </Flash>
         <span className="dim text-[10px] ml-auto">
           {data.exchange ?? ""} · {data.currency ?? ""} · {data.source}
+          <span className="block dim">Retrieved: {data.retrievedAt??"unknown"} · Observed: {data.time?new Date(data.time*1000).toISOString():"not supplied"}{data.stale?" · STALE FALLBACK":" · indicative feed"}</span>
         </span>
       </div>
       <div className="dim text-[11px] mb-2 truncate">{data.name}</div>
