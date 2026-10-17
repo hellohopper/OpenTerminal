@@ -6,6 +6,7 @@ import { apiGet, fmt, fmtBig, pctClass, type Quote } from "../../lib/api";
 import { normalizeSymbol, symbolsParam } from "../../lib/symbol";
 import { useTerminal } from "../../store/terminal";
 import {quoteQuality} from "../../lib/valuation";
+import SavedControls from "../SavedControls";
 import Flash from "../Flash";
 
 export default function WatchlistWidget() {
@@ -25,6 +26,7 @@ export default function WatchlistWidget() {
 
   return (
     <div>
+      <SavedControls kind="groups" value={watchlist} onLoad={value=>useTerminal.getState().setWatchlist(value as string[])} />
       <form
         className="flex gap-1 p-1"
         onSubmit={(e) => {

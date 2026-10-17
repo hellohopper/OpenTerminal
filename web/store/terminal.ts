@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { persist, createJSONStorage, type StateStorage } from "zustand/middleware";
+import { readSymbols } from "../lib/preferences";
 import { normalizeSymbol } from "../lib/symbol";
 import { makeWorkspace, readWorkspace, restoreWorkspaces, workspaceName, newId, SIZE_BY_TYPE, MAX_WORKSPACES, type Preset, type SavedWorkspace, type WorkspaceData, type WidgetType, type LayoutItem } from "../lib/workspaces";
 export type { WidgetType, WidgetInstance, LayoutItem } from "../lib/workspaces";
@@ -19,6 +20,7 @@ type TerminalState = WorkspaceData & {
   setLayout: (layout: LayoutItem[]) => void;
   addToWatchlist: (s: string) => void;
   removeFromWatchlist: (s: string) => void;
+  setWatchlist: (symbols: string[]) => void;
   resetWorkspace: () => void;
   createWorkspace: (name: string, preset?: Preset) => void;
   switchWorkspace: (id: string) => void;
@@ -53,6 +55,7 @@ export function createTerminalStore(storage?: StateStorage) {
       toggleLinked: (id) => set((st) => activePatch(st, { widgets: st.widgets.map((w) => w.id === id ? { ...w, linked: !w.linked } : w) })),
       setLayout: (layout) => set((st) => activePatch(st, { layout })),
       addToWatchlist: (s) => { const sym = normalizeSymbol(s); if (sym) set((st) => activePatch(st, { watchlist: st.watchlist.includes(sym) || st.watchlist.length >= 200 ? st.watchlist : [...st.watchlist, sym] })); },
+      setWatchlist: (symbols) => { const watchlist=readSymbols(symbols); set(st=>activePatch(st,{watchlist})); },
       removeFromWatchlist: (s) => set((st) => activePatch(st, { watchlist: st.watchlist.filter((x) => x !== s) })),
       resetWorkspace: () => { const { widgets, layout } = makeWorkspace("Default"); set((st) => activePatch(st, { widgets, layout })); },
       createWorkspace: (name, preset = "daily") => addWorkspace(makeWorkspace(name, preset)),
