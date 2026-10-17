@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import {authConfig,validSession,sameOrigin,SESSION_COOKIE} from "@/lib/session";
 import { getApiKey } from "@/lib/api-key";
 
 // A route handler (rather than next.config.ts rewrites) because rewrites
@@ -7,6 +8,8 @@ import { getApiKey } from "@/lib/api-key";
 const API_URL = process.env.API_URL ?? "http://localhost:4000";
 
 async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
+  try{if(!validSession(req.cookies.get(SESSION_COOKIE)?.value,authConfig()))return NextResponse.json({error:"Sign in required."},{status:401});}catch{return NextResponse.json({error:"Web authentication is not configured."},{status:503});}
+  if(!["GET","HEAD"].includes(req.method)&&!sameOrigin(req))return NextResponse.json({error:"Same-origin request required."},{status:403});
   const url = `${API_URL}/api/${path.join("/")}${req.nextUrl.search}`;
   const apiKey = getApiKey();
 
@@ -21,18 +24,21 @@ async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
 
   const hasBody = req.method !== "GET" && req.method !== "HEAD" && req.method !== "DELETE";
 
+  try {
   const upstream = await fetch(url, {
     method: req.method,
     headers,
     body: hasBody ? await req.text() : undefined,
     cache: "no-store",
+    signal:AbortSignal.any([req.signal,AbortSignal.timeout(90000)]),
   });
 
   const body = upstream.status === 204 ? null : await upstream.arrayBuffer();
   return new NextResponse(body, {
     status: upstream.status,
-    headers: { "content-type": upstream.headers.get("content-type") ?? "application/json" },
+    headers: { "content-type": upstream.headers.get("content-type") ?? "application/json", "cache-control":"no-store" },
   });
+  }catch{return NextResponse.json({error:"API unavailable or timed out."},{status:502});}
 }
 
 type RouteContext = { params: Promise<{ path: string[] }> };

@@ -63,6 +63,7 @@ export default function TopBar() {
       >
         {activeSymbol} — search symbol… <span className="float-right">⌘K</span>
       </button>
+      <button className="term-btn" onClick={async()=>{await fetch("/api/session",{method:"DELETE"});window.location.assign("/login");}}>Sign out</button>
       <span className="dim ml-auto">
         feeds:{" "}
         {healthy.length > 0
