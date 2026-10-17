@@ -94,10 +94,10 @@ export function applyDeviceSnapshot(
       storage.setItem(key, value);
     storage.setItem(SYNC_VERSION_KEY, version);
   } catch (error) {
-    for (const [key, value] of old) {
-      if (value === null) storage.removeItem(key);
-      else storage.setItem(key, value);
-    }
+    // Free all partially written values before restoring the old snapshot.
+    // Restoring large old entries first can otherwise exceed the same quota.
+    for (const key of old.keys()) storage.removeItem(key);
+    for (const [key, value] of old) if (value !== null) storage.setItem(key, value);
     throw error;
   }
 }
