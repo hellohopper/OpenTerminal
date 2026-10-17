@@ -7,6 +7,7 @@ import "react-resizable/css/styles.css";
 import { normalizeSymbol } from "../lib/symbol";
 import { useTerminal, type WidgetInstance } from "../store/terminal";
 import QualityWidget from "./widgets/QualityWidget";
+import BackupWidget from "./widgets/BackupWidget";
 import AlertsWidget from "./widgets/AlertsWidget";
 import BriefingWidget from "./widgets/BriefingWidget";
 import StrategyWidget from "./widgets/StrategyWidget";
@@ -36,6 +37,7 @@ const Grid = WidthProvider(GridLayout);
 function WidgetBody({ widget }: { widget: WidgetInstance }) {
   switch (widget.type) {
     case "quality": return <QualityWidget />;
+    case "backup": return <BackupWidget />;
     case "alerts": return <AlertsWidget />;
     case "briefing": return <BriefingWidget />;
     case "strategy": return <StrategyWidget widget={widget} />;

@@ -38,6 +38,7 @@ export const TABLE_COLUMNS = {
     "label",
     "armed",
     "revision",
+    "generation",
     "created_at",
     "last_checked_at",
     "last_value",

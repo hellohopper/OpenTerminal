@@ -17,6 +17,7 @@ export type AlertRule = {
   label: string;
   armed: number;
   revision: number;
+  generation: string;
   created_at: string;
   last_checked_at: string | null;
   last_value: number | null;
@@ -81,7 +82,7 @@ export async function evaluateAlerts(
       const triggered = matchesAlert(rule, quote) !== null;
       const changed = await db
         .prepare(
-          "UPDATE price_alerts SET last_checked_at=?,last_value=?,armed=?,last_triggered_at=CASE WHEN ?=1 THEN ? ELSE last_triggered_at END,revision=revision+? WHERE id=? AND armed=1 AND revision=?",
+          "UPDATE price_alerts SET last_checked_at=?,last_value=?,armed=?,last_triggered_at=CASE WHEN ?=1 THEN ? ELSE last_triggered_at END,revision=revision+? WHERE id=? AND armed=1 AND revision=? AND generation=?",
         )
         .run(
           now.toISOString(),
@@ -92,6 +93,7 @@ export async function evaluateAlerts(
           triggered ? 1 : 0,
           rule.id,
           rule.revision,
+          rule.generation??"legacy",
         );
       if (!changed.changes || !triggered) continue;
       const observed = quote.time === null ? null : new Date(quote.time * 1000);

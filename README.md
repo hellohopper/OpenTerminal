@@ -260,3 +260,7 @@ This project is not affiliated with, endorsed by, or sponsored by any of the dat
 **star the repo** ⭐ — it's the best way to support the project.
 
 </div>
+
+### Server backups and migrations
+
+Open BACKUP to download a private JSON snapshot (32 MB / 50000 rows maximum). Restore validates the checksum and schema before replacing server records in one transaction; type RESTORE to confirm. Keep a separate offline backup before restoring. Secrets and browser workspaces are excluded. SQLite and PostgreSQL apply numbered schema migrations automatically at startup and reject a database newer than the running application. Use native database backup tools for larger installations.
