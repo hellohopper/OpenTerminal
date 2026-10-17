@@ -33,7 +33,7 @@ export async function restoreBackup(db:AppDatabase,input:unknown){
   for(const table of [...tables].reverse())await db.prepare(`DELETE FROM ${table}`).run();
   const counts:Record<string,number>={};
   for(const table of tables){for(const original of data[table]){
-    const row=table==='price_alerts'?{...original,generation:randomUUID()}:original;
+    const row=table==='price_alerts'?{...original,generation:randomUUID()}:table==='workspace_sync'?{...original,version:randomUUID()}:original;
     const columns=Object.keys(row);await db.prepare(`INSERT INTO ${table} (${columns.map(c=>`"${c}"`).join(',')}) VALUES (${columns.map(()=>'?').join(',')})`).run(...columns.map(c=>row[c]));
    }counts[table]=data[table].length;
   }

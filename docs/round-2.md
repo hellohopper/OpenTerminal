@@ -11,7 +11,7 @@ Requested workflow: separate reviewable PRs, followed by eight features in order
 | 2. Trade CSV import/export | codex/feature-14-trade-csv | Complete: 129 tests, full build and 4 browser workflows pass |
 | 3. Backup/restore and versioned schema migrations | codex/feature-15-backups | Complete: 139 tests including real PostgreSQL, production build and backup browser workflow pass |
 | 4. Watchlist groups and saved screeners | codex/feature-16-watchlists | Complete: 141 tests, production build and persistent groups/presets browser workflow pass |
-| 5. Cross-device workspace sync | codex/feature-17-sync | Planned |
+| 5. Cross-device workspace sync | codex/feature-17-sync | Complete: 143 tests including PostgreSQL concurrency, production build and two-device browser workflow pass |
 | 6. Repeat/conditional alerts and scheduled briefings | codex/feature-18-delivery | Planned |
 | 7. Option strategy risk scenarios | codex/feature-19-strategy-risk | Planned |
 | 8. Holdings event center | codex/feature-20-events | Planned |
