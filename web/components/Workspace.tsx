@@ -8,6 +8,7 @@ import { normalizeSymbol } from "../lib/symbol";
 import { useTerminal, type WidgetInstance } from "../store/terminal";
 import QualityWidget from "./widgets/QualityWidget";
 import BackupWidget from "./widgets/BackupWidget";
+import SyncWidget from "./widgets/SyncWidget";
 import AlertsWidget from "./widgets/AlertsWidget";
 import BriefingWidget from "./widgets/BriefingWidget";
 import StrategyWidget from "./widgets/StrategyWidget";
@@ -38,6 +39,7 @@ function WidgetBody({ widget }: { widget: WidgetInstance }) {
   switch (widget.type) {
     case "quality": return <QualityWidget />;
     case "backup": return <BackupWidget />;
+    case "sync": return <SyncWidget />;
     case "alerts": return <AlertsWidget />;
     case "briefing": return <BriefingWidget />;
     case "strategy": return <StrategyWidget widget={widget} />;
