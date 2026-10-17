@@ -276,3 +276,7 @@ DEVICE SYNC stores one manual owner-wide snapshot on this server. Upload include
 ALERTS supports price, daily percentage change and volume conditions. Set repeat cooldown to 0 for a one-shot rule, or 60–86400 seconds for repeating notifications while the condition remains met. Each trigger is persisted atomically; stale fallback quotes never trigger a rule.
 
 SCHEDULES generates source-based reports into MY BRIEFING history while the API is running. Configure 1–12 symbols, local time, IANA timezone and calendar weekdays (including exchange holidays). Up to ten schedules are supported. A missed time catches up later on the same local date; older dates are not backfilled. Database claims prevent duplicate reports, failed runs retry up to three times with a delay, and abandoned claims become eligible after five minutes. Pause/resume or delete schedules in the panel. No external email/webhook is sent and no paid AI generation is used.
+
+### Strategy risk scenarios
+
+STRATEGY now aggregates signed position delta, gamma, theta, vega and rho across stock and standard option legs. Set common IV, continuous rate/dividend yield, spot and expiration assumptions, then vary spot, volatility and calendar days. The grid reports modeled P&L relative to entry premiums and uses intrinsic value after expiration. Save the complete assumptions, legs and scenario results to the journal. These are European Black–Scholes estimates; early assignment, margin, discrete dividends, fees and volatility skew are excluded.
