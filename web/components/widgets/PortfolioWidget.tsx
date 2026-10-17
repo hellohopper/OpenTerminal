@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { apiGet, apiPost, apiDelete, fmt, pctClass, type Quote } from "../../lib/api";
+import TradeCsvControls from "../TradeCsvControls";
 import { valuePortfolio } from "../../lib/valuation";
 import { symbolsParam } from "../../lib/symbol";
 
@@ -101,6 +102,7 @@ export default function PortfolioWidget() {
         {addTx.error && <span className="down">{(addTx.error as Error).message}</span>}
       </form>
 
+      {pid&&<TradeCsvControls key={pid} portfolioId={pid} onDone={()=>{qc.invalidateQueries({queryKey:["positions",pid]});qc.invalidateQueries({queryKey:["transactions",pid]});qc.invalidateQueries({queryKey:["performance",pid]});}}/>}
       {!showTx ? (
         <table className="data-table">
           <thead>

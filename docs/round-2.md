@@ -8,7 +8,7 @@ Requested workflow: separate reviewable PRs, followed by eight features in order
 | Web authentication and access control | codex/fix-web-auth | Complete: 125 tests pass, web build and 2 browser checks pass |
 | Dependency maintenance | codex/fix-dependency-advisories | Complete: zero audit advisories; 125 tests, full build and 2 browser checks pass; Docker build added to CI |
 | 1. Quote quality dashboard | codex/feature-13-quote-quality | Complete: full build and 3 browser workflows pass |
-| 2. Trade CSV import/export | codex/feature-14-trade-csv | Planned |
+| 2. Trade CSV import/export | codex/feature-14-trade-csv | Complete: 129 tests, full build and 4 browser workflows pass |
 | 3. Backup/restore and versioned schema migrations | codex/feature-15-backups | Planned |
 | 4. Watchlist groups and saved screeners | codex/feature-16-watchlists | Planned |
 | 5. Cross-device workspace sync | codex/feature-17-sync | Planned |

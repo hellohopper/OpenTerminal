@@ -1,3 +1,4 @@
+import {tradeCsvRouter} from "./routes/trade-csv.js";
 import express, { type ErrorRequestHandler } from "express";
 import { db } from "./db.js";
 import cors from "cors";
@@ -38,6 +39,7 @@ app.use(
   express.json({ limit: "1500kb" }),
   journalRouter,
 );
+app.use("/api/portfolios/:id/import",requireApiKey,express.json({limit:"2mb"}),tradeCsvRouter);
 app.use(express.json());
 app.use("/api/alerts", requireApiKey, alertsRouter);
 app.use(
