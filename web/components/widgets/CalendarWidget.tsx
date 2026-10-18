@@ -41,7 +41,7 @@ const TIMEZONES: Array<{ label: string; zone: string | undefined }> = [
   { label: "Sydney", zone: "Australia/Sydney" },
 ];
 
-function EconomicTab() {
+export function EconomicTab() {
   const [minImpact, setMinImpact] = useState<"all" | "medium">("medium");
   const [tz, setTz] = useState<string>("Local");
 
@@ -181,8 +181,9 @@ function EarningsHistoryRows({ symbol }: { symbol: string }) {
   );
 }
 
-function EarningsTab() {
-  const watchlist = useTerminal((s) => s.watchlist);
+export function EarningsTab({ symbols }: { symbols?: string[] } = {}) {
+  const savedWatchlist = useTerminal((s) => s.watchlist);
+  const watchlist = symbols ?? savedWatchlist;
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const { data = [], isLoading, error } = useQuery({

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { WIDGET_CATALOG } from "../lib/widget-catalog";
 import GridLayout, { WidthProvider } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
@@ -115,14 +116,7 @@ function SymbolTag({ widget, activeSymbol }: { widget: WidgetInstance; activeSym
   );
 }
 
-const TITLES: Record<string, string> = {
-  quality: "Data Quality", alerts: "Price Alerts", briefing: "Personal Daily Briefing", strategy: "Options Strategy", performance: "Portfolio Performance / Risk", journal: "Research Journal", fundamentals: "Company Fundamentals", comparison: "Comparison", quote: "Quote", chart: "Chart", watchlist: "Watchlist", news: "News",
-  heatmap: "Heatmap", screener: "Screener", crypto: "Crypto",
-  macro: "Macro / Indexes", options: "Option Chain", portfolio: "Portfolio", ai: "AI Assistant",
-  calendar: "Calendar", insider: "Insider Transactions", tv: "Live TV", recap: "Market Recap",
-};
-
-export default function Workspace() {
+export default function Workspace({ compact = false }: { compact?: boolean }) {
   const widgets = useTerminal((s) => s.widgets);
   const layout = useTerminal((s) => s.layout);
   const setLayout = useTerminal((s) => s.setLayout);
@@ -132,6 +126,26 @@ export default function Workspace() {
 
   const symbolAware = new Set(["quote", "chart", "news", "options", "insider", "fundamentals", "journal", "strategy"]);
 
+  const panels = widgets.map((w) => (
+        <div key={w.id} className={compact ? "mobile-workspace-panel" : undefined}>
+          <div className="terminal-panel">
+            <div className="panel-title">
+              <span>{WIDGET_CATALOG[w.type].title}{symbolAware.has(w.type) && <SymbolTag widget={w} activeSymbol={activeSymbol} />}</span>
+              <span className="flex gap-2 items-center">
+                {symbolAware.has(w.type) && <>
+                  <button aria-label={`Research ${w.linked ? activeSymbol : w.symbol ?? activeSymbol}`} onMouseDown={e => e.stopPropagation()} onClick={() => useTerminal.getState().openResearch(w.linked ? activeSymbol : w.symbol ?? activeSymbol)}>Research</button>
+                  <button title={w.linked ? "Linked to active symbol (click to unlink)" : "Unlinked (click to link)"} onMouseDown={e => e.stopPropagation()} onClick={() => toggleLinked(w.id)} className={w.linked ? "amber" : "dim"}>⛓</button>
+                </>}
+                <button aria-label={`Remove ${WIDGET_CATALOG[w.type].title}`} onMouseDown={e => e.stopPropagation()} onClick={() => removeWidget(w.id)} className="dim">✕</button>
+              </span>
+            </div>
+            <div className="flex-1 overflow-auto min-h-0">
+              <WidgetErrorBoundary name={WIDGET_CATALOG[w.type].title}><WidgetBody widget={w} /></WidgetErrorBoundary>
+            </div>
+          </div>
+        </div>
+  ));
+  if (compact) return <div className="space-y-3 p-2">{panels.length ? panels : <p className="dim">This workspace is empty. Open Tools to add a panel.</p>}</div>;
   return (
     <Grid
       className="layout"
@@ -142,42 +156,7 @@ export default function Workspace() {
       draggableHandle=".panel-title"
       onLayoutChange={(l) => setLayout(l.map(({ i, x, y, w, h }) => ({ i, x, y, w, h })))}
     >
-      {widgets.map((w) => (
-        <div key={w.id}>
-          <div className="terminal-panel">
-            <div className="panel-title">
-              <span>
-                {TITLES[w.type]}
-                {symbolAware.has(w.type) && <SymbolTag widget={w} activeSymbol={activeSymbol} />}
-              </span>
-              <span className="flex gap-2 items-center">
-                {symbolAware.has(w.type) && (
-                  <button
-                    title={w.linked ? "Linked to active symbol (click to unlink)" : "Unlinked (click to link)"}
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onClick={() => toggleLinked(w.id)}
-                    className={w.linked ? "text-[var(--amber)]" : "dim"}
-                  >
-                    ⛓
-                  </button>
-                )}
-                <button
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onClick={() => removeWidget(w.id)}
-                  className="dim hover:text-[var(--down)]"
-                >
-                  ✕
-                </button>
-              </span>
-            </div>
-            <div className="flex-1 overflow-auto min-h-0">
-              <WidgetErrorBoundary name={TITLES[w.type]}>
-                <WidgetBody widget={w} />
-              </WidgetErrorBoundary>
-            </div>
-          </div>
-        </div>
-      ))}
+      {panels}
     </Grid>
   );
 }

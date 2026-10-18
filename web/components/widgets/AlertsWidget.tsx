@@ -33,8 +33,9 @@ const blank = (symbol: string): Form => ({
   label: "",
   armed: true,
 });
-export default function AlertsWidget() {
-  const symbol = useTerminal((s) => s.activeSymbol);
+export default function AlertsWidget({ initialSymbol }: { initialSymbol?: string } = {}) {
+  const activeSymbol = useTerminal((s) => s.activeSymbol);
+  const symbol = initialSymbol ?? activeSymbol;
   const qc = useQueryClient();
   const [form, setForm] = useState<Form>(() => blank(symbol));
   const [message, setMessage] = useState("");

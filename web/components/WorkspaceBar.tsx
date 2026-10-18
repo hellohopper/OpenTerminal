@@ -18,7 +18,7 @@ export default function WorkspaceBar() {
     </select>
     <details className="relative">
       <summary className="cursor-pointer amber">Manage</summary>
-      <div className="absolute top-full left-0 z-50 w-80 p-3 space-y-3 border border-[var(--border)] bg-[var(--panel-2)] shadow-xl">
+      <div className="absolute top-full left-0 z-50 w-72 max-w-[80vw] p-3 space-y-3 border border-[var(--border)] bg-[var(--panel-2)] shadow-xl">
         <label className="block">Name<input aria-label="Workspace name" className="block w-full mt-1" maxLength={64} value={name} placeholder={current.name} onChange={(e) => setName(e.target.value)} /></label>
         <label className="block">Preset<select aria-label="Workspace preset" className="ml-2" value={preset} onChange={(e) => setPreset(e.target.value as Preset)}>{Object.entries(PRESETS).map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>
         <div className="flex gap-2 flex-wrap">

@@ -101,3 +101,55 @@ export function applyDeviceSnapshot(
     throw error;
   }
 }
+
+export type SyncScope = { workspaceIds: string[] | null; includePreferences: boolean };
+/** Selective sync upserts only chosen IDs; it never removes unselected workspaces. */
+export function mergeDeviceSnapshots(source: DeviceSnapshot, target: DeviceSnapshot, scope: SyncScope): DeviceSnapshot {
+  const from = readDeviceSnapshot(source), to = readDeviceSnapshot(target);
+  if (scope.workspaceIds === null) return from;
+  const ids = new Set(scope.workspaceIds);
+  if (!ids.size || [...ids].some(id => !from.workspace.workspaces.some(w => w.id === id)))
+    throw new Error("Select at least one existing source workspace.");
+  const selected = from.workspace.workspaces.filter(w => ids.has(w.id));
+  const byId = new Map(selected.map(w => [w.id, w]));
+  const workspaces = [...to.workspace.workspaces.map(w => byId.get(w.id) ?? w), ...selected.filter(w => !to.workspace.workspaces.some(old => old.id === w.id))];
+  if (workspaces.length > MAX_WORKSPACES) throw new Error(`The result exceeds ${MAX_WORKSPACES} workspaces.`);
+  // Drawings belong to widget IDs. Remove only drawings belonging to replaced panels.
+  const widgetIds = new Set([...selected, ...to.workspace.workspaces.filter(w => ids.has(w.id))].flatMap(w => w.widgets.map(p => p.id)));
+  // Duplicated/imported workspaces may share widget IDs (and therefore drawing keys).
+  // Preserve drawings referenced by an unselected destination workspace.
+  const protectedIds = new Set(to.workspace.workspaces.filter(w => !ids.has(w.id)).flatMap(w => w.widgets.map(p => p.id)));
+  const belongs = (key: string) => [...widgetIds].filter(id => !protectedIds.has(id)).some(id => key.startsWith(`openterminal-drawings-v1:${id}:`));
+  const drawings = Object.fromEntries([
+    ...Object.entries(to.drawings).filter(([key]) => !belongs(key)),
+    ...Object.entries(from.drawings).filter(([key]) => belongs(key)),
+  ]);
+  return readDeviceSnapshot({ ...to, workspace: { workspaces, activeWorkspaceId: to.workspace.activeWorkspaceId }, preferences: scope.includePreferences ? from.preferences : to.preferences, drawings });
+}
+function canonical(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+  if (value && typeof value === "object") return `{${Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([k,v]) => `${JSON.stringify(k)}:${canonical(v)}`).join(",")}}`;
+  return JSON.stringify(value) ?? "null";
+}
+export const sameSnapshot = (a: DeviceSnapshot, b: DeviceSnapshot) => canonical(a) === canonical(b);
+export function describeSyncChanges(before: DeviceSnapshot | null, after: DeviceSnapshot) {
+  const changes: { name: string; status: "Added" | "Removed" | "Changed" | "Unchanged"; detail: string }[] = [];
+  const old = before?.workspace.workspaces ?? [], next = after.workspace.workspaces;
+  for (const id of new Set([...old, ...next].map(w => w.id))) {
+    const a = old.find(w => w.id === id), b = next.find(w => w.id === id);
+    const fields = a && b ? (["name", "activeSymbol", "watchlist", "widgets", "layout"] as const).filter(k => canonical(a[k]) !== canonical(b[k])) : [];
+    changes.push({ name: b?.name ?? a!.name, status: !a ? "Added" : !b ? "Removed" : fields.length ? "Changed" : "Unchanged", detail: fields.length ? fields.map(k => k === "watchlist" ? `watchlist: ${a!.watchlist.join(", ") || "empty"} → ${b!.watchlist.join(", ") || "empty"}` : k === "name" ? `name: ${a!.name} → ${b!.name}` : k === "widgets" ? `panels: ${a!.widgets.map(p => p.type).join(", ")} → ${b!.widgets.map(p => p.type).join(", ")}` : k === "activeSymbol" ? `symbol: ${a!.activeSymbol} → ${b!.activeSymbol}` : "panel layout").join(" · ") : `${(b ?? a)!.widgets.length} panels · watchlist: ${(b ?? a)!.watchlist.join(", ") || "empty"}` });
+  }
+  if (before && canonical(old.map(w => w.id)) !== canonical(next.map(w => w.id)))
+    changes.push({ name: "Workspace order", status: "Changed", detail: next.map(w => w.name).join(" → ") });
+  if (before?.workspace.activeWorkspaceId !== after.workspace.activeWorkspaceId)
+    changes.push({ name: "Active workspace", status: "Changed", detail: next.find(w => w.id === after.workspace.activeWorkspaceId)!.name });
+  for (const kind of ["groups", "screeners"] as const) {
+    const a = before?.preferences[kind] ?? [], b = after.preferences[kind];
+    changes.push({ name: kind === "groups" ? "Watchlist groups" : "Screener presets", status: canonical(a) === canonical(b) ? "Unchanged" : "Changed", detail: `${a.length} → ${b.length}: ${b.map(v => v.name).join(", ") || "none"}` });
+  }
+  const keys = new Set([...Object.keys(before?.drawings ?? {}), ...Object.keys(after.drawings)]);
+  const changed = [...keys].filter(key => before?.drawings[key] !== after.drawings[key]);
+  changes.push({ name: "Chart drawings", status: changed.length ? "Changed" : "Unchanged", detail: `${changed.length} chart(s) changed · ${Object.keys(before?.drawings ?? {}).length} → ${Object.keys(after.drawings).length} saved charts` });
+  return changes;
+}
