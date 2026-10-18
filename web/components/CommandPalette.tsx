@@ -1,88 +1,48 @@
 "use client";
-
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { apiGet } from "../lib/api";
-import { useTerminal } from "../store/terminal";
-
+import { useTerminal, type WidgetType } from "../store/terminal";
+import { WIDGET_CATALOG } from "../lib/widget-catalog";
+import Modal from "./Modal";
 type SearchResult = { symbol: string; name: string; exchange: string; type: string };
-
-export default function CommandPalette() {
-  const open = useTerminal((s) => s.commandOpen);
-  const setOpen = useTerminal((s) => s.setCommandOpen);
-  const setActiveSymbol = useTerminal((s) => s.setActiveSymbol);
-  const addToWatchlist = useTerminal((s) => s.addToWatchlist);
-  const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState(0);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const { data: results = [] } = useQuery({
-    queryKey: ["search", query],
-    queryFn: () => apiGet<SearchResult[]>(`/api/search?q=${encodeURIComponent(query)}`),
-    enabled: open && query.trim().length > 0,
-    staleTime: 300_000,
-  });
-
-  useEffect(() => {
-    if (open) {
-      setQuery("");
-      setSelected(0);
-      setTimeout(() => inputRef.current?.focus(), 30);
+type Command = { id: string; label: string; detail: string; run: (watch?: boolean) => void };
+function Palette() {
+  const st = useTerminal(), [query, setQuery] = useState(""), [debounced, setDebounced] = useState(""), [selected, setSelected] = useState(0);
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => { input.current?.focus(); }, []);
+  useEffect(() => { const t = setTimeout(() => setDebounced(query.trim()), 250); return () => clearTimeout(t); }, [query]);
+  const mode = query.startsWith(">") ? "actions" : query.startsWith("@") ? "workspaces" : "all";
+  const needle = query.replace(/^[>@]/, "").trim().toLowerCase();
+  const symbols = useQuery({ queryKey: ["search", debounced], queryFn: () => apiGet<SearchResult[]>(`/api/search?q=${encodeURIComponent(debounced)}`), enabled: mode === "all" && debounced.length > 0 && !/^[>@]/.test(debounced), staleTime: 300000 });
+  const close = () => st.setCommandOpen(false);
+  const commands: Command[] = [];
+  if (mode !== "workspaces") {
+    const label = `Research ${st.activeSymbol}`;
+    if (!needle || label.toLowerCase().includes(needle)) commands.push({ id: "research", label, detail: "Open stock research", run: () => st.openResearch(st.activeSymbol) });
+    for (const [type, item] of Object.entries(WIDGET_CATALOG)) {
+      if (!needle || `${item.title} ${item.label} ${item.group}`.toLowerCase().includes(needle)) commands.push({ id: type, label: `Add ${item.title}`, detail: `${item.group} · panel`, run: () => { st.addWidget(type as WidgetType); close(); } });
     }
-  }, [open]);
-
-  useEffect(() => setSelected(0), [results.length]);
-
-  if (!open) return null;
-
-  const pick = (r: SearchResult, watch = false) => {
-    setActiveSymbol(r.symbol);
-    if (watch) addToWatchlist(r.symbol);
-    setOpen(false);
-  };
-
-  return (
-    <div
-      className="fixed inset-0 bg-black/70 z-50 flex items-start justify-center pt-24"
-      onClick={() => setOpen(false)}
-    >
-      <div
-        className="w-[560px] bg-[var(--panel)] border border-[var(--amber-dim)]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <input
-          ref={inputRef}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") setOpen(false);
-            if (e.key === "ArrowDown") setSelected((s) => Math.min(s + 1, results.length - 1));
-            if (e.key === "ArrowUp") setSelected((s) => Math.max(s - 1, 0));
-            if (e.key === "Enter" && results[selected]) pick(results[selected], e.shiftKey);
-          }}
-          placeholder="Ticker, company, ETF, crypto, index…  (Enter = load · Shift+Enter = load + watchlist)"
-          className="w-full !border-0 !border-b !border-[var(--border)] px-3 py-2 text-[13px]"
-        />
-        <div className="max-h-80 overflow-auto">
-          {results.map((r, i) => (
-            <div
-              key={r.symbol + i}
-              onClick={() => pick(r)}
-              className={`px-3 py-1.5 flex gap-3 cursor-pointer ${
-                i === selected ? "bg-[#1f1a10] text-[var(--amber)]" : "hover:bg-[#161616]"
-              }`}
-            >
-              <span className="w-24 font-bold">{r.symbol}</span>
-              <span className="flex-1 truncate">{r.name}</span>
-              <span className="dim">{r.exchange}</span>
-              <span className="dim w-16 text-right">{r.type}</span>
-            </div>
-          ))}
-          {query && results.length === 0 && (
-            <div className="px-3 py-3 dim">No results for “{query}”</div>
-          )}
-        </div>
-      </div>
+  }
+  if (mode !== "actions") for (const w of st.workspaces) if (!needle || w.name.toLowerCase().includes(needle)) commands.push({ id: `workspace-${w.id}`, label: `Switch to ${w.name}`, detail: "Workspace", run: () => { st.switchWorkspace(w.id); close(); } });
+  if (mode === "all" && debounced === query.trim()) for (const r of symbols.data ?? []) commands.unshift({ id: `symbol-${r.symbol}-${r.exchange}`, label: `${r.symbol} · ${r.name}`, detail: `${r.exchange} · research (Shift+Enter also watches)`, run: (watch) => { if (watch) st.addToWatchlist(r.symbol); st.openResearch(r.symbol); } });
+  const index = Math.min(selected, Math.max(0, commands.length - 1));
+  useEffect(() => { document.getElementById(`command-${index}`)?.scrollIntoView({ block: "nearest" }); }, [index]);
+  return <Modal label="Search symbols, features and workspaces" onClose={close} className="command-dialog">
+    <div className="flex gap-2 p-2"><input ref={input} aria-label="Search symbols, features and workspaces" role="combobox" aria-expanded={true} aria-controls="command-results" aria-activedescendant={commands.length ? `command-${index}` : undefined} autoComplete="off" className="w-full" placeholder="Symbol, feature, workspace… (> panels, @ workspaces)" value={query} onChange={e => { setQuery(e.target.value); setSelected(0); }} onKeyDown={e => {
+      if (e.key === "ArrowDown") { e.preventDefault(); setSelected((index + 1) % Math.max(1, commands.length)); }
+      if (e.key === "ArrowUp") { e.preventDefault(); setSelected((index - 1 + commands.length) % Math.max(1, commands.length)); }
+      if (e.key === "Enter" && commands[index]) { e.preventDefault(); commands[index].run(e.shiftKey); }
+    }} /><button className="term-btn" aria-label="Close search" onClick={close}>Close</button></div>
+    <p className="dim px-3 pb-2">↑↓ to navigate · Enter to open · Escape to close</p>
+    <div id="command-results" role="listbox" className="command-results">{commands.map((c,i) => <button key={c.id} id={`command-${i}`} role="option" aria-selected={index === i} className={`w-full text-left px-3 py-2 ${index === i ? "bg-[#1f1a10] amber" : ""}`} onMouseMove={() => setSelected(i)} onClick={e => c.run(e.shiftKey)}><span className="block">{c.label}</span><span className="dim text-[10px]">{c.detail}</span></button>)}
+      {symbols.isFetching && mode === "all" && <p className="dim p-3">Searching symbols…</p>}
+      {symbols.error && mode === "all" && <p className="amber p-3">Symbol search unavailable. Local commands still work.</p>}
+      {!commands.length && !symbols.isFetching && <p className="dim p-3">No matching commands or symbols.</p>}
     </div>
-  );
+  </Modal>;
+}
+export default function CommandPalette() {
+  const open = useTerminal(s => s.commandOpen);
+  return open ? <Palette /> : null;
 }

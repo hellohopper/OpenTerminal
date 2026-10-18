@@ -35,6 +35,10 @@ No signup. No credit card. No rate‑limited demo tier. Clone it, `npm install`,
 
 ## ✨ Features
 
+- 🔎 **Unified stock research** — open a symbol from watchlists, portfolios, news or command search; review charts, financials, events and notes, then create a symbol-bound alert. [Guide](docs/research-sync-mobile.md).
+- 🔄 **Reviewed sync and version recovery** — preview changes, sync selected workspaces, and restore one of the last ten server snapshots. [Guide](docs/research-sync-mobile.md#reviewed-device-sync).
+- 📱 **Mobile navigation** — holdings, alerts and events at your fingertips; single-column workspaces preserve desktop layouts. Search features and workspaces with Cmd/Ctrl+K. [Guide](docs/research-sync-mobile.md#desktop-and-phone).
+
 - 🔔 **Price alerts** — persistent price/daily-change thresholds, pause/rearm controls, trigger history, in-app delivery and opt-in desktop notifications; checks run while the API is active. [Usage and limits](docs/price-alerts.md).
 - ✏️ **Chart tools** — saved horizontal/trend lines with undo/delete controls, plus normalized overlays for the chart symbol and up to three comparison assets. [Usage](docs/chart-tools.md).
 - 📄 **Trade CSV** — import from PORTFOLIO with column mapping, preview, duplicate detection and atomic ledger validation; export canonical CSV. Up to 512 KB / 5000 rows per import.
@@ -269,7 +273,7 @@ Watchlist groups and screener presets can be saved, loaded, renamed and deleted 
 
 ### Device sync
 
-DEVICE SYNC stores one manual owner-wide snapshot on this server. Upload includes all workspaces, watchlist groups, screener presets and chart drawings. On another signed-in browser, explicitly replace that device with Download. Concurrent or outdated uploads return a conflict; download the latest version before editing further. Database restore invalidates existing sync versions. Deployment secrets, sessions and notification permissions are excluded. This remains a single-owner deployment.
+DEVICE SYNC previews every upload/download before confirmation. Transfer an entire snapshot or upsert selected workspaces while keeping other destination data. Review changed fields, explicitly confirm replacements, and recover one of the last ten server versions. Concurrent changes invalidate previews. Includes workspaces, saved lists/presets and drawings; excludes deployment secrets, sessions and notification permissions. Server portfolios and journals already share the database. This remains a single-owner deployment. [Scope, history and limits](docs/research-sync-mobile.md#reviewed-device-sync).
 
 ### Repeating alerts and scheduled briefings
 

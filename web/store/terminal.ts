@@ -11,6 +11,11 @@ type TerminalState = WorkspaceData & {
   workspaces: SavedWorkspace[];
   activeWorkspaceId: string;
   commandOpen: boolean;
+  researchSymbol: string | null;
+  openResearch: (symbol: string) => void;
+  closeResearch: () => void;
+  mobileView: "holdings" | "alerts" | "events" | "workspace";
+  setMobileView: (view: "holdings" | "alerts" | "events" | "workspace") => void;
   setActiveSymbol: (s: string) => void;
   setCommandOpen: (open: boolean) => void;
   addWidget: (type: WidgetType, symbol?: string) => void;
@@ -37,10 +42,14 @@ export function createTerminalStore(storage?: StateStorage) {
   return create<TerminalState>()(persist((set, get) => {
     const addWorkspace = (workspace: SavedWorkspace) => {
       if (get().workspaces.length >= MAX_WORKSPACES) throw new Error(`You can save up to ${MAX_WORKSPACES} workspaces.`);
-      set((st) => ({ ...workspace, workspaces: [...st.workspaces, workspace], activeWorkspaceId: workspace.id }));
+      set((st) => ({ ...workspace, workspaces: [...st.workspaces, workspace], activeWorkspaceId: workspace.id, mobileView: "workspace" }));
     };
     return {
       ...initial, workspaces: [initial], activeWorkspaceId: initial.id, commandOpen: false,
+      researchSymbol: null, mobileView: "holdings",
+      openResearch: (symbol) => { const sym = normalizeSymbol(symbol); if (sym) { get().setActiveSymbol(sym); set({ researchSymbol: sym, commandOpen: false }); } },
+      closeResearch: () => set({ researchSymbol: null }),
+      setMobileView: (mobileView) => set({ mobileView }),
       setActiveSymbol: (s) => { const sym = normalizeSymbol(s); if (sym) set((st) => activePatch(st, { activeSymbol: sym })); },
       setCommandOpen: (open) => set({ commandOpen: open }),
       addWidget: (type, symbol) => set((st) => {
@@ -48,7 +57,7 @@ export function createTerminalStore(storage?: StateStorage) {
         const id = newId();
         const sym = symbol ? normalizeSymbol(symbol) : undefined;
         const maxY = st.layout.reduce((m, l) => Math.max(m, l.y + l.h), 0);
-        return activePatch(st, { widgets: [...st.widgets, { id, type, ...(sym ? { symbol: sym } : {}), linked: !sym }], layout: [...st.layout, { i: id, x: 0, y: maxY, ...SIZE_BY_TYPE[type] }] });
+        return { mobileView: "workspace" as const, ...activePatch(st, { widgets: [...st.widgets, { id, type, ...(sym ? { symbol: sym } : {}), linked: !sym }], layout: [...st.layout, { i: id, x: 0, y: maxY, ...SIZE_BY_TYPE[type] }] }) };
       }),
       removeWidget: (id) => set((st) => activePatch(st, { widgets: st.widgets.filter((w) => w.id !== id), layout: st.layout.filter((l) => l.i !== id) })),
       setWidgetSymbol: (id, symbol) => { const sym = normalizeSymbol(symbol); if (sym) set((st) => activePatch(st, { widgets: st.widgets.map((w) => w.id === id ? { ...w, symbol: sym, linked: false } : w) })); },
@@ -59,7 +68,7 @@ export function createTerminalStore(storage?: StateStorage) {
       removeFromWatchlist: (s) => set((st) => activePatch(st, { watchlist: st.watchlist.filter((x) => x !== s) })),
       resetWorkspace: () => { const { widgets, layout } = makeWorkspace("Default"); set((st) => activePatch(st, { widgets, layout })); },
       createWorkspace: (name, preset = "daily") => addWorkspace(makeWorkspace(name, preset)),
-      switchWorkspace: (id) => { const workspace = get().workspaces.find((w) => w.id === id); if (workspace) set({ ...workspace, activeWorkspaceId: id, commandOpen: false }); },
+      switchWorkspace: (id) => { const workspace = get().workspaces.find((w) => w.id === id); if (workspace) set({ ...workspace, activeWorkspaceId: id, commandOpen: false, mobileView: "workspace" }); },
       renameWorkspace: (name) => { const valid = workspaceName(name); set((st) => ({ workspaces: st.workspaces.map((w) => w.id === st.activeWorkspaceId ? { ...w, name: valid } : w) })); },
       duplicateWorkspace: () => { const current = get().workspaces.find((w) => w.id === get().activeWorkspaceId)!; addWorkspace(readWorkspace({ ...current, name: `${current.name.slice(0, 57)} (copy)` })); },
       deleteWorkspace: () => {

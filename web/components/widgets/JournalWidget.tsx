@@ -4,11 +4,11 @@ import { useState } from "react";
 import { apiGet, apiPost, apiPut, apiDelete } from "../../lib/api";
 import { useWidgetSymbol, type WidgetInstance } from "../../store/terminal";
 export type JournalEntry = { id: number; symbol: string; title: string; body: string; kind: "research" | "trade"; image?: string | null; hasImage?: number; created_at: string; updated_at: string };
-export default function JournalWidget({ widget }: { widget: WidgetInstance }) {
+export default function JournalWidget({ widget, startNew = false }: { widget: WidgetInstance; startNew?: boolean }) {
   const symbol = useWidgetSymbol(widget), qc = useQueryClient();
   const [all, setAll] = useState(false), [kind, setKind] = useState("");
   const [before, setBefore] = useState<number | undefined>();
-  const [draft, setDraft] = useState<{ id?: number; symbol: string; title: string; body: string; kind: "research" | "trade"; image: string | null } | null>(null);
+  const [draft, setDraft] = useState<{ id?: number; symbol: string; title: string; body: string; kind: "research" | "trade"; image: string | null } | null>(() => startNew ? { symbol, title: "", body: "", kind: "research", image: null } : null);
   const [error, setError] = useState("");
   const { data, error: loadError } = useQuery({ queryKey: ["journal", all ? "all" : symbol, kind, before], queryFn: () => apiGet<{ entries: JournalEntry[]; nextCursor: number | null }>(`/api/journal?symbol=${all ? "" : encodeURIComponent(symbol)}&kind=${kind}${before ? `&before=${before}` : ""}`) });
   const save = useMutation({ mutationFn: () => draft!.id ? apiPut(`/api/journal/${draft!.id}`, draft) : apiPost("/api/journal", draft), onSuccess: () => { qc.invalidateQueries({ queryKey: ["journal"] }); setDraft(null); setError(""); }, onError: (err) => setError(err.message) });

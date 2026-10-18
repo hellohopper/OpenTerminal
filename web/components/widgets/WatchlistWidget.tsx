@@ -63,7 +63,7 @@ export default function WatchlistWidget() {
             const q = data.find((d) => d.symbol === sym);
             return (
               <tr key={sym} onClick={() => setActiveSymbol(sym)}>
-                <td className="font-bold">{sym}</td>
+                <td className="font-bold"><button aria-label={`Research ${sym}`} className="amber underline" onClick={e => { e.stopPropagation(); useTerminal.getState().openResearch(sym); }}>{sym}</button></td>
                 <td title={quoteQuality(q)??`Retrieved ${q?.retrievedAt}; indicative feed`}><Flash value={q?.price}>{fmt(q?.price)}</Flash>{quoteQuality(q)&&<span className="amber"> ⚠</span>}</td>
                 <td className={pctClass(q?.changePercent)}>
                   <Flash value={q?.changePercent}>{fmt(q?.changePercent)}%</Flash>

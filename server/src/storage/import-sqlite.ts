@@ -22,6 +22,7 @@ export const TABLE_COLUMNS = {
     "claimed_at",
     "token",
   ],
+  workspace_sync_history: ["id", "payload", "version", "updated_at"],
   workspace_sync: ["id", "payload", "version", "updated_at"],
   portfolios: ["id", "name", "created_at"],
   transactions: [

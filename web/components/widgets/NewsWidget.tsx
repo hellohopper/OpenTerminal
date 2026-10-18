@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { apiGet } from "../../lib/api";
 import { isSafeHttpUrl } from "../../lib/links";
-import { useWidgetSymbol, type WidgetInstance } from "../../store/terminal";
+import { useTerminal, useWidgetSymbol, type WidgetInstance } from "../../store/terminal";
 
 type NewsItem = { title: string; link: string; publisher: string; publishedAt: string | null };
 
@@ -27,6 +27,7 @@ export default function NewsWidget({ widget }: { widget: WidgetInstance }) {
         <button className={`term-btn ${mode === "global" ? "active" : ""}`} onClick={() => setMode("global")}>
           GLOBAL
         </button>
+        <button className="term-btn" onClick={() => useTerminal.getState().openResearch(symbol)}>Research {symbol}</button>
       </div>
       {isLoading && <div className="p-2 dim">Loading news…</div>}
       {data.map((n, i) => {

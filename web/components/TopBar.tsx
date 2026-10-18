@@ -50,27 +50,29 @@ export default function TopBar() {
   const healthy = status?.providers.filter((p) => p.ok > 0) ?? [];
 
   return (
-    <header className="flex items-center gap-4 px-3 h-8 bg-[var(--panel-2)] border-b border-[var(--border)] text-[11px] shrink-0">
+    <header className="flex items-center gap-2 px-3 min-h-8 topbar bg-[var(--panel-2)] border-b border-[var(--border)] text-[11px] shrink-0">
       <span className="amber font-bold tracking-widest">OPENTERMINAL</span>
-      <span className={market.open ? "up" : "down"}>● {market.label}</span>
-      <Clock tz="America/New_York" label="NY" />
-      <Clock tz="Europe/Rome" label="MIL" />
-      <Clock tz="Europe/London" label="LDN" />
-      <Clock tz="Asia/Tokyo" label="TYO" />
+      <span className={`market-status ${market.open ? "up" : "down"}`}>● {market.label}</span>
+      {/* desktop market clocks */}
+      <span className="desktop-clocks"><Clock tz="America/New_York" label="NY" /></span>
+      <span className="desktop-clocks"><Clock tz="Europe/Rome" label="MIL" /></span>
+      <span className="desktop-clocks"><Clock tz="Europe/London" label="LDN" /></span>
+      <span className="desktop-clocks"><Clock tz="Asia/Tokyo" label="TYO" /></span>
       <button
-        className="term-btn flex-1 max-w-md text-left dim"
+        className="term-btn flex-1 max-w-md min-w-0 text-left dim topbar-search"
         onClick={() => setCommandOpen(true)}
       >
-        {activeSymbol} — search symbol… <span className="float-right">⌘K</span>
+        {activeSymbol} — search symbols, features… <span className="float-right">⌘K</span>
       </button>
+      <button className="term-btn" aria-label={`Research ${activeSymbol}`} onClick={() => useTerminal.getState().openResearch(activeSymbol)}>Research</button>
       <button className="term-btn" onClick={async()=>{await fetch("/api/session",{method:"DELETE"});window.location.assign("/login");}}>Sign out</button>
-      <span className="dim ml-auto">
+      <span className="dim ml-auto feed-status">
         feeds:{" "}
         {healthy.length > 0
           ? healthy.map((p) => `${p.name} ${p.lastLatencyMs ?? "—"}ms`).join(" · ")
           : "connecting…"}
       </span>
-      <span className={status?.ai ? "up" : "dim"}>AI {status?.ai ? "●" : "○"}</span>
+      <span className={`ai-status ${status?.ai ? "up" : "dim"}`}>AI {status?.ai ? "●" : "○"}</span>
     </header>
   );
 }

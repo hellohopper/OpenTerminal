@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { apiGet, apiPost, apiDelete, fmt, pctClass, type Quote } from "../../lib/api";
+import { useTerminal } from "../../store/terminal";
 import TradeCsvControls from "../TradeCsvControls";
 import { valuePortfolio } from "../../lib/valuation";
 import { symbolsParam } from "../../lib/symbol";
@@ -85,7 +86,7 @@ export default function PortfolioWidget() {
 
       {totals.missing.length>0&&<p role="status" className="amber p-1">Valuation incomplete: {totals.missing.join(", ")}. Missing, expired or unverified-currency quotes are excluded; totals are withheld.</p>}
       <form
-        className="flex gap-1 p-1 border-b border-[var(--border)]"
+        className="flex flex-wrap gap-1 p-1 border-b border-[var(--border)]"
         onSubmit={(e) => {
           e.preventDefault();
           if (form.symbol && form.quantity && form.price) addTx.mutate();
@@ -114,7 +115,7 @@ export default function PortfolioWidget() {
               const last=valued.last,mv=valued.marketValue,upnl=valued.unrealized;
               return (
                 <tr key={p.symbol}>
-                  <td className="font-bold">{p.symbol}</td>
+                  <td className="font-bold"><button aria-label={`Research ${p.symbol}`} className="amber underline" onClick={() => useTerminal.getState().openResearch(p.symbol)}>{p.symbol}</button></td>
                   <td>{fmt(p.quantity, 4)}</td>
                   <td>{fmt(p.avgCost)}</td>
                   <td title={valued.reason??undefined}>{fmt(last)}{valued.reason&&<span className="amber"> ⚠</span>}</td>

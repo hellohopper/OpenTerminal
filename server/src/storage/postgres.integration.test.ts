@@ -9,7 +9,7 @@ import {
 } from "vitest";
 import pg from "pg";
 import {createBackup,restoreBackup} from "./backup.js";
-import {writeSync} from "../sync.js";
+import {writeSync, readSync, listSyncHistory, restoreSyncVersion} from "../sync.js";
 import {makeWorkspace} from "../../../web/lib/workspaces.js";
 import { randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -133,6 +133,16 @@ suite("real PostgreSQL backend", () => {
     const outcomes=await Promise.allSettled([writeSync(db,payload,null),writeSync(db,payload,null)]);
     expect(outcomes.filter(r=>r.status==="fulfilled")).toHaveLength(1);
     expect(outcomes.filter(r=>r.status==="rejected")).toHaveLength(1);
+  });
+  it("retains sync history and serializes concurrent restores", async () => {
+    const w = makeWorkspace("Before", "blank"), payload = {format:"openterminal-device",version:1,workspace:{workspaces:[w],activeWorkspaceId:w.id},preferences:{groups:[],screeners:[]},drawings:{}};
+    const first = await writeSync(db, payload, null);
+    const second = await writeSync(db, {...payload,workspace:{...payload.workspace,workspaces:[{...w,name:"After"}]}}, first.version);
+    const outcomes = await Promise.allSettled([restoreSyncVersion(db, first.version, second.version), restoreSyncVersion(db, first.version, second.version)]);
+    expect(outcomes.filter(o => o.status === "fulfilled")).toHaveLength(1);
+    expect((await readSync(db))!.payload.workspace.workspaces[0].name).toBe("Before");
+    expect((await readSync(db))!.version).not.toBe(first.version);
+    expect(await listSyncHistory(db)).toHaveLength(3);
   });
   it("serializes concurrent ledger writes and rolls back oversells", async () => {
     await call(portfolio, "post", "/:id/transactions", trade);
