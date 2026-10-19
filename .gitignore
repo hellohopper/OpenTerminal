@@ -11,3 +11,6 @@ out/
 # Database
 data/*.db*
 data/.api-key
+
+/test-results/
+/playwright-report/

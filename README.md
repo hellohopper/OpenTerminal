@@ -133,7 +133,7 @@ npm run dev
 - Web UI → **http://localhost:3000**
 - API health → **http://localhost:4000/api/status**
 
-That's it — no `.env` file required to get a fully working terminal.
+Open the web UI and sign in. Set WEB_PASSWORD (12+ characters) and WEB_SESSION_SECRET (32+ characters), or use a strong API_KEY as the owner password and signing key. Without API_KEY, the generated key is saved in data/.api-key. The private API still uses a server-to-server key; browsers receive only an HttpOnly, SameSite session cookie.
 
 ### Optional: AI assistant
 
@@ -154,6 +154,10 @@ Two optional knobs for the assistant, both standard for the Anthropic SDK:
 ### Optional: PostgreSQL
 
 SQLite is the default. Set `DATABASE_URL` on the API to use PostgreSQL for server-side data. [Setup, Docker and SQLite import instructions](docs/postgresql.md) include the `db:migrate` command; existing data is not moved automatically.
+
+### Web sign-in
+
+Web pages and every proxied API request require a signed 12-hour owner session. Set `WEB_PASSWORD` and `WEB_SESSION_SECRET` on the web process; changing either invalidates existing sessions. Local default credentials come from `data/.api-key`. For HTTPS/reverse-proxy deployment, set `WEB_ORIGIN` to the public origin. Mutations require that Origin header, and login attempts are limited to 10 per minute per web process. `WEB_AUTH_DISABLED=1` is an explicit opt-out for isolated development only. This is a single-owner terminal; data is shared across that owner's sessions.
 
 ### Security defaults
 

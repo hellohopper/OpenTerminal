@@ -5,7 +5,7 @@ Requested workflow: separate reviewable PRs, followed by eight features in order
 | Work | Branch | State |
 |---|---|---|
 | Fix valuation and quote metadata | codex/fix-valuation-quality | Complete: 123 tests pass (6 PostgreSQL tests skipped); full build passes |
-| Web authentication and access control | codex/fix-web-auth | Planned |
+| Web authentication and access control | codex/fix-web-auth | Complete: 125 tests pass, web build and 2 browser checks pass |
 | Dependency maintenance | codex/fix-dependency-advisories | Planned |
 | 1. Quote quality dashboard | codex/feature-13-quote-quality | Planned |
 | 2. Trade CSV import/export | codex/feature-14-trade-csv | Planned |

@@ -30,6 +30,9 @@ services:
     ports:
       - "127.0.0.1:3000:3000"
     environment:
+      - WEB_PASSWORD=${WEB_PASSWORD:-}
+      - WEB_SESSION_SECRET=${WEB_SESSION_SECRET:-}
+      - WEB_ORIGIN=${WEB_ORIGIN:-http://localhost:3000}
       - API_URL=http://api:4000
       - API_KEY=${API_KEY:-}
       - API_KEY_FILE=/app/data/.api-key
