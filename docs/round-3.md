@@ -20,3 +20,7 @@ The API checks every five minutes, deduplicates by rule/symbol/bar, and retains 
 ## Investment thesis cards
 
 Add THESES or open a stock's research → Thesis. Record rationale, key metrics, catalysts, invalidation criteria, status and a UTC review date. Edit cards to retain previous versions (latest 500 revisions globally). Version guards reject conflicting edits. Up to 100 cards are supported; archived and invalidated cards stop appearing in due reviews. Due active/watching cards appear in current and newly saved briefings, including text export. Review dates are manually maintained; the Events section provides earnings context. Cards and history participate in server backup/import. Restore invalidates in-flight record writes.
+
+## Trade reviews
+
+REVIEWS groups each symbol into flat-to-flat position cycles, retaining all partial entries/exits and adjusting quantities for recorded splits. Completed cycles show gross dollar P&L, return on total buy cost and calendar days held; open cycles are separate. Summary and strategy groups show win rate (breakeven is not a win), average win/loss and holding time. Add strategy tags, notes and a link to an existing journal entry. Ledger edits recalculate cycles; annotations whose cycle no longer exists are excluded. Up to 500 annotations and 50000 ledger entries are supported. This is USD long-only analysis; dividends, fees, FX and taxes are excluded.

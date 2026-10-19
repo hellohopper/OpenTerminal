@@ -1,3 +1,4 @@
+import {tradeReviewsRouter} from "./routes/trade-reviews.js";
 import {thesesRouter} from "./routes/theses.js";
 import {signalsRouter} from "./routes/signals.js";
 import {signalMonitor} from "./signals.js";
@@ -50,6 +51,7 @@ app.use("/api/data",requireApiKey,express.json({limit:"34mb"}),dataRouter);
 app.use("/api/portfolios/:id/import",requireApiKey,express.json({limit:"2mb"}),tradeCsvRouter);
 app.use("/api/sync",requireApiKey,express.json({limit:"2300kb"}),syncRouter);
 app.use(express.json());
+app.use("/api/trade-reviews",requireApiKey,tradeReviewsRouter);
 app.use("/api/theses",requireApiKey,thesesRouter);
 app.use("/api/signals",requireApiKey,rateLimit({windowMs:60000,max:30}),signalsRouter);
 app.use("/api/delivery",requireApiKey,rateLimit({windowMs:60000,max:20}),deliveryRouter);
