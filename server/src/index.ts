@@ -1,3 +1,4 @@
+import {filingReaderRouter} from "./routes/filing-reader.js";
 import {consolidatedLedgerRouter} from "./routes/consolidated-ledger.js";
 import {paperRouter} from "./routes/paper-trading.js";
 import {paperMonitor} from "./paper-monitor.js";
@@ -67,6 +68,7 @@ app.use("/api/portfolios/:id/import",requireApiKey,express.json({limit:"2mb"}),t
 app.use("/api/sync",requireApiKey,express.json({limit:"2300kb"}),syncRouter);
 app.use("/api/history-library",requireApiKey,express.json({limit:"700kb"}),rateLimit({windowMs:60000,max:60}),historyLibraryRouter);
 app.use(express.json());
+app.use("/api/filing-reader",requireApiKey,rateLimit({windowMs:60000,max:30}),filingReaderRouter);
 app.use("/api/consolidated",requireApiKey,rateLimit({windowMs:60000,max:60}),consolidatedLedgerRouter);
 app.use("/api/paper",requireApiKey,rateLimit({windowMs:60000,max:30}),paperRouter);
 app.use("/api/portfolio-risk",requireApiKey,rateLimit({windowMs:60000,max:20}),portfolioRiskRouter);
@@ -95,7 +97,6 @@ app.use(
 // caller could otherwise repeat the multi-provider fan-out in market.ts (up to
 // hundreds of outbound calls per request — see getQuotes) fast enough to get
 // this deployment's IP rate-limited or banned by Nasdaq/Yahoo/Stooq/SEC.
-app.use("/api", rateLimit({ windowMs: 60_000, max: 240 }), marketRouter);
 // Portfolio data and the paid AI endpoint require a shared secret; see auth.ts.
 app.use("/api/portfolios", requireApiKey, portfolioRouter);
 app.use(
@@ -104,6 +105,8 @@ app.use(
   rateLimit({ windowMs: 60_000, max: 10 }),
   aiRouter,
 );
+
+app.use("/api", rateLimit({ windowMs: 60_000, max: 240 }), marketRouter);
 
 app.get("/api/status", (_req, res) => {
   res.json({
