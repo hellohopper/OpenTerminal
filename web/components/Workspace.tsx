@@ -21,6 +21,7 @@ import PortfolioRiskWidget from "./widgets/PortfolioRiskWidget";
 import PaperTradingWidget from "./widgets/PaperTradingWidget";
 import ConsolidatedLedgerWidget from "./widgets/ConsolidatedLedgerWidget";
 import FilingReaderWidget from "./widgets/FilingReaderWidget";
+import EarningsReviewWidget from "./widgets/EarningsReviewWidget";
 import SignalsWidget from "./widgets/SignalsWidget";
 import QualityWidget from "./widgets/QualityWidget";
 import BackupWidget from "./widgets/BackupWidget";
@@ -69,6 +70,7 @@ function WidgetBody({ widget }: { widget: WidgetInstance }) {
     case "paper": return <PaperTradingWidget />;
     case "consolidated": return <ConsolidatedLedgerWidget />;
     case "filingReader": return <FilingReaderWidget />;
+    case "earningsReview": return <EarningsReviewWidget />;
     case "signals": return <SignalsWidget />;
     case "quality": return <QualityWidget />;
     case "backup": return <BackupWidget />;
