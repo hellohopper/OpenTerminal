@@ -123,6 +123,8 @@ No paid API, no keys, and no single point of failure — every endpoint has a fa
 
 ## 🚀 Quick start
 
+Requires Node.js 22.12 or newer.
+
 ```bash
 git clone https://github.com/ErTasselli/openterminal.git
 cd openterminal
@@ -234,7 +236,7 @@ Please open an issue first for anything non‑trivial so we can align on approac
 
 ## Known limitations
 
-- `npm audit` still flags two dependency advisories this project doesn't force-fix: `fast-xml-parser`'s XMLBuilder injection (moderate) doesn't apply here — only `XMLParser` is used, never `XMLBuilder` — and `postcss`'s high-severity issue is bundled inside Next.js itself, only resolved by a Next 16 major upgrade. Both are tracked, neither is silently ignored.
+- Dependency advisories are checked with `npm audit` in CI. The maintenance update currently reports zero advisories, including development dependencies. Patched transitive PostCSS and qs versions are enforced by root overrides; keep the lockfile committed and use `npm ci` for repeatable installs.
 - If you deploy behind a reverse proxy or load balancer, set `API_HOST`/`WEB_ORIGIN` to match, and terminate TLS in front of it — this project doesn't handle HTTPS itself.
 
 <br/>
