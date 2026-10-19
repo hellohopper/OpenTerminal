@@ -128,7 +128,7 @@ export async function getQuotes(symbols: string[], options: { allowStale?: boole
   const missing: string[] = [];
   for (const sym of symbols) {
     const hit = cacheGet<yahoo.Quote>(`quote:${sym}`);
-    if (hit) fresh.set(sym, hit);
+    if (hit) fresh.set(sym, { ...hit, stale: false });
     else missing.push(sym);
   }
   if (missing.length === 0) return symbols.map((s) => fresh.get(s)!).filter(Boolean);
@@ -212,6 +212,7 @@ export async function getQuotes(symbols: string[], options: { allowStale?: boole
   }
 
   options.signal?.throwIfAborted();
+  for (const [sym,q] of fetched) fetched.set(sym,{...q,retrievedAt:new Date().toISOString(),stale:false});
   // Price-only monitor reads must not replace enriched dashboard quotes.
   if (options.includeFundamentals !== false) {
     for (const [sym, q] of fetched) cacheStore(`quote:${sym}`, q, QUOTE_TTL);
@@ -220,7 +221,7 @@ export async function getQuotes(symbols: string[], options: { allowStale?: boole
   const out: yahoo.Quote[] = [];
   for (const sym of symbols) {
     const q = fresh.get(sym) ?? fetched.get(sym) ?? (options.allowStale === false ? undefined : staleGet<yahoo.Quote>(`quote:${sym}`));
-    if (q) out.push(q);
+    if (q) out.push(fresh.has(sym)||fetched.has(sym)?q:{...q,stale:true});
   }
   return out;
 }

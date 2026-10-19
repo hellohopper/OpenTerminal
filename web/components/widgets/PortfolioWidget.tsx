@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { apiGet, apiPost, apiDelete, fmt, pctClass, type Quote } from "../../lib/api";
+import { valuePortfolio } from "../../lib/valuation";
 import { symbolsParam } from "../../lib/symbol";
 
 type Portfolio = { id: number; name: string };
@@ -22,7 +23,7 @@ export default function PortfolioWidget() {
   });
   const pid = portfolioId ?? portfolios[0]?.id;
 
-  const { data: positions = [], error: positionsError } = useQuery({
+  const { data: positions = [], error: positionsError, isLoading: positionsLoading } = useQuery({
     queryKey: ["positions", pid],
     queryFn: () => apiGet<Position[]>(`/api/portfolios/${pid}/positions`),
     enabled: !!pid,
@@ -59,18 +60,8 @@ export default function PortfolioWidget() {
     },
   });
 
-  const totals = positions.reduce(
-    (acc, p) => {
-      const q = quotes.find((x) => x.symbol === p.symbol);
-      const mv = (q?.price ?? p.avgCost) * p.quantity;
-      acc.marketValue += mv;
-      acc.cost += p.avgCost * p.quantity;
-      acc.realized += p.realizedPnl;
-      return acc;
-    },
-    { marketValue: 0, cost: 0, realized: 0 }
-  );
-  const unrealized = totals.marketValue - totals.cost;
+  const totals=valuePortfolio(positions,quotes);
+  const unrealized=positionsLoading||positionsError?null:totals.unrealized;
 
   return (
     <div>
@@ -85,12 +76,13 @@ export default function PortfolioWidget() {
           TRANSACTIONS
         </button>
         <span className="ml-auto">
-          MV <span className="amber">{fmt(totals.marketValue)}</span>{" "}
+          MV <span className="amber">{fmt(positionsLoading||positionsError?null:totals.marketValue)}</span>{" "}
           <span className="dim">Unrl</span> <span className={pctClass(unrealized)}>{fmt(unrealized)}</span>{" "}
           <span className="dim">Rlzd</span> <span className={pctClass(totals.realized)}>{fmt(totals.realized)}</span>
         </span>
       </div>
 
+      {totals.missing.length>0&&<p role="status" className="amber p-1">Valuation incomplete: {totals.missing.join(", ")}. Missing, expired or unverified-currency quotes are excluded; totals are withheld.</p>}
       <form
         className="flex gap-1 p-1 border-b border-[var(--border)]"
         onSubmit={(e) => {
@@ -116,16 +108,14 @@ export default function PortfolioWidget() {
           </thead>
           <tbody>
             {positions.map((p) => {
-              const q = quotes.find((x) => x.symbol === p.symbol);
-              const last = q?.price ?? null;
-              const mv = last !== null ? last * p.quantity : null;
-              const upnl = last !== null ? (last - p.avgCost) * p.quantity : null;
+              const valued=totals.rows.find(r=>r.symbol===p.symbol)!;
+              const last=valued.last,mv=valued.marketValue,upnl=valued.unrealized;
               return (
                 <tr key={p.symbol}>
                   <td className="font-bold">{p.symbol}</td>
                   <td>{fmt(p.quantity, 4)}</td>
                   <td>{fmt(p.avgCost)}</td>
-                  <td>{fmt(last)}</td>
+                  <td title={valued.reason??undefined}>{fmt(last)}{valued.reason&&<span className="amber"> ⚠</span>}</td>
                   <td>{fmt(mv)}</td>
                   <td className={pctClass(upnl)}>{fmt(upnl)}</td>
                   <td className={pctClass(p.realizedPnl)}>{fmt(p.realizedPnl)}</td>

@@ -23,7 +23,7 @@ describe("fresh quote reads for alerts", () => {
       }),
     ).toEqual([]);
     expect(await getQuotes(["FAIL"], { includeFundamentals: false })).toEqual([
-      quote,
+      {...quote,stale:true},
     ]);
   });
   it("never resolves a failed crypto quote through a same-named equity", async () => {
@@ -57,7 +57,7 @@ describe("fresh quote reads for alerts", () => {
         allowStale: false,
         includeFundamentals: false,
       }),
-    ).toEqual([quote]);
+    ).toEqual([{...quote,stale:false}]);
     expect(enrich).not.toHaveBeenCalled();
   });
   it("honors a caller cancellation before reading or calling providers", async () => {
