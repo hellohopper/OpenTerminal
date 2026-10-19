@@ -1,7 +1,7 @@
 import {db} from './db.js';
 import {records} from './records.js';
 export type ResearchEntry={kind:string;id:number;symbol:string;title:string;updatedAt:string;body:string;details:unknown;paragraphs?:{id:string;text:string}[];truncated?:boolean};
-export const researchKinds=['thesis-rule','journal','thesis','thesis-history','valuation-scenario','filing','filing-document','filing-annotation','earnings-review','paper-order'] as const;
+export const researchKinds=['thesis-rule','journal','thesis','thesis-history','valuation-scenario','filing','filing-document','filing-annotation','earnings-review','paper-order','option-lot'] as const;
 export function researchEntry(kind:string,row:any,documents:any[]=[]):ResearchEntry|null{
  const p=row.payload??row,doc=kind==='filing-annotation'?documents.find(d=>d.id===p.documentId)?.payload:null;
  const symbol=p.symbol??p.input?.symbol??p.filing?.symbol??p.card?.symbol??doc?.filing?.symbol;if(typeof symbol!=='string')return null;
