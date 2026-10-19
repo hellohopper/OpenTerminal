@@ -5,6 +5,7 @@ export const WIDGET_CATALOG: Record<WidgetType, { title: string; label: string; 
   rebalance: { title: "Rebalance Simulator", label: "REBALANCE", group: "Portfolio", key: "" },
   filings: { title: "SEC Filing Tracker", label: "FILINGS", group: "Research", key: "" },
   notifications: { title: "Notification Center", label: "NOTIFICATIONS", group: "Portfolio", key: "" },
+  tracking: { title: "Screener Changes", label: "SCREEN CHANGES", group: "Research", key: "" },
   signals: { title: "Technical Signals", label: "SIGNALS", group: "Research", key: "" },
   chart: { title: "Chart", label: "CHART", group: "Markets", key: "⌥1" },
   quote: { title: "Quote", label: "QUOTE", group: "Markets", key: "⌥2" },

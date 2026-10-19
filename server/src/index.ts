@@ -1,3 +1,5 @@
+import {screenerTrackingRouter} from "./routes/screener-tracking.js";
+import {screenerTracker} from "./screener-tracking.js";
 import {notificationsRouter} from "./routes/notifications.js";
 import {notificationWorker} from "./notifications.js";
 import {filingsRouter} from "./routes/filings.js";
@@ -56,6 +58,7 @@ app.use("/api/data",requireApiKey,express.json({limit:"34mb"}),dataRouter);
 app.use("/api/portfolios/:id/import",requireApiKey,express.json({limit:"2mb"}),tradeCsvRouter);
 app.use("/api/sync",requireApiKey,express.json({limit:"2300kb"}),syncRouter);
 app.use(express.json());
+app.use("/api/screener-tracking",requireApiKey,rateLimit({windowMs:60000,max:30}),screenerTrackingRouter);
 app.use("/api/notifications",requireApiKey,rateLimit({windowMs:60000,max:30}),notificationsRouter);
 app.use("/api/filings",requireApiKey,rateLimit({windowMs:60000,max:30}),filingsRouter);
 app.use("/api/rebalance",requireApiKey,rateLimit({windowMs:60000,max:20}),rebalanceRouter);
@@ -110,6 +113,7 @@ const PORT = Number(process.env.API_PORT ?? 4000);
 // API_KEY + WEB_ORIGIN) to intentionally expose it beyond this machine.
 const HOST = process.env.API_HOST ?? "127.0.0.1";
 const server = app.listen(PORT, HOST, () => {
+  screenerTracker.start();
   notificationWorker.start();
   filingMonitor.start();
   signalMonitor.start();
@@ -124,7 +128,7 @@ async function shutdown() {
   stopping = true;
   const deadline = setTimeout(() => process.exit(1), 15000);
   deadline.unref();
-  await Promise.all([alertMonitor.stop(),briefingScheduler.stop(),signalMonitor.stop(),filingMonitor.stop(),notificationWorker.stop()]);
+  await Promise.all([alertMonitor.stop(),briefingScheduler.stop(),signalMonitor.stop(),filingMonitor.stop(),notificationWorker.stop(),screenerTracker.stop()]);
   await new Promise<void>((resolve) => server.close(() => resolve()));
   await db.close();
   clearTimeout(deadline);

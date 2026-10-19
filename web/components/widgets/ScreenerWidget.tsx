@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { apiGet, fmt, fmtBig, pctClass } from "../../lib/api";
+import { apiGet, apiPost, fmt, fmtBig, pctClass } from "../../lib/api";
 import { useTerminal } from "../../store/terminal";
 import SavedControls from "../SavedControls";
 import type {ScreenerPreset} from "../../lib/preferences";
@@ -16,6 +16,7 @@ type Row = {
 
 export default function ScreenerWidget() {
   const setActiveSymbol = useTerminal((s) => s.setActiveSymbol);
+  const [trackerName,setTrackerName]=useState("My daily screen"),[trackerMessage,setTrackerMessage]=useState("");
   const [market, setMarket] = useState<"us" | "eu">("us");
   const [sector, setSector] = useState("");
   const [changeMin, setChangeMin] = useState("");
@@ -60,6 +61,7 @@ export default function ScreenerWidget() {
   return (
     <div>
       <SavedControls kind="screeners" value={{market,sector,changeMin,marketCapMinB,volumeMinM,sort,dir}} onLoad={value=>{const p=value as ScreenerPreset;setMarket(p.market);setSector(p.sector);setChangeMin(p.changeMin);setMarketCapMinB(p.marketCapMinB);setVolumeMinM(p.volumeMinM);setSort(p.sort);setDir(p.dir);}} />
+      <div className="flex gap-1 p-1 flex-wrap"><input aria-label="Daily tracker name" value={trackerName} maxLength={80} onChange={e=>setTrackerName(e.target.value)}/><button className="term-btn" onClick={async()=>{try{await apiPost("/api/screener-tracking",{name:trackerName,market,sector,changeMin:changeMin===""?null:Number(changeMin),marketCapMin:marketCapMinB===""?null:Number(marketCapMinB)*1e9,volumeMin:volumeMinM===""?null:Number(volumeMinM)*1e6,sort,dir,enabled:true});useTerminal.getState().addWidget("tracking");setTrackerMessage("Daily tracker created.");}catch(e){setTrackerMessage((e as Error).message);}}}>Track daily results</button>{trackerMessage&&<span role="status">{trackerMessage}</span>}</div>
       <div className="flex gap-2 p-1 flex-wrap items-center">
         <div className="flex gap-1">
           {(["us", "eu"] as const).map((m) => (
