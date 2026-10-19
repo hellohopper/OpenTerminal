@@ -28,6 +28,7 @@ import ThesisMonitorWidget from "./widgets/ThesisMonitorWidget";
 import AccountImportWidget from "./widgets/AccountImportWidget";
 import PortfolioGuardsWidget from "./widgets/PortfolioGuardsWidget";
 import OptionPositionsWidget from "./widgets/OptionPositionsWidget";
+import WalkforwardWidget from "./widgets/WalkforwardWidget";
 import SignalsWidget from "./widgets/SignalsWidget";
 import QualityWidget from "./widgets/QualityWidget";
 import BackupWidget from "./widgets/BackupWidget";
@@ -83,6 +84,7 @@ function WidgetBody({ widget }: { widget: WidgetInstance }) {
     case "accountImport": return <AccountImportWidget />;
     case "portfolioGuards": return <PortfolioGuardsWidget />;
     case "optionPositions": return <OptionPositionsWidget />;
+    case "walkforward": return <WalkforwardWidget />;
     case "signals": return <SignalsWidget />;
     case "quality": return <QualityWidget />;
     case "backup": return <BackupWidget />;

@@ -1,3 +1,5 @@
+import {walkforwardRouter} from "./routes/walkforward.js";
+import {recoverWalkforward,stopWalkforward} from "./walkforward-jobs.js";
 import {optionPositionsRouter} from "./routes/option-positions.js";
 import {portfolioGuardsRouter} from "./routes/portfolio-guards.js";
 import {guardMonitor} from "./guard-monitor.js";
@@ -76,9 +78,12 @@ app.use(
 app.use("/api/data",requireApiKey,express.json({limit:"34mb"}),dataRouter);
 app.use("/api/portfolios/:id/import",requireApiKey,express.json({limit:"2mb"}),tradeCsvRouter);
 app.use("/api/sync",requireApiKey,express.json({limit:"2300kb"}),syncRouter);
-app.use("/api/history-library",requireApiKey,express.json({limit:"700kb"}),rateLimit({windowMs:60000,max:60}),historyLibraryRouter);
+// Chart panels share authenticated history reads; imports keep a separate write budget.
+const historyReads=rateLimit({windowMs:60000,max:240}),historyWrites=rateLimit({windowMs:60000,max:60});
+app.use("/api/history-library",requireApiKey,express.json({limit:"700kb"}),(req,res,next)=>(req.method==='GET'?historyReads:historyWrites)(req,res,next),historyLibraryRouter);
 app.use("/api/account-import",requireApiKey,express.json({limit:"700kb"}),rateLimit({windowMs:60000,max:60}),accountImportRouter);
 app.use(express.json());
+app.use("/api/walkforward",requireApiKey,rateLimit({windowMs:60000,max:180}),walkforwardRouter);
 app.use("/api/option-positions",requireApiKey,rateLimit({windowMs:60000,max:30}),optionPositionsRouter);
 app.use("/api/portfolio-guards",requireApiKey,rateLimit({windowMs:60000,max:30}),portfolioGuardsRouter);
 app.use("/api/thesis-monitor",requireApiKey,rateLimit({windowMs:60000,max:30}),thesisMonitorRouter);
@@ -148,6 +153,7 @@ const PORT = Number(process.env.API_PORT ?? 4000);
 // unauthenticated-by-default API to the network. Set API_HOST=0.0.0.0 (and
 // API_KEY + WEB_ORIGIN) to intentionally expose it beyond this machine.
 const HOST = process.env.API_HOST ?? "127.0.0.1";
+await recoverWalkforward();
 const server = app.listen(PORT, HOST, () => {
   guardMonitor.start();
   thesisMonitor.start();
@@ -167,7 +173,7 @@ async function shutdown() {
   stopping = true;
   const deadline = setTimeout(() => process.exit(1), 15000);
   deadline.unref();
-  await Promise.all([guardMonitor.stop(),thesisMonitor.stop(),alertMonitor.stop(),briefingScheduler.stop(),signalMonitor.stop(),filingMonitor.stop(),notificationWorker.stop(),screenerTracker.stop(),paperMonitor.stop()]);
+  await Promise.all([stopWalkforward(),guardMonitor.stop(),thesisMonitor.stop(),alertMonitor.stop(),briefingScheduler.stop(),signalMonitor.stop(),filingMonitor.stop(),notificationWorker.stop(),screenerTracker.stop(),paperMonitor.stop()]);
   await new Promise<void>((resolve) => server.close(() => resolve()));
   await db.close();
   clearTimeout(deadline);
