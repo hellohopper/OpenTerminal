@@ -110,11 +110,13 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
     window.addEventListener("keydown", cancel);
     return () => window.removeEventListener("keydown", cancel);
   }, []);
+  const library=useQuery({queryKey:["history-library"],queryFn:()=>apiGet<{active:{payload:{symbol:string;datasetId:number|null}}[]}>("/api/history-library")});
+  const selectedHistory=library.data?.active.find(a=>a.payload.symbol===symbol)?.payload.datasetId;
   const { data: candles, error } = useQuery({
-    queryKey: ["history", symbol, range],
+    queryKey: ["history", symbol, range,selectedHistory],
     queryFn: () =>
       apiGet<Candle[]>(
-        `/api/history/${encodeURIComponent(symbol)}?range=${range}`,
+        `/api/history-library/series/${encodeURIComponent(symbol)}?range=${range}`,
       ),
     refetchInterval: range === "1D" ? 8_000 : 60_000,
   });
@@ -124,7 +126,7 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
       queryKey: ["history", s, range],
       queryFn: () =>
         apiGet<Candle[]>(
-          `/api/history/${encodeURIComponent(s)}?range=${range}`,
+          `/api/history-library/series/${encodeURIComponent(s)}?range=${range}`,
         ),
       enabled: comparing,
       refetchInterval: range === "1D" ? 8000 : 60000,
@@ -534,7 +536,8 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
   return (
     <div className="flex flex-col h-full">
       <div className="flex gap-1 p-1 flex-wrap shrink-0">
-        <button
+        {selectedHistory&&!["1D","5D","1M"].includes(range)&&<span className="amber">Library version #{selectedHistory}</span>}
+          <button
           className="term-btn"
           disabled={
             !candles?.length ||

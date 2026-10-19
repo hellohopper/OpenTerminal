@@ -12,7 +12,7 @@ export function backtestDecision(rows:Candle[],index:number,p:BacktestInput){
  const priorHigh=Math.max(...rows.slice(index-p.lookback,index).map(r=>r.high));return {buy:c.close>priorHigh,sell:c.close<fast,evidence:{fast,priorHigh}};
 }
 export function runBacktest(raw:Candle[],input:BacktestInput,now=new Date()){
- if(raw.length>2000)throw new Error('At most 2000 daily candles are supported.');
+ if(raw.length>5000)throw new Error('At most 5000 daily candles are supported.');
  const rows=closedDaily(raw,now).filter(r=>new Date(r.time*1000).toISOString().slice(0,10)<=input.to),day=(r:Candle)=>new Date(r.time*1000).toISOString().slice(0,10),warmup=(input.template==='sma'?input.slow:Math.max(input.fast,input.lookback))+1,start=rows.findIndex(r=>day(r)>=input.from),last=rows.at(-1);
  if(!last||start<0||start<warmup)throw new Error(`Insufficient history: need ${warmup} prior daily bars for warmup.`);
  if(Date.parse(day(rows[start]))-Date.parse(input.from)>5*86400000||Date.parse(input.to)-Date.parse(day(last))>5*86400000)throw new Error('Requested date range is not covered by the available daily history.');

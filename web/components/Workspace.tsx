@@ -15,6 +15,7 @@ import NotificationsWidget from "./widgets/NotificationsWidget";
 import ScreenerTrackingWidget from "./widgets/ScreenerTrackingWidget";
 import BacktestWidget from "./widgets/BacktestWidget";
 import TodayWidget from "./widgets/TodayWidget";
+import HistoryLibraryWidget from "./widgets/HistoryLibraryWidget";
 import SignalsWidget from "./widgets/SignalsWidget";
 import QualityWidget from "./widgets/QualityWidget";
 import BackupWidget from "./widgets/BackupWidget";
@@ -57,6 +58,7 @@ function WidgetBody({ widget }: { widget: WidgetInstance }) {
     case "tracking": return <ScreenerTrackingWidget />;
     case "backtest": return <BacktestWidget />;
     case "today": return <TodayWidget />;
+    case "historyLibrary": return <HistoryLibraryWidget />;
     case "signals": return <SignalsWidget />;
     case "quality": return <QualityWidget />;
     case "backup": return <BackupWidget />;
