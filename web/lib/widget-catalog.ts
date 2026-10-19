@@ -15,6 +15,7 @@ export const WIDGET_CATALOG: Record<WidgetType, { title: string; label: string; 
   consolidated: { title: "Consolidated Multicurrency Ledger", label: "MULTI LEDGER", group: "Portfolio", key: "" },
   filingReader: { title: "SEC Filing Reader", label: "FILING READER", group: "Research", key: "" },
   earningsReview: { title: "Earnings Review Archives", label: "EARNINGS REVIEW", group: "Research", key: "" },
+  researchSearch: { title: "Personal Research Search", label: "RESEARCH SEARCH", group: "Research", key: "" },
   signals: { title: "Technical Signals", label: "SIGNALS", group: "Research", key: "" },
   chart: { title: "Chart", label: "CHART", group: "Markets", key: "⌥1" },
   quote: { title: "Quote", label: "QUOTE", group: "Markets", key: "⌥2" },

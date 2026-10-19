@@ -22,6 +22,7 @@ import PaperTradingWidget from "./widgets/PaperTradingWidget";
 import ConsolidatedLedgerWidget from "./widgets/ConsolidatedLedgerWidget";
 import FilingReaderWidget from "./widgets/FilingReaderWidget";
 import EarningsReviewWidget from "./widgets/EarningsReviewWidget";
+import ResearchSearchWidget from "./widgets/ResearchSearchWidget";
 import SignalsWidget from "./widgets/SignalsWidget";
 import QualityWidget from "./widgets/QualityWidget";
 import BackupWidget from "./widgets/BackupWidget";
@@ -71,6 +72,7 @@ function WidgetBody({ widget }: { widget: WidgetInstance }) {
     case "consolidated": return <ConsolidatedLedgerWidget />;
     case "filingReader": return <FilingReaderWidget />;
     case "earningsReview": return <EarningsReviewWidget />;
+    case "researchSearch": return <ResearchSearchWidget />;
     case "signals": return <SignalsWidget />;
     case "quality": return <QualityWidget />;
     case "backup": return <BackupWidget />;
