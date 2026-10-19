@@ -17,3 +17,9 @@ Select one version per symbol to share its daily bars with charts, comparisons a
 VALUATION provides enterprise DCF, reverse-DCF growth, discount/terminal-growth sensitivities and equity P/E scenarios. All rates are decimals; user revenue grows through the explicit forecast and is multiplied by a user-assumed unlevered FCF margin. Cost of capital must exceed terminal growth. Equity deducts net debt once (negative debt represents net cash); negative equity residual is floored at zero per share. P/E uses net income and does not deduct debt again. Reverse DCF solves only growth in −50% to +100% with other assumptions fixed, otherwise showing unavailable.
 
 Optional current USD quote and annual SEC revenue/net-income references populate inputs; reported operating cash flow minus capex is displayed only as a reference and is not automatically treated as FCFF. Save up to fifty scenarios, link a matching-symbol thesis version and export assumptions/results to the journal. These are user assumption models, not forecasts or trading instructions.
+
+## Portfolio stress and correlation
+
+PORTFOLIO RISK analyzes 1–20 funded long-only USD holdings using fresh valuations, a selected daily history version or provider fallback and SPY. Correlations, current-weight volatility, beta and variance-risk contributions require at least ten common observations and no gaps over seven calendar days. Constant-series statistics remain unavailable. Mixed adjustment bases are rejected and actual common-date coverage is shown.
+
+Symbol and sector percentage shocks compound; cash is unchanged. Historical scenarios revalue current positions using first-to-last price moves in the selected common window, rather than replaying the old portfolio. Costs, dividends, FX and future outcomes are not modeled. Sector lookup failures produce Unclassified exposure. Save the latest thirty snapshots with holdings, assumptions and source identities; snapshots are included in server backups.
