@@ -1,0 +1,2 @@
+/** Read the first CSV record for column selectors; full validation stays on the API. */
+export function csvHeaders(csv:string){const headers:string[]=[];let cell='',quoted=false;for(let i=0;i<csv.length;i++){const c=csv[i];if(c==='"'){if(quoted&&csv[i+1]==='"'){cell+='"';i++;}else quoted=!quoted;}else if(!quoted&&c===','){headers.push(cell);cell='';}else if(!quoted&&(c==='\n'||c==='\r')){headers.push(cell);return headers.map(h=>h.replace(/^\uFEFF/,''));}else cell+=c;}if(cell||headers.length)headers.push(cell);return headers.map(h=>h.replace(/^\uFEFF/,''));}
