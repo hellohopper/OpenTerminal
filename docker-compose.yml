@@ -15,6 +15,9 @@ services:
       - WEB_ORIGIN=${WEB_ORIGIN:-http://localhost:3000}
       - DATA_DIR=/app/data
       - DATABASE_URL=${DATABASE_URL:-}
+      - WEB_PUSH_PUBLIC_KEY=${WEB_PUSH_PUBLIC_KEY:-}
+      - WEB_PUSH_PRIVATE_KEY=${WEB_PUSH_PRIVATE_KEY:-}
+      - WEB_PUSH_SUBJECT=${WEB_PUSH_SUBJECT:-}
       # Leave unset unless you put your own trusted reverse proxy in front of
       # the web service (see README > Security defaults) — otherwise a caller
       # could forge X-Forwarded-For to dodge the /api/ai rate limit.
