@@ -1,6 +1,7 @@
 import SQLite from "better-sqlite3";
 import { AppDatabase, type Row } from "./database.js";
 export const TABLE_COLUMNS = {
+  research_records: ["id", "kind", "record_key", "payload", "version", "updated_at"],
   briefing_schedules: [
     "id",
     "symbols",

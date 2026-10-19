@@ -7,6 +7,7 @@ import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 import { normalizeSymbol } from "../lib/symbol";
 import { useTerminal, type WidgetInstance } from "../store/terminal";
+import SignalsWidget from "./widgets/SignalsWidget";
 import QualityWidget from "./widgets/QualityWidget";
 import BackupWidget from "./widgets/BackupWidget";
 import SyncWidget from "./widgets/SyncWidget";
@@ -40,6 +41,7 @@ const Grid = WidthProvider(GridLayout);
 
 function WidgetBody({ widget }: { widget: WidgetInstance }) {
   switch (widget.type) {
+    case "signals": return <SignalsWidget />;
     case "quality": return <QualityWidget />;
     case "backup": return <BackupWidget />;
     case "sync": return <SyncWidget />;
