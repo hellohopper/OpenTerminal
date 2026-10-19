@@ -1,6 +1,6 @@
-# Fourth feature round
+# Daily workbench, research models and earnings archives
 
-Each feature has its own PR, validated and merged before the next begins: TODAY workbench, historical data center, valuation lab, portfolio stress/correlation, paper trading, consolidated multicurrency ledger, filing reader/diff, and earnings review archives.
+Add panels from the widget sidebar or find them with Cmd/Ctrl+K: TODAY, HISTORY DATA, VALUATION, PORTFOLIO RISK, PAPER TRADE, MULTI LEDGER, FILING READER and EARNINGS REVIEW. Saved research records belong to the single deployment owner and participate in server database backup/import. They are independent of browser workspace layout sync.
 
 ## TODAY
 
@@ -45,3 +45,11 @@ Reports support ten existing portfolios, five currency accounts and thirty open 
 FILING READER retrieves stored filing metadata's canonical SEC HTML URLs only, with redirects disabled, a 15-second timeout and a streamed 2 MB limit. Inert extracted text retains up to 500 paragraphs / 200,000 characters, with explicit truncation, source URL, retrieval time and SHA-256 of downloaded HTML. Tables are flattened. Twenty immutable snapshots and 500 revision-guarded paragraph annotations participate in backups. Matching company/form documents support exact paragraph multiset addition/removal comparisons; reordering and semantic interpretation are outside this comparison.
 
 Optional Anthropic summary/Q&A accepts 1–12 selected excerpts totaling at most 24,000 characters. It labels excerpt-only scope and returns source text plus clickable paragraph links. Missing or unknown paragraph citations reject the response; valid citation syntax does not establish factual correctness. Source text is untrusted reference data. Without a configured AI key, reading, annotations and comparisons remain available.
+
+## Earnings review archives
+
+EARNINGS REVIEW captures a matching company's immutable thesis revision, expectations, user event date and declared release session. Only captures before the event UTC date are prospective; same-day and past captures are explicitly retrospective and cannot establish prior predictions. Up to 100 archives hold post-event notes and refreshed analyses, with optimistic revision guards and the latest twenty prior revisions per archive. Search, JSON export, deletion and server backup/import are supported.
+
+After the event UTC date completes, refresh matches Nasdaq's reported EPS/consensus/surprise to the exact event date; missing actuals remain unavailable and flag the window as user-dated. Fresh USD currency checks and matching history adjustment-basis labels are required. Shared selected history versions or provider fallback supply completed prices, with source checksums and measured closing values preserved. Unknown/before-open timing uses the previous common close; after-close timing requires an exact event-date close. Sessions are user declarations, not verified release timestamps.
+
+The 1/5/20 horizons count common supplied completed dates with SPY, rather than calendar days or an independently verified exchange calendar. Missing horizons or gaps over seven calendar days remain unavailable. Excess return is asset price return minus SPY price return in percentage points. Dividend inclusion follows the declared or unspecified series adjustment basis; no separate dividends, fees, FX or causal attribution are modeled. Thesis edits never rewrite the captured thesis; result refreshes retain previous analyses in revision history.
