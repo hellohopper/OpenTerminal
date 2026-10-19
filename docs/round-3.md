@@ -24,3 +24,7 @@ Add THESES or open a stock's research → Thesis. Record rationale, key metrics,
 ## Trade reviews
 
 REVIEWS groups each symbol into flat-to-flat position cycles, retaining all partial entries/exits and adjusting quantities for recorded splits. Completed cycles show gross dollar P&L, return on total buy cost and calendar days held; open cycles are separate. Summary and strategy groups show win rate (breakeven is not a win), average win/loss and holding time. Add strategy tags, notes and a link to an existing journal entry. Ledger edits recalculate cycles; annotations whose cycle no longer exists are excluded. Up to 500 annotations and 50000 ledger entries are supported. This is USD long-only analysis; dividends, fees, FX and taxes are excluded.
+
+## Rebalance simulation
+
+REBALANCE accepts target stock weights (one SYMBOL:PERCENT per line, total at most 100%, remainder cash), new funds and fractional/whole-share or no-sale modes. Save/load target sets per portfolio; simulations show before/after cash, weights, concentration, sector exposure and signed share adjustments. Ledger cash must be funded and every holding/target needs a freshly retrieved, non-stale USD quote. No-sale deficits are proportionally scaled to available cash. Whole-share adjustments round toward zero and can leave residual drift. Simulations never write trades. Up to 30 symbols and 50000 ledger entries are supported; fees, slippage, tax and FX are excluded.
