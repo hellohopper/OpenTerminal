@@ -1,4 +1,5 @@
 "use client";
+import {researchLink,type ResearchTarget} from "../lib/research-link";
 
 import { create } from "zustand";
 import { persist, createJSONStorage, type StateStorage } from "zustand/middleware";
@@ -12,7 +13,8 @@ type TerminalState = WorkspaceData & {
   activeWorkspaceId: string;
   commandOpen: boolean;
   researchSymbol: string | null;
-  openResearch: (symbol: string) => void;
+  researchTarget: ResearchTarget | null;
+  openResearch: (symbol: string, target?: ResearchTarget) => void;
   closeResearch: () => void;
   mobileView: "holdings" | "alerts" | "events" | "workspace";
   setMobileView: (view: "holdings" | "alerts" | "events" | "workspace") => void;
@@ -46,9 +48,9 @@ export function createTerminalStore(storage?: StateStorage) {
     };
     return {
       ...initial, workspaces: [initial], activeWorkspaceId: initial.id, commandOpen: false,
-      researchSymbol: null, mobileView: "holdings",
-      openResearch: (symbol) => { const sym = normalizeSymbol(symbol); if (sym) { get().setActiveSymbol(sym); set({ researchSymbol: sym, commandOpen: false }); } },
-      closeResearch: () => set({ researchSymbol: null }),
+      researchSymbol: null, researchTarget: null, mobileView: "holdings",
+      openResearch: (symbol,target) => { const sym = normalizeSymbol(symbol); if (sym) { get().setActiveSymbol(sym); set({ researchSymbol: sym, researchTarget: target??null, commandOpen: false }); if(typeof window!=="undefined")window.history.replaceState(null,"",researchLink(sym,target)); } },
+      closeResearch: () => {set({ researchSymbol: null,researchTarget:null });if(typeof window!=="undefined")window.history.replaceState(null,"",window.location.pathname);},
       setMobileView: (mobileView) => set({ mobileView }),
       setActiveSymbol: (s) => { const sym = normalizeSymbol(s); if (sym) set((st) => activePatch(st, { activeSymbol: sym })); },
       setCommandOpen: (open) => set({ commandOpen: open }),

@@ -1,5 +1,6 @@
 "use client";
-import { useState } from "react";
+import ResearchRecords from "./ResearchRecords";
+import { useEffect, useState } from "react";
 import { useTerminal, type WidgetInstance } from "../store/terminal";
 import Modal from "./Modal";
 import WidgetErrorBoundary from "./WidgetErrorBoundary";
@@ -12,9 +13,10 @@ import FundamentalsWidget from "./widgets/FundamentalsWidget";
 import JournalWidget from "./widgets/JournalWidget";
 import AlertsWidget from "./widgets/AlertsWidget";
 import { EarningsTab, EconomicTab } from "./widgets/CalendarWidget";
-const TABS = ["Overview", "Chart", "Financials", "Events", "Thesis", "Filings", "Notes", "Alerts"] as const;
+const TABS = ["Overview", "Chart", "Financials", "Events", "Thesis", "Filings", "Notes", "Alerts", "Timeline", "Valuations", "Reader", "Earnings Reviews", "Plans"] as const;
 type Tab = typeof TABS[number];
 export default function ResearchView({ symbol }: { symbol: string }) {
+  const target=useTerminal(s=>s.researchTarget);
   const close = useTerminal(s => s.closeResearch), add = useTerminal(s => s.addToWatchlist);
   const watched = useTerminal(s => s.watchlist.includes(symbol));
   const [tab, setTab] = useState<Tab>("Overview"), [note, setNote] = useState(0);
@@ -25,6 +27,8 @@ export default function ResearchView({ symbol }: { symbol: string }) {
     setTab(next);
   };
   // Stable symbol-specific ID keeps research annotations across visits and device sync.
+  useEffect(()=>{if(target)setTab("Timeline");},[target]);
+  const recordKinds:Partial<Record<Tab,string[]>>={Valuations:['valuation-scenario'],Reader:['filing-document','filing-annotation'],"Earnings Reviews":['earnings-review'],Plans:['paper-order']};
   const widget: WidgetInstance = { id: `research-${symbol}`, type: "quote", linked: false, symbol };
   return <Modal label={`${symbol} research`} onClose={close} className="research-dialog">
     <header className="p-3 border-b border-[var(--border)] flex flex-wrap gap-2 items-center">
@@ -37,6 +41,7 @@ export default function ResearchView({ symbol }: { symbol: string }) {
     <nav aria-label="Research sections" className="flex flex-wrap gap-1 p-2 border-b border-[var(--border)]">{TABS.map(t => <button className={`term-btn ${tab === t ? "active" : ""}`} aria-pressed={tab === t} key={t} onClick={() => choose(t)}>{t}</button>)}</nav>
     <div className="research-body">
       <WidgetErrorBoundary key={`${symbol}-${tab}-${note}`} name={`${symbol} ${tab}`}>
+        {(tab==="Timeline"||recordKinds[tab])&&<ResearchRecords symbol={symbol} target={target} kinds={recordKinds[tab]}/>}
         {tab === "Overview" && <div className="research-overview"><section><h2 className="amber p-2">Quote / source</h2><QuoteWidget widget={widget} /></section><section><h2 className="amber p-2">Latest news</h2><NewsWidget widget={widget} /></section></div>}
         {tab === "Filings" && <FilingsWidget initialSymbol={symbol} />}
         {tab === "Thesis" && <ThesisWidget initialSymbol={symbol} />}

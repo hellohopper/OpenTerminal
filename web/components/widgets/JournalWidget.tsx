@@ -1,14 +1,16 @@
 "use client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { apiGet, apiPost, apiPut, apiDelete } from "../../lib/api";
 import { useWidgetSymbol, type WidgetInstance } from "../../store/terminal";
 export type JournalEntry = { id: number; symbol: string; title: string; body: string; kind: "research" | "trade"; image?: string | null; hasImage?: number; created_at: string; updated_at: string };
+const researchDrafts=new Map<string,any>();
 export default function JournalWidget({ widget, startNew = false }: { widget: WidgetInstance; startNew?: boolean }) {
-  const symbol = useWidgetSymbol(widget), qc = useQueryClient();
+  const symbol = useWidgetSymbol(widget), qc = useQueryClient(),cacheKey=widget.id.startsWith("research-")?widget.id:null;
   const [all, setAll] = useState(false), [kind, setKind] = useState("");
   const [before, setBefore] = useState<number | undefined>();
-  const [draft, setDraft] = useState<{ id?: number; symbol: string; title: string; body: string; kind: "research" | "trade"; image: string | null } | null>(() => startNew ? { symbol, title: "", body: "", kind: "research", image: null } : null);
+  const [draft, setDraft] = useState<{ id?: number; symbol: string; title: string; body: string; kind: "research" | "trade"; image: string | null } | null>(() => cacheKey&&researchDrafts.has(cacheKey)?researchDrafts.get(cacheKey):startNew ? { symbol, title: "", body: "", kind: "research", image: null } : null);
+  useEffect(()=>{if(cacheKey){if(draft)researchDrafts.set(cacheKey,draft);else researchDrafts.delete(cacheKey);}},[cacheKey,draft]);
   const [error, setError] = useState("");
   const { data, error: loadError } = useQuery({ queryKey: ["journal", all ? "all" : symbol, kind, before], queryFn: () => apiGet<{ entries: JournalEntry[]; nextCursor: number | null }>(`/api/journal?symbol=${all ? "" : encodeURIComponent(symbol)}&kind=${kind}${before ? `&before=${before}` : ""}`) });
   const save = useMutation({ mutationFn: () => draft!.id ? apiPut(`/api/journal/${draft!.id}`, draft) : apiPost("/api/journal", draft), onSuccess: () => { qc.invalidateQueries({ queryKey: ["journal"] }); setDraft(null); setError(""); }, onError: (err) => setError(err.message) });
@@ -18,6 +20,7 @@ export default function JournalWidget({ widget, startNew = false }: { widget: Wi
     <button className="term-btn" onClick={() => { setDraft({ symbol, title: "", body: "", kind: "research", image: null }); setError(""); }}>New entry</button>
   </div>
   {(error || loadError) && <p role="alert" className="down">{error || (loadError as Error)?.message}</p>}
+  {draft&&cacheKey&&<p className="amber">Unsaved draft retained for {symbol} while switching research. Save before reloading this browser tab.</p>}
   {draft && <form className="space-y-2 border border-[var(--border)] p-2" onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
     <div className="flex gap-2"><input aria-label="Journal symbol" required maxLength={20} value={draft.symbol} onChange={(e) => setDraft({ ...draft, symbol: e.target.value.toUpperCase() })} /><select aria-label="Entry category" value={draft.kind} onChange={(e) => setDraft({ ...draft, kind: e.target.value as "research" | "trade" })}><option value="research">Research</option><option value="trade">Trade log</option></select></div>
     <input aria-label="Entry title" placeholder="Research question or trade rationale" className="w-full" required maxLength={120} value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
