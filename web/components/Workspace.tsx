@@ -11,6 +11,7 @@ import ThesisWidget from "./widgets/ThesisWidget";
 import TradeReviewsWidget from "./widgets/TradeReviewsWidget";
 import RebalanceWidget from "./widgets/RebalanceWidget";
 import FilingsWidget from "./widgets/FilingsWidget";
+import NotificationsWidget from "./widgets/NotificationsWidget";
 import SignalsWidget from "./widgets/SignalsWidget";
 import QualityWidget from "./widgets/QualityWidget";
 import BackupWidget from "./widgets/BackupWidget";
@@ -49,6 +50,7 @@ function WidgetBody({ widget }: { widget: WidgetInstance }) {
     case "reviews": return <TradeReviewsWidget />;
     case "rebalance": return <RebalanceWidget />;
     case "filings": return <FilingsWidget />;
+    case "notifications": return <NotificationsWidget />;
     case "signals": return <SignalsWidget />;
     case "quality": return <QualityWidget />;
     case "backup": return <BackupWidget />;

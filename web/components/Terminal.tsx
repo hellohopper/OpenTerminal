@@ -27,6 +27,7 @@ export default function Terminal() {
     update(); media.addEventListener("change", update);
     return () => media.removeEventListener("change", update);
   }, []);
+  useEffect(()=>{const symbol=new URLSearchParams(window.location.search).get("research");if(symbol)useTerminal.getState().openResearch(symbol);},[]);
   const workspaceId = useTerminal((s) => s.activeWorkspaceId);
 
   useEffect(() => {

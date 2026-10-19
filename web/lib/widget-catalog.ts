@@ -4,6 +4,7 @@ export const WIDGET_CATALOG: Record<WidgetType, { title: string; label: string; 
   reviews: { title: "Trade Reviews", label: "REVIEWS", group: "Portfolio", key: "" },
   rebalance: { title: "Rebalance Simulator", label: "REBALANCE", group: "Portfolio", key: "" },
   filings: { title: "SEC Filing Tracker", label: "FILINGS", group: "Research", key: "" },
+  notifications: { title: "Notification Center", label: "NOTIFICATIONS", group: "Portfolio", key: "" },
   signals: { title: "Technical Signals", label: "SIGNALS", group: "Research", key: "" },
   chart: { title: "Chart", label: "CHART", group: "Markets", key: "⌥1" },
   quote: { title: "Quote", label: "QUOTE", group: "Markets", key: "⌥2" },
