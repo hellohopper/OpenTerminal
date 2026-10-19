@@ -1,6 +1,6 @@
 import { normalizeSymbol } from "./symbol";
 
-export const WIDGET_TYPES = ["quote", "chart", "watchlist", "news", "heatmap", "screener", "crypto", "macro", "options", "portfolio", "ai", "calendar", "insider", "tv", "recap", "comparison", "fundamentals", "journal", "performance", "strategy", "briefing", "alerts", "quality", "backup", "sync", "delivery", "events"] as const;
+export const WIDGET_TYPES = ["quote", "chart", "watchlist", "news", "heatmap", "screener", "crypto", "macro", "options", "portfolio", "ai", "calendar", "insider", "tv", "recap", "comparison", "fundamentals", "journal", "performance", "strategy", "briefing", "alerts", "quality", "backup", "sync", "delivery", "events", "signals"] as const;
 export type WidgetType = typeof WIDGET_TYPES[number];
 export type WidgetInstance = { id: string; type: WidgetType; symbol?: string; linked: boolean };
 export type LayoutItem = { i: string; x: number; y: number; w: number; h: number };
@@ -10,6 +10,7 @@ export const MAX_WORKSPACES = 20;
 export const PRESETS = { daily: "Daily market", research: "Company research", options: "Options analysis", blank: "Blank" };
 export type Preset = keyof typeof PRESETS;
 export const SIZE_BY_TYPE: Record<WidgetType, { w: number; h: number }> = {
+  signals: { w: 12, h: 18 },
   events: { w: 12, h: 16 },
   delivery: { w: 12, h: 16 },
   sync: { w: 12, h: 16 },

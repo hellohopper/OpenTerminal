@@ -1,0 +1,14 @@
+import {Router} from 'express';
+import {asyncRoute} from '../async-route.js';
+import {db} from '../db.js';
+import {records,addRecord,removeRecord,updateRecord} from '../records.js';
+import {signalSchema,signalMonitor,type SignalRule} from '../signals.js';
+export const signalsRouter=Router();
+signalsRouter.get('/',asyncRoute(async(_req,res)=>res.json({rules:await records('signal'),events:await records('signal-event')})));
+signalsRouter.post('/check',asyncRoute(async(_req,res)=>res.json(await signalMonitor.check())));
+signalsRouter.post('/',asyncRoute(async(req,res)=>{const p=signalSchema.safeParse(req.body);if(!p.success)return res.status(400).json({error:p.error.issues[0].message});
+  const id=await db.transaction(async()=>{const rows=await records<SignalRule>('signal');if(rows.length>=20||new Set([...rows.filter(r=>r.payload.enabled).flatMap(r=>r.payload.symbols),...(p.data.enabled?p.data.symbols:[])]).size>30)throw new Error('Limit: 20 rules and 30 monitored symbols.');return addRecord('signal',p.data);})();res.status(201).json({id});}));
+signalsRouter.put('/:id',asyncRoute(async(req,res)=>{const rows=await records<SignalRule>('signal'),row=rows.find(r=>r.id===Number(req.params.id));if(!row)return res.status(404).json({error:'Rule not found'});if(typeof req.body.enabled!=='boolean'||req.body.version!==row.version)return res.status(409).json({error:'Reload the rule before changing it.'});
+ if(req.body.enabled&&new Set(rows.filter(r=>r.id!==row.id&&r.payload.enabled).flatMap(r=>r.payload.symbols).concat(row.payload.symbols)).size>30)return res.status(400).json({error:'Limit: 30 monitored symbols.'});
+ await updateRecord('signal',row.id,row.version,{...row.payload,enabled:req.body.enabled});res.json({ok:true});}));
+signalsRouter.delete('/:id',asyncRoute(async(req,res)=>{await removeRecord('signal',Number(req.params.id));res.status(204).end();}));

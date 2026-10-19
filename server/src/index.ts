@@ -1,3 +1,5 @@
+import {signalsRouter} from "./routes/signals.js";
+import {signalMonitor} from "./signals.js";
 import {holdingEventsRouter} from "./routes/holding-events.js";
 import {deliveryRouter,briefingScheduler} from "./routes/delivery.js";
 import {syncRouter} from "./routes/sync.js";
@@ -47,6 +49,7 @@ app.use("/api/data",requireApiKey,express.json({limit:"34mb"}),dataRouter);
 app.use("/api/portfolios/:id/import",requireApiKey,express.json({limit:"2mb"}),tradeCsvRouter);
 app.use("/api/sync",requireApiKey,express.json({limit:"2300kb"}),syncRouter);
 app.use(express.json());
+app.use("/api/signals",requireApiKey,rateLimit({windowMs:60000,max:30}),signalsRouter);
 app.use("/api/delivery",requireApiKey,rateLimit({windowMs:60000,max:20}),deliveryRouter);
 app.use("/api/holding-events",requireApiKey,rateLimit({windowMs:60000,max:30}),holdingEventsRouter);
 app.use("/api/alerts", requireApiKey, alertsRouter);
@@ -95,6 +98,7 @@ const PORT = Number(process.env.API_PORT ?? 4000);
 // API_KEY + WEB_ORIGIN) to intentionally expose it beyond this machine.
 const HOST = process.env.API_HOST ?? "127.0.0.1";
 const server = app.listen(PORT, HOST, () => {
+  signalMonitor.start();
   alertMonitor.start();
   briefingScheduler.start();
   console.log(`OpenTerminal API listening on http://${HOST}:${PORT}`);
@@ -106,7 +110,7 @@ async function shutdown() {
   stopping = true;
   const deadline = setTimeout(() => process.exit(1), 15000);
   deadline.unref();
-  await Promise.all([alertMonitor.stop(),briefingScheduler.stop()]);
+  await Promise.all([alertMonitor.stop(),briefingScheduler.stop(),signalMonitor.stop()]);
   await new Promise<void>((resolve) => server.close(() => resolve()));
   await db.close();
   clearTimeout(deadline);
