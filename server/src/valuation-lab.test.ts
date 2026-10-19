@@ -1,0 +1,4 @@
+import {it,expect} from 'vitest';import {valuationInput,valuation,dcf} from './valuation-lab.js';
+const p=valuationInput.parse({symbol:'AAPL',revenue:1000,margin:.1,growth:0,terminalGrowth:0,discount:.1,years:5,netDebt:200,shares:10,price:80,netIncome:100});
+it('values a level perpetuity, deducts net debt once and solves implied growth',()=>{const r=valuation(p);expect(r.enterpriseValue).toBeCloseTo(1000);expect(r.perShare).toBeCloseTo(80);expect(r.impliedGrowth).toBeCloseTo(0);expect(r.multiples[0].perShare).toBe(100);expect(dcf({...p,discount:.12}).perShare).toBeLessThan(r.perShare);});
+it('rejects invalid terminal assumptions and withholds unsupported reverse/multiple results',()=>{expect(valuationInput.safeParse({...p,discount:0}).success).toBe(false);const r=valuation({...p,margin:0,netIncome:-100});expect(r.impliedGrowth).toBeNull();expect(r.multiples.every(m=>m.perShare===null)).toBe(true);expect(r.perShare).toBe(0);});
