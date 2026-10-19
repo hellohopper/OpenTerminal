@@ -1,3 +1,5 @@
+import {thesisMonitorRouter} from "./routes/thesis-monitor.js";
+import {thesisMonitor} from "./thesis-monitor.js";
 import {peersRouter} from "./routes/peers.js";
 import {researchSearchRouter} from "./routes/research-search.js";
 import {researchHubRouter} from "./routes/research-hub.js";
@@ -72,6 +74,7 @@ app.use("/api/portfolios/:id/import",requireApiKey,express.json({limit:"2mb"}),t
 app.use("/api/sync",requireApiKey,express.json({limit:"2300kb"}),syncRouter);
 app.use("/api/history-library",requireApiKey,express.json({limit:"700kb"}),rateLimit({windowMs:60000,max:60}),historyLibraryRouter);
 app.use(express.json());
+app.use("/api/thesis-monitor",requireApiKey,rateLimit({windowMs:60000,max:30}),thesisMonitorRouter);
 app.use("/api/peers",requireApiKey,rateLimit({windowMs:60000,max:20}),peersRouter);
 app.use("/api/research-search",requireApiKey,rateLimit({windowMs:60000,max:60}),researchSearchRouter);
 app.use("/api/research-hub",requireApiKey,researchHubRouter);
@@ -139,6 +142,7 @@ const PORT = Number(process.env.API_PORT ?? 4000);
 // API_KEY + WEB_ORIGIN) to intentionally expose it beyond this machine.
 const HOST = process.env.API_HOST ?? "127.0.0.1";
 const server = app.listen(PORT, HOST, () => {
+  thesisMonitor.start();
   paperMonitor.start();
   screenerTracker.start();
   notificationWorker.start();
@@ -155,7 +159,7 @@ async function shutdown() {
   stopping = true;
   const deadline = setTimeout(() => process.exit(1), 15000);
   deadline.unref();
-  await Promise.all([alertMonitor.stop(),briefingScheduler.stop(),signalMonitor.stop(),filingMonitor.stop(),notificationWorker.stop(),screenerTracker.stop(),paperMonitor.stop()]);
+  await Promise.all([thesisMonitor.stop(),alertMonitor.stop(),briefingScheduler.stop(),signalMonitor.stop(),filingMonitor.stop(),notificationWorker.stop(),screenerTracker.stop(),paperMonitor.stop()]);
   await new Promise<void>((resolve) => server.close(() => resolve()));
   await db.close();
   clearTimeout(deadline);
