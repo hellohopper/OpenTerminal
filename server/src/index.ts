@@ -1,3 +1,5 @@
+import {paperRouter} from "./routes/paper-trading.js";
+import {paperMonitor} from "./paper-monitor.js";
 import {portfolioRiskRouter} from "./routes/portfolio-risk.js";
 import {valuationLabRouter} from "./routes/valuation-lab.js";
 import {historyLibraryRouter} from "./routes/history-library.js";
@@ -64,6 +66,7 @@ app.use("/api/portfolios/:id/import",requireApiKey,express.json({limit:"2mb"}),t
 app.use("/api/sync",requireApiKey,express.json({limit:"2300kb"}),syncRouter);
 app.use("/api/history-library",requireApiKey,express.json({limit:"700kb"}),rateLimit({windowMs:60000,max:60}),historyLibraryRouter);
 app.use(express.json());
+app.use("/api/paper",requireApiKey,rateLimit({windowMs:60000,max:30}),paperRouter);
 app.use("/api/portfolio-risk",requireApiKey,rateLimit({windowMs:60000,max:20}),portfolioRiskRouter);
 app.use("/api/valuation-lab",requireApiKey,valuationLabRouter);
 app.use("/api/today",requireApiKey,rateLimit({windowMs:60000,max:30}),todayRouter);
@@ -123,6 +126,7 @@ const PORT = Number(process.env.API_PORT ?? 4000);
 // API_KEY + WEB_ORIGIN) to intentionally expose it beyond this machine.
 const HOST = process.env.API_HOST ?? "127.0.0.1";
 const server = app.listen(PORT, HOST, () => {
+  paperMonitor.start();
   screenerTracker.start();
   notificationWorker.start();
   filingMonitor.start();
@@ -138,7 +142,7 @@ async function shutdown() {
   stopping = true;
   const deadline = setTimeout(() => process.exit(1), 15000);
   deadline.unref();
-  await Promise.all([alertMonitor.stop(),briefingScheduler.stop(),signalMonitor.stop(),filingMonitor.stop(),notificationWorker.stop(),screenerTracker.stop()]);
+  await Promise.all([alertMonitor.stop(),briefingScheduler.stop(),signalMonitor.stop(),filingMonitor.stop(),notificationWorker.stop(),screenerTracker.stop(),paperMonitor.stop()]);
   await new Promise<void>((resolve) => server.close(() => resolve()));
   await db.close();
   clearTimeout(deadline);
