@@ -1,3 +1,4 @@
+import {accountImportRouter} from "./routes/account-import.js";
 import {thesisMonitorRouter} from "./routes/thesis-monitor.js";
 import {thesisMonitor} from "./thesis-monitor.js";
 import {peersRouter} from "./routes/peers.js";
@@ -73,6 +74,7 @@ app.use("/api/data",requireApiKey,express.json({limit:"34mb"}),dataRouter);
 app.use("/api/portfolios/:id/import",requireApiKey,express.json({limit:"2mb"}),tradeCsvRouter);
 app.use("/api/sync",requireApiKey,express.json({limit:"2300kb"}),syncRouter);
 app.use("/api/history-library",requireApiKey,express.json({limit:"700kb"}),rateLimit({windowMs:60000,max:60}),historyLibraryRouter);
+app.use("/api/account-import",requireApiKey,express.json({limit:"700kb"}),rateLimit({windowMs:60000,max:60}),accountImportRouter);
 app.use(express.json());
 app.use("/api/thesis-monitor",requireApiKey,rateLimit({windowMs:60000,max:30}),thesisMonitorRouter);
 app.use("/api/peers",requireApiKey,rateLimit({windowMs:60000,max:20}),peersRouter);
