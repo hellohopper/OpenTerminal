@@ -1,0 +1,3 @@
+export type ResearchTarget={kind:string;id:number;paragraph?:string};
+export function researchLink(symbol:string,target?:ResearchTarget){const p=new URLSearchParams({research:symbol});if(target){p.set('recordKind',target.kind);p.set('recordId',String(target.id));if(target.paragraph)p.set('paragraph',target.paragraph);}return `/?${p}`;}
+export function readResearchLink(search:string){const p=new URLSearchParams(search),symbol=p.get('research'),id=Number(p.get('recordId')),kind=p.get('recordKind'),paragraph=p.get('paragraph');return {symbol,target:kind&&id>0&&Number.isSafeInteger(id)?{kind,id,...(paragraph&&/^P\d+$/.test(paragraph)?{paragraph}: {})}:null};}

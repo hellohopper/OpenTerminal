@@ -1,4 +1,5 @@
 "use client";
+import {readResearchLink} from "../lib/research-link";
 
 import { useEffect, useState } from "react";
 import ResearchView from "./ResearchView";
@@ -27,7 +28,7 @@ export default function Terminal() {
     update(); media.addEventListener("change", update);
     return () => media.removeEventListener("change", update);
   }, []);
-  useEffect(()=>{const symbol=new URLSearchParams(window.location.search).get("research");if(symbol)useTerminal.getState().openResearch(symbol);},[]);
+  useEffect(()=>{const read=()=>{const {symbol,target}=readResearchLink(window.location.search);if(symbol)useTerminal.getState().openResearch(symbol,target??undefined);else useTerminal.getState().closeResearch();};read();window.addEventListener("popstate",read);return()=>window.removeEventListener("popstate",read);},[]);
   const workspaceId = useTerminal((s) => s.activeWorkspaceId);
 
   useEffect(() => {
