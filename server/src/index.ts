@@ -1,3 +1,4 @@
+import {todayRouter} from "./routes/today.js";
 import {backtestsRouter} from "./routes/backtests.js";
 import {screenerTrackingRouter} from "./routes/screener-tracking.js";
 import {screenerTracker} from "./screener-tracking.js";
@@ -59,6 +60,7 @@ app.use("/api/data",requireApiKey,express.json({limit:"34mb"}),dataRouter);
 app.use("/api/portfolios/:id/import",requireApiKey,express.json({limit:"2mb"}),tradeCsvRouter);
 app.use("/api/sync",requireApiKey,express.json({limit:"2300kb"}),syncRouter);
 app.use(express.json());
+app.use("/api/today",requireApiKey,rateLimit({windowMs:60000,max:30}),todayRouter);
 app.use("/api/backtests",requireApiKey,rateLimit({windowMs:60000,max:20}),backtestsRouter);
 app.use("/api/screener-tracking",requireApiKey,rateLimit({windowMs:60000,max:30}),screenerTrackingRouter);
 app.use("/api/notifications",requireApiKey,rateLimit({windowMs:60000,max:30}),notificationsRouter);
