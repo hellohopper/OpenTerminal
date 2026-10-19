@@ -35,6 +35,8 @@ No signup. No credit card. No rate‑limited demo tier. Clone it, `npm install`,
 
 ## ✨ Features
 
+- **Research workflow extensions** — grouped technical signals, versioned investment theses, trade reviews, rebalance simulations, SEC filing tracking, a background Web Push notification center, daily screener changes, and price-only strategy backtests with daily replay. [Setup, usage and limits](docs/round-3.md).
+
 - 🔎 **Unified stock research** — open a symbol from watchlists, portfolios, news or command search; review charts, financials, events and notes, then create a symbol-bound alert. [Guide](docs/research-sync-mobile.md).
 - 🔄 **Reviewed sync and version recovery** — preview changes, sync selected workspaces, and restore one of the last ten server snapshots. [Guide](docs/research-sync-mobile.md#reviewed-device-sync).
 - 📱 **Mobile navigation** — holdings, alerts and events at your fingertips; single-column workspaces preserve desktop layouts. Search features and workspaces with Cmd/Ctrl+K. [Guide](docs/research-sync-mobile.md#desktop-and-phone).

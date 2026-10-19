@@ -6,6 +6,7 @@ export const WIDGET_CATALOG: Record<WidgetType, { title: string; label: string; 
   filings: { title: "SEC Filing Tracker", label: "FILINGS", group: "Research", key: "" },
   notifications: { title: "Notification Center", label: "NOTIFICATIONS", group: "Portfolio", key: "" },
   tracking: { title: "Screener Changes", label: "SCREEN CHANGES", group: "Research", key: "" },
+  backtest: { title: "Backtest and Replay", label: "BACKTEST", group: "Research", key: "" },
   signals: { title: "Technical Signals", label: "SIGNALS", group: "Research", key: "" },
   chart: { title: "Chart", label: "CHART", group: "Markets", key: "⌥1" },
   quote: { title: "Quote", label: "QUOTE", group: "Markets", key: "⌥2" },
