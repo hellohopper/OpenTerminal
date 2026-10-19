@@ -6,6 +6,8 @@ export const ALERT_CONDITIONS = {
 };
 export type AlertCondition = keyof typeof ALERT_CONDITIONS;
 export type AlertRule = {
+  metric?: "native" | "volume";
+  repeat_seconds?: number;
   id: number;
   symbol: string;
   condition: AlertCondition;
@@ -18,6 +20,7 @@ export type AlertRule = {
   last_triggered_at: string | null;
 };
 export type AlertEvent = {
+  metric?: "native" | "volume";
   id: number;
   alert_id: number | null;
   symbol: string;
@@ -52,15 +55,18 @@ export const alertNumber = (value: number) =>
 export function describeAlert(
   event: Pick<
     AlertEvent,
-    "symbol" | "condition" | "threshold" | "value" | "currency"
+    "symbol" | "condition" | "threshold" | "value" | "currency" | "metric"
   >,
 ): string {
-  const suffix = event.condition.startsWith("CHANGE_")
-    ? "%"
-    : event.currency
-      ? ` ${event.currency}`
-      : " quote units";
-  return `${event.symbol}: ${ALERT_CONDITIONS[event.condition]} ${alertNumber(event.threshold)}${suffix}; observed ${alertNumber(event.value)}${suffix}`;
+  const suffix =
+    event.metric === "volume"
+      ? " shares"
+      : event.condition.startsWith("CHANGE_")
+        ? "%"
+        : event.currency
+          ? ` ${event.currency}`
+          : " quote units";
+  return `${event.symbol}: ${event.metric === "volume" ? `Volume ${event.condition.endsWith("ABOVE") ? "≥" : "≤"}` : ALERT_CONDITIONS[event.condition]} ${alertNumber(event.threshold)}${suffix}; observed ${alertNumber(event.value)}${suffix}`;
 }
 export function readAlertCursor(): number {
   try {
