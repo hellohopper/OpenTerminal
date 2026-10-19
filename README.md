@@ -35,6 +35,8 @@ No signup. No credit card. No rate‑limited demo tier. Clone it, `npm install`,
 
 ## ✨ Features
 
+- **Daily research and review** — TODAY workbench, versioned historical datasets, DCF and reverse DCF valuation, portfolio correlation/stress, independent paper trading, multicurrency consolidation, SEC paragraph reading/comparison and earnings thesis archives. [Panel guide and limits](docs/round-4.md).
+
 - **Research workflow extensions** — grouped technical signals, versioned investment theses, trade reviews, rebalance simulations, SEC filing tracking, a background Web Push notification center, daily screener changes, and price-only strategy backtests with daily replay. [Setup, usage and limits](docs/round-3.md).
 
 - 🔎 **Unified stock research** — open a symbol from watchlists, portfolios, news or command search; review charts, financials, events and notes, then create a symbol-bound alert. [Guide](docs/research-sync-mobile.md).

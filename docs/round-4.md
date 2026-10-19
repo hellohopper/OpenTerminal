@@ -1,6 +1,6 @@
-# Fourth feature round
+# Daily workbench, research models and earnings archives
 
-Each feature has its own PR, validated and merged before the next begins: TODAY workbench, historical data center, valuation lab, portfolio stress/correlation, paper trading, consolidated multicurrency ledger, filing reader/diff, and earnings review archives.
+Add panels from the widget sidebar or find them with Cmd/Ctrl+K: TODAY, HISTORY DATA, VALUATION, PORTFOLIO RISK, PAPER TRADE, MULTI LEDGER, FILING READER and EARNINGS REVIEW. Saved research records belong to the single deployment owner and participate in server database backup/import. They are independent of browser workspace layout sync.
 
 ## TODAY
 
