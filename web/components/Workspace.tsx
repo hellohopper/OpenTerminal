@@ -10,6 +10,7 @@ import { useTerminal, type WidgetInstance } from "../store/terminal";
 import ThesisWidget from "./widgets/ThesisWidget";
 import TradeReviewsWidget from "./widgets/TradeReviewsWidget";
 import RebalanceWidget from "./widgets/RebalanceWidget";
+import FilingsWidget from "./widgets/FilingsWidget";
 import SignalsWidget from "./widgets/SignalsWidget";
 import QualityWidget from "./widgets/QualityWidget";
 import BackupWidget from "./widgets/BackupWidget";
@@ -47,6 +48,7 @@ function WidgetBody({ widget }: { widget: WidgetInstance }) {
     case "thesis": return <ThesisWidget />;
     case "reviews": return <TradeReviewsWidget />;
     case "rebalance": return <RebalanceWidget />;
+    case "filings": return <FilingsWidget />;
     case "signals": return <SignalsWidget />;
     case "quality": return <QualityWidget />;
     case "backup": return <BackupWidget />;

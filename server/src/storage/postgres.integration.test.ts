@@ -96,6 +96,11 @@ suite("real PostgreSQL backend", () => {
     price: 100,
     executed_at: "2026-01-01T00:00:00Z",
   };
+  it("roundtrips research records and invalidates pre-restore revisions",async()=>{
+    await db.prepare("INSERT INTO research_records (kind,payload,updated_at) VALUES (?,?,?)").run("thesis",JSON.stringify({symbol:"AAPL"}),new Date().toISOString());
+    const before=(await db.prepare("SELECT * FROM research_records").get())!;const backup=await createBackup(db);await restoreBackup(db,backup);const after=(await db.prepare("SELECT * FROM research_records").get())!;
+    expect(after.payload).toBe(before.payload);expect(after.version).toBeGreaterThan(before.version);expect((await db.prepare("UPDATE research_records SET payload=? WHERE id=? AND version=?").run("{}",before.id,before.version)).changes).toBe(0);
+  });
   it("normalizes IDs/counts and journals without changing API metadata", async () => {
     const created = await call(journal, "post", "/", {
       symbol: "AAPL",
