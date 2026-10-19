@@ -8,6 +8,7 @@ import {
   vi,
 } from "vitest";
 import pg from "pg";
+import {createBackup,restoreBackup} from "./backup.js";
 import { randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -219,6 +220,12 @@ suite("real PostgreSQL backend", () => {
     expect(
       (await db.prepare("SELECT COUNT(*) AS n FROM portfolios").get())!.n,
     ).toBe(1);
+  });
+  it("restores older snapshots while keeping PostgreSQL IDs monotonic",async()=>{
+    const backup=await createBackup(db);
+    await db.prepare("INSERT INTO portfolios (id,name) VALUES (?,?)").run(1000,"Later");
+    await restoreBackup(db,backup);
+    expect((await db.prepare("INSERT INTO portfolios (name) VALUES (?)").run("After restore")).lastInsertRowid).toBeGreaterThan(1000);
   });
   it("imports all SQLite tables with IDs, attachments, history and working sequences; rejects a second import", async () => {
     const source = await AppDatabase.open({

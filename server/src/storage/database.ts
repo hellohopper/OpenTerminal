@@ -1,7 +1,7 @@
 import SQLite from "better-sqlite3";
 import pg from "pg";
 import { AsyncLocalStorage } from "node:async_hooks";
-import { sqliteSchema, postgresSchema } from "./schema.js";
+import { MIGRATIONS,SCHEMA_VERSION } from "./migrations.js";
 export type Row = Record<string, any>;
 export type RunResult = { changes: number; lastInsertRowid: number };
 export interface Session {
@@ -66,7 +66,10 @@ export class AppDatabase {
     const db = new AppDatabase(options);
     try {
       await db.transaction(async () => {
-        await db.exec(db.kind === "postgres" ? postgresSchema : sqliteSchema);
+        await db.exec("CREATE TABLE IF NOT EXISTS app_schema_migrations (id INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)");
+        const current=(await db.prepare("SELECT COALESCE(MAX(id),0) AS version FROM app_schema_migrations").get())!.version;
+        if(current>SCHEMA_VERSION)throw new Error("Database schema is newer than this application.");
+        for(const migration of MIGRATIONS)if(migration.id>current){await db.exec(db.kind==="postgres"?migration.postgres:migration.sqlite);await db.prepare("INSERT INTO app_schema_migrations (id,applied_at) VALUES (?,?)").run(migration.id,new Date().toISOString());}
         if (
           options.seed !== false &&
           !(await db.prepare("SELECT id FROM portfolios LIMIT 1").get())
