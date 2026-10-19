@@ -19,6 +19,7 @@ import HistoryLibraryWidget from "./widgets/HistoryLibraryWidget";
 import ValuationLabWidget from "./widgets/ValuationLabWidget";
 import PortfolioRiskWidget from "./widgets/PortfolioRiskWidget";
 import PaperTradingWidget from "./widgets/PaperTradingWidget";
+import ConsolidatedLedgerWidget from "./widgets/ConsolidatedLedgerWidget";
 import SignalsWidget from "./widgets/SignalsWidget";
 import QualityWidget from "./widgets/QualityWidget";
 import BackupWidget from "./widgets/BackupWidget";
@@ -65,6 +66,7 @@ function WidgetBody({ widget }: { widget: WidgetInstance }) {
     case "valuationLab": return <ValuationLabWidget />;
     case "portfolioRisk": return <PortfolioRiskWidget />;
     case "paper": return <PaperTradingWidget />;
+    case "consolidated": return <ConsolidatedLedgerWidget />;
     case "signals": return <SignalsWidget />;
     case "quality": return <QualityWidget />;
     case "backup": return <BackupWidget />;

@@ -12,6 +12,7 @@ export const WIDGET_CATALOG: Record<WidgetType, { title: string; label: string; 
   valuationLab: { title: "Valuation Lab", label: "VALUATION", group: "Research", key: "" },
   portfolioRisk: { title: "Portfolio Stress and Correlation", label: "PORTFOLIO RISK", group: "Portfolio", key: "" },
   paper: { title: "Paper Trading and Plans", label: "PAPER TRADE", group: "Portfolio", key: "" },
+  consolidated: { title: "Consolidated Multicurrency Ledger", label: "MULTI LEDGER", group: "Portfolio", key: "" },
   signals: { title: "Technical Signals", label: "SIGNALS", group: "Research", key: "" },
   chart: { title: "Chart", label: "CHART", group: "Markets", key: "⌥1" },
   quote: { title: "Quote", label: "QUOTE", group: "Markets", key: "⌥2" },

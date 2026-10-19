@@ -17,6 +17,7 @@ globalThis.fetch = async (input, init) => {
  if (url.includes('scanner.tradingview.com')) { const body=JSON.parse(init?.body||'{}');if(body.columns?.includes('earnings_release_next_date')) return json({data:[{s:'NASDAQ:AAPL',d:[Date.parse(next)/1000,null,2]}]});if(body.range) return json({data:['AAPL','MSFT','SPY'].map(s=>({s:`NASDAQ:${s}`,d:[s,110,1,1e9,'Technology',10000,'NASDAQ']}))});return json({data:[]}); }
  if (url.includes('ff_calendar_')) return json([{title:'Fixture CPI',country:'USD',date:next+'T12:30:00Z',impact:'High',forecast:'2.0%',previous:'2.1%'}]);
  if (url.includes('feeds.finance.yahoo.com') || url.includes('news.google.com/rss')) return new Response(`<rss><channel><item><title>Fixture company outlook</title><link>https://example.com/fixture-news</link><pubDate>${now.toUTCString()}</pubDate></item></channel></rss>`);
+ if(url.includes('data-api.ecb.europa.eu/service/data/EXR/')) {const currency=(url.match(/D\.([A-Z]+)\.EUR/)||[])[1];const values={USD:1.2,GBP:.8,CHF:.95,JPY:160,CAD:1.5,AUD:1.7,CNY:7.8,HKD:8.5};return new Response(`TIME_PERIOD,OBS_VALUE\n2026-01-01,${values[currency]||1}\n${today},${values[currency]||1}\n`);}
  if(url.startsWith('http://127.0.0.1')||url.startsWith('http://localhost')) return realFetch(input,init);
  throw new Error('Unmocked smoke provider: '+url);
 };
