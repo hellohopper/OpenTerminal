@@ -1,3 +1,4 @@
+import {optionPositionsRouter} from "./routes/option-positions.js";
 import {portfolioGuardsRouter} from "./routes/portfolio-guards.js";
 import {guardMonitor} from "./guard-monitor.js";
 import {accountImportRouter} from "./routes/account-import.js";
@@ -78,6 +79,7 @@ app.use("/api/sync",requireApiKey,express.json({limit:"2300kb"}),syncRouter);
 app.use("/api/history-library",requireApiKey,express.json({limit:"700kb"}),rateLimit({windowMs:60000,max:60}),historyLibraryRouter);
 app.use("/api/account-import",requireApiKey,express.json({limit:"700kb"}),rateLimit({windowMs:60000,max:60}),accountImportRouter);
 app.use(express.json());
+app.use("/api/option-positions",requireApiKey,rateLimit({windowMs:60000,max:30}),optionPositionsRouter);
 app.use("/api/portfolio-guards",requireApiKey,rateLimit({windowMs:60000,max:30}),portfolioGuardsRouter);
 app.use("/api/thesis-monitor",requireApiKey,rateLimit({windowMs:60000,max:30}),thesisMonitorRouter);
 app.use("/api/peers",requireApiKey,rateLimit({windowMs:60000,max:20}),peersRouter);

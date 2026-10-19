@@ -28,7 +28,7 @@ export default function ResearchView({ symbol }: { symbol: string }) {
   };
   // Stable symbol-specific ID keeps research annotations across visits and device sync.
   useEffect(()=>{if(target)setTab("Timeline");},[target]);
-  const recordKinds:Partial<Record<Tab,string[]>>={Valuations:['valuation-scenario'],Reader:['filing-document','filing-annotation'],"Earnings Reviews":['earnings-review'],Plans:['paper-order']};
+  const recordKinds:Partial<Record<Tab,string[]>>={Valuations:['valuation-scenario'],Reader:['filing-document','filing-annotation'],"Earnings Reviews":['earnings-review'],Plans:['paper-order','option-lot']};
   const widget: WidgetInstance = { id: `research-${symbol}`, type: "quote", linked: false, symbol };
   return <Modal label={`${symbol} research`} onClose={close} className="research-dialog">
     <header className="p-3 border-b border-[var(--border)] flex flex-wrap gap-2 items-center">

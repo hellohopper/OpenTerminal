@@ -4,6 +4,7 @@ import { useState } from "react";
 import { apiGet, apiPost, fmt } from "../../lib/api";
 import { analyzeStrategy, type StrategyLeg } from "../../lib/option-strategy";
 import { useWidgetSymbol, type WidgetInstance } from "../../store/terminal";
+import {useTerminal} from "../../store/terminal";
 import StrategyRisk from "../StrategyRisk";
 import AnalysisChart from "../AnalysisChart";
 type Option = {
@@ -302,6 +303,7 @@ function Builder({ symbol }: { symbol: string }) {
           >
             Save strategy to journal
           </button>
+          <button className="term-btn" onClick={()=>{const options=legs.filter(l=>l.kind!=='stock');if(options.length!==legs.length||!options.length||options.some(l=>l.quantity!==options[0].quantity)){setMessage('Copy requires option-only legs with equal contract quantities. Review the strategy structure first.');return;}sessionStorage.setItem('option-position-draft',JSON.stringify({symbol,expiry:expiry||data?.selectedDate||'',quantity:options[0]?.quantity??1,legs:options.map(({kind,side,strike,premium})=>({kind,side,strike,premium}))}));useTerminal.getState().addWidget('optionPositions');setMessage('Strategy copied to option holdings. Confirm standard contracts and supported debit structure before opening.');}}>Create simulated option holding</button>
         </>
       )}
       <StrategyRisk
