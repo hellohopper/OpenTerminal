@@ -1,3 +1,4 @@
+import {peersRouter} from "./routes/peers.js";
 import {researchSearchRouter} from "./routes/research-search.js";
 import {researchHubRouter} from "./routes/research-hub.js";
 import {earningsReviewRouter} from "./routes/earnings-review.js";
@@ -71,6 +72,7 @@ app.use("/api/portfolios/:id/import",requireApiKey,express.json({limit:"2mb"}),t
 app.use("/api/sync",requireApiKey,express.json({limit:"2300kb"}),syncRouter);
 app.use("/api/history-library",requireApiKey,express.json({limit:"700kb"}),rateLimit({windowMs:60000,max:60}),historyLibraryRouter);
 app.use(express.json());
+app.use("/api/peers",requireApiKey,rateLimit({windowMs:60000,max:20}),peersRouter);
 app.use("/api/research-search",requireApiKey,rateLimit({windowMs:60000,max:60}),researchSearchRouter);
 app.use("/api/research-hub",requireApiKey,researchHubRouter);
 app.use("/api/earnings-review",requireApiKey,rateLimit({windowMs:60000,max:30}),earningsReviewRouter);

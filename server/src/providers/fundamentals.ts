@@ -1,6 +1,6 @@
 import { edgarFetch, resolveCik } from "./secedgar.js";
 type Fact = { start?: string; end: string; val: number; accn: string; filed: string; form: string };
-export type FinancialValue = { value: number; filingUrl: string; filed: string; derived: boolean };
+export type FinancialValue = { value: number; filingUrl: string; filed: string; derived: boolean; periodStart: string | null; periodEnd: string; componentUrls: string[] };
 const TAGS = {
   revenue: ["RevenueFromContractWithCustomerExcludingAssessedTax", "Revenues", "SalesRevenueNet"],
   netIncome: ["NetIncomeLoss", "ProfitLoss"], operatingCashFlow: ["NetCashProvidedByUsedInOperatingActivities"],
@@ -21,7 +21,7 @@ export function extractFinancials(data: any, frequency: "quarterly" | "annual", 
     }
     return [metric, [...byPeriod.values()]];
   })) as Record<keyof typeof TAGS, Fact[]>;
-  const value = (f: Fact, amount = f.val, derived = false): FinancialValue => ({ value: amount, filed: f.filed, derived, filingUrl: `https://www.sec.gov/Archives/edgar/data/${Number(cik)}/${f.accn.replace(/-/g, "")}/${f.accn}-index.html` });
+  const value = (f: Fact, amount = f.val, derived = false, periodStart:string|null=f.start??null, componentUrls:string[]=[]): FinancialValue => ({ value: amount, filed: f.filed, derived, periodStart,periodEnd:f.end,componentUrls, filingUrl: `https://www.sec.gov/Archives/edgar/data/${Number(cik)}/${f.accn.replace(/-/g, "")}/${f.accn}-index.html` });
   const flow = (rows: Fact[], end: string): FinancialValue | null => {
     const candidates = rows.filter((f) => f.end === end && f.start);
     const direct = candidates.find((f) => frequency === "annual" ? days(f.start!, end) >= 300 && days(f.start!, end) <= 400 : days(f.start!, end) >= 60 && days(f.start!, end) <= 110);
@@ -29,7 +29,7 @@ export function extractFinancials(data: any, frequency: "quarterly" | "annual", 
     if (frequency === "annual") return null;
     for (const cumulative of candidates) {
       const previous = rows.find((f) => f.start === cumulative.start && days(f.end, end) >= 60 && days(f.end, end) <= 110);
-      if (previous) return value(cumulative, cumulative.val - previous.val, true);
+      if (previous) return value(cumulative, cumulative.val - previous.val, true,new Date(Date.parse(previous.end)+86400000).toISOString().slice(0,10),[value(cumulative).filingUrl,value(previous).filingUrl]);
     }
     return null;
   };
