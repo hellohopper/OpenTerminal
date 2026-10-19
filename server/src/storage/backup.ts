@@ -114,7 +114,7 @@ export async function restoreBackup(db: AppDatabase, input: unknown) {
                 }
               : table === "workspace_sync"
                 ? { ...original, version: randomUUID() }
-                : original;
+                : table === "research_records" ? {...original,version:Date.now()} : original;
         const columns = Object.keys(row);
         await db
           .prepare(

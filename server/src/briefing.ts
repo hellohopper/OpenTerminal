@@ -1,3 +1,4 @@
+import {dueTheses,type Thesis} from "./thesis.js";
 import { cached } from "./cache.js";
 import { mapWithConcurrency } from "./concurrency.js";
 import { getQuotes } from "./routes/market.js";
@@ -19,10 +20,10 @@ export function assembleBriefing(symbols: string[], mode: BriefingMode, parts: {
   const warnings = [...parts.warnings, ...(missing.length ? [`Quotes missing: ${missing.join(", ")}.`] : [])];
   const leader = movers[0];
   const summary = quotes.length ? `${quotes.length}/${symbols.length} watched assets available. ${leader ? `${leader.symbol} has the largest absolute daily move (${leader.changePercent! >= 0 ? "+" : ""}${leader.changePercent!.toFixed(2)}%).` : "Daily changes unavailable."} ${earnings.length} earnings releases and ${economic.length} high-impact economic events in the next seven days.` : "Watchlist quotes are unavailable; see the remaining sources and warnings below.";
-  return { date, mode, generatedAt: now.toISOString(), symbols, summary, quotes, movers, indexes, earnings, economic, headlines, warnings };
+  return { date, mode, generatedAt: now.toISOString(), symbols, summary, quotes, movers, indexes, earnings, lastEarnings: parts.earnings, economic, headlines, warnings };
 }
 export async function generateBriefing(symbols: string[], mode: BriefingMode) {
-  return cached(`briefing:${mode}:${symbols.join(",")}`, 300000, async () => {
+  const report=await cached(`briefing:${mode}:${symbols.join(",")}`, 300000, async () => {
     const parts = await Promise.allSettled([
       getQuotes([...new Set([...symbols, "SPY", "QQQ"])]),
       mapWithConcurrency(symbols, 3, async (s) => ({ symbol: s, items: await cached(`briefing-news:${s}`, 300000, () => news.symbolNews(s).catch(() => news.topNews(`${s} stock`))).catch(() => null) })),
@@ -33,4 +34,8 @@ export async function generateBriefing(symbols: string[], mode: BriefingMode) {
     const names = ["Quotes", "News", "Earnings", "Economic calendar"];
     return assembleBriefing(symbols, mode, { quotes: quotes.status === "fulfilled" ? quotes.value : [], news: headlines.status === "fulfilled" ? headlines.value.flatMap((r) => r.items ?? []) : [], earnings: earnings.status === "fulfilled" ? earnings.value : [], economic: economic.status === "fulfilled" ? economic.value : [], warnings: [...parts.flatMap((p, i) => p.status === "rejected" ? [`${names[i]} unavailable.`] : []), ...(headlines.status === "fulfilled" ? headlines.value.filter((r) => r.items === null).map((r) => `News unavailable for ${r.symbol}.`) : [])] });
   });
+  const {records}=await import("./records.js");
+  const cards=await records<Thesis>("thesis"),due=new Set(dueTheses(cards,symbols).map(r=>r.id));
+  const reviews=cards.filter(r=>symbols.includes(r.payload.symbol)&&["watching","active"].includes(r.payload.status)).flatMap(r=>{const earnings=report.lastEarnings.find(e=>e.symbol===r.payload.symbol)?.lastEarningsDate;const afterEarnings=!!earnings&&earnings*1000>Date.parse(r.updated_at)&&earnings*1000<=Date.now();return due.has(r.id)||afterEarnings?[{id:r.id,symbol:r.payload.symbol,title:r.payload.title,reviewDate:r.payload.reviewDate,reason:afterEarnings?"Earnings since last review":"Review date reached"}]:[];});
+  return {...report,reviews};
 }

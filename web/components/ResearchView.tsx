@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useTerminal, type WidgetInstance } from "../store/terminal";
 import Modal from "./Modal";
 import WidgetErrorBoundary from "./WidgetErrorBoundary";
+import ThesisWidget from "./widgets/ThesisWidget";
 import QuoteWidget from "./widgets/QuoteWidget";
 import NewsWidget from "./widgets/NewsWidget";
 import ChartWidget from "./widgets/ChartWidget";
@@ -10,7 +11,7 @@ import FundamentalsWidget from "./widgets/FundamentalsWidget";
 import JournalWidget from "./widgets/JournalWidget";
 import AlertsWidget from "./widgets/AlertsWidget";
 import { EarningsTab, EconomicTab } from "./widgets/CalendarWidget";
-const TABS = ["Overview", "Chart", "Financials", "Events", "Notes", "Alerts"] as const;
+const TABS = ["Overview", "Chart", "Financials", "Events", "Thesis", "Notes", "Alerts"] as const;
 type Tab = typeof TABS[number];
 export default function ResearchView({ symbol }: { symbol: string }) {
   const close = useTerminal(s => s.closeResearch), add = useTerminal(s => s.addToWatchlist);
@@ -36,6 +37,7 @@ export default function ResearchView({ symbol }: { symbol: string }) {
     <div className="research-body">
       <WidgetErrorBoundary key={`${symbol}-${tab}-${note}`} name={`${symbol} ${tab}`}>
         {tab === "Overview" && <div className="research-overview"><section><h2 className="amber p-2">Quote / source</h2><QuoteWidget widget={widget} /></section><section><h2 className="amber p-2">Latest news</h2><NewsWidget widget={widget} /></section></div>}
+        {tab === "Thesis" && <ThesisWidget initialSymbol={symbol} />}
         {tab === "Chart" && <div className="research-chart"><ChartWidget widget={{ ...widget, type: "chart" }} /></div>}
         {tab === "Financials" && <FundamentalsWidget widget={{ ...widget, type: "fundamentals" }} />}
         {tab === "Events" && <div className="space-y-4 p-2"><section><h2 className="amber">{symbol} earnings</h2><p className="dim">Expected provider dates; release sessions are unverified. Select a row for past results.</p><EarningsTab symbols={[symbol]} /></section><section><h2 className="amber">Market-wide economic calendar</h2><p className="dim">Current-week events provide context; they are not company-specific.</p><EconomicTab /></section></div>}
