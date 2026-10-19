@@ -26,6 +26,7 @@ import ResearchSearchWidget from "./widgets/ResearchSearchWidget";
 import PeersWidget from "./widgets/PeersWidget";
 import ThesisMonitorWidget from "./widgets/ThesisMonitorWidget";
 import AccountImportWidget from "./widgets/AccountImportWidget";
+import PortfolioGuardsWidget from "./widgets/PortfolioGuardsWidget";
 import SignalsWidget from "./widgets/SignalsWidget";
 import QualityWidget from "./widgets/QualityWidget";
 import BackupWidget from "./widgets/BackupWidget";
@@ -79,6 +80,7 @@ function WidgetBody({ widget }: { widget: WidgetInstance }) {
     case "peers": return <PeersWidget />;
     case "thesisMonitor": return <ThesisMonitorWidget />;
     case "accountImport": return <AccountImportWidget />;
+    case "portfolioGuards": return <PortfolioGuardsWidget />;
     case "signals": return <SignalsWidget />;
     case "quality": return <QualityWidget />;
     case "backup": return <BackupWidget />;
