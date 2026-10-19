@@ -5,3 +5,9 @@ Each feature has its own PR, validated and merged before the next begins: TODAY 
 ## TODAY
 
 TODAY combines unread notification/filing records, due active/watching thesis cards, upcoming seven-day earnings and quote-quality problems. Earnings and quality checks cover the first twelve workspace watchlist symbols. Expected earnings sessions remain unverified. Complete, reopen or snooze items for an hour; filters show pending, completed and snoozed tasks. State persists on the server and participates in backup/import, with optimistic conflict checks and retention of the latest 500 states. Completing a queue task does not mark its source read. A new thesis revision creates a new review task. Source and research buttons open existing panels.
+
+## Historical data center
+
+HISTORY DATA imports daily date/open/high/low/close/volume CSV (512 KB, 2–5000 rows), with symbol, currency, source and raw/split-adjusted/total-return/unknown basis declarations. Headers, dates, OHLCV and duplicate sessions are validated; gaps and large moves are flagged. Immutable versions have SHA-256 content checksums and server backup/import support. Up to twenty versions are retained; delete inactive versions to make room. Provider snapshots require a fresh USD currency check and preserve unknown adjustment basis.
+
+Select one version per symbol to share its daily bars with charts, comparisons and backtests. Intraday chart ranges continue using providers. Personal CSV data is served only through authenticated library endpoints; public market history is unchanged. Backtests require USD and disclose user-declared adjustment basis without certifying it. Gap/coverage checks still apply. A version can be deactivated to return to providers; active versions cannot be deleted. Selections use conflict guards. This center stores supplied adjustments; it does not infer corporate actions or generate total returns from raw prices.

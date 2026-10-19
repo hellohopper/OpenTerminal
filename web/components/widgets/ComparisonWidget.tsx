@@ -10,7 +10,7 @@ export default function ComparisonWidget() {
   const [symbols, setSymbols] = useState(["AAPL", "MSFT", "SPY"]);
   const [range, setRange] = useState("6M");
   const [validation, setValidation] = useState("");
-  const queries = useQueries({ queries: symbols.map((symbol) => ({ queryKey: ["history", symbol, range], queryFn: () => apiGet<Candle[]>(`/api/history/${encodeURIComponent(symbol)}?range=${range}`), staleTime: 60000 })) });
+  const queries = useQueries({ queries: symbols.map((symbol) => ({ queryKey: ["history", symbol, range], queryFn: () => apiGet<Candle[]>(`/api/history-library/series/${encodeURIComponent(symbol)}?range=${range}`), staleTime: 60000 })) });
   const signature = queries.map((q) => q.dataUpdatedAt).join(",");
   const result = useMemo(() => compareSeries(symbols.map((symbol, i) => ({ symbol, candles: queries[i].data ?? [] }))), [symbols, signature]); // eslint-disable-line react-hooks/exhaustive-deps
   const failed = queries.map((q, i) => q.error ? symbols[i] : null).filter(Boolean);
