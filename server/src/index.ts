@@ -1,3 +1,5 @@
+import {portfolioGuardsRouter} from "./routes/portfolio-guards.js";
+import {guardMonitor} from "./guard-monitor.js";
 import {accountImportRouter} from "./routes/account-import.js";
 import {thesisMonitorRouter} from "./routes/thesis-monitor.js";
 import {thesisMonitor} from "./thesis-monitor.js";
@@ -76,6 +78,7 @@ app.use("/api/sync",requireApiKey,express.json({limit:"2300kb"}),syncRouter);
 app.use("/api/history-library",requireApiKey,express.json({limit:"700kb"}),rateLimit({windowMs:60000,max:60}),historyLibraryRouter);
 app.use("/api/account-import",requireApiKey,express.json({limit:"700kb"}),rateLimit({windowMs:60000,max:60}),accountImportRouter);
 app.use(express.json());
+app.use("/api/portfolio-guards",requireApiKey,rateLimit({windowMs:60000,max:30}),portfolioGuardsRouter);
 app.use("/api/thesis-monitor",requireApiKey,rateLimit({windowMs:60000,max:30}),thesisMonitorRouter);
 app.use("/api/peers",requireApiKey,rateLimit({windowMs:60000,max:20}),peersRouter);
 app.use("/api/research-search",requireApiKey,rateLimit({windowMs:60000,max:60}),researchSearchRouter);
@@ -144,6 +147,7 @@ const PORT = Number(process.env.API_PORT ?? 4000);
 // API_KEY + WEB_ORIGIN) to intentionally expose it beyond this machine.
 const HOST = process.env.API_HOST ?? "127.0.0.1";
 const server = app.listen(PORT, HOST, () => {
+  guardMonitor.start();
   thesisMonitor.start();
   paperMonitor.start();
   screenerTracker.start();
@@ -161,7 +165,7 @@ async function shutdown() {
   stopping = true;
   const deadline = setTimeout(() => process.exit(1), 15000);
   deadline.unref();
-  await Promise.all([thesisMonitor.stop(),alertMonitor.stop(),briefingScheduler.stop(),signalMonitor.stop(),filingMonitor.stop(),notificationWorker.stop(),screenerTracker.stop(),paperMonitor.stop()]);
+  await Promise.all([guardMonitor.stop(),thesisMonitor.stop(),alertMonitor.stop(),briefingScheduler.stop(),signalMonitor.stop(),filingMonitor.stop(),notificationWorker.stop(),screenerTracker.stop(),paperMonitor.stop()]);
   await new Promise<void>((resolve) => server.close(() => resolve()));
   await db.close();
   clearTimeout(deadline);
