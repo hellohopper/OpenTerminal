@@ -28,5 +28,6 @@ export const MIGRATIONS = [
     postgres: "CREATE TABLE workspace_sync_history (id BIGSERIAL PRIMARY KEY,payload TEXT NOT NULL,version TEXT NOT NULL UNIQUE,updated_at TEXT NOT NULL); INSERT INTO workspace_sync_history (payload,version,updated_at) SELECT payload,version,updated_at FROM workspace_sync WHERE id=1;",
   },
   { id: 6, sqlite: "CREATE TABLE research_records (id INTEGER PRIMARY KEY AUTOINCREMENT,kind TEXT NOT NULL,record_key TEXT,payload TEXT NOT NULL,version INTEGER NOT NULL DEFAULT 1,updated_at TEXT NOT NULL,UNIQUE(kind,record_key));", postgres: "CREATE TABLE research_records (id BIGSERIAL PRIMARY KEY,kind TEXT NOT NULL,record_key TEXT,payload TEXT NOT NULL,version INTEGER NOT NULL DEFAULT 1,updated_at TEXT NOT NULL,UNIQUE(kind,record_key));" },
+  { id: 7, sqlite: "SELECT 1;", postgres: "ALTER TABLE research_records ALTER COLUMN version TYPE BIGINT;" },
 ];
 export const SCHEMA_VERSION = MIGRATIONS.at(-1)!.id;
