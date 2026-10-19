@@ -9,3 +9,9 @@ Unsaved research journal drafts stay in browser-tab memory per symbol when closi
 ## Personal research search
 
 RESEARCH SEARCH finds retained journals, theses, valuations, SEC text/annotations and earnings reviews with case-insensitive Unicode normalization and AND matching of up to eight keywords. Filter by company, record type and updated-date range; results paginate thirty at a time and link to exact records/paragraphs. Filing truncation and journal scan coverage are explicit. No separate index can become stale: each search reads current saved records, including deletions. Cmd/Ctrl+K with #keywords searches the same authenticated source set. Search covers retained data, not unsaved drafts or unretained source documents.
+
+## Peer fundamentals
+
+PEER FINANCIALS compares two to six USD US-GAAP companies. Annual values require a supported annual duration; TTM requires four consecutive, non-overlapping supported quarters. Each metric must cover the same actual periods; missing metrics remain unavailable. Derived quarters retain both filing URLs. Growth additionally requires a comparable prior year/window. Current P/E and P/S need fresh USD market capitalization and positive denominators; negative income has no P/E. Source details expose periods, filing dates, units and retrieval timestamps. Company fiscal periods and accounting definitions can differ.
+
+Save twenty named peer groups and the latest twenty immutable comparison snapshots. Transfer revenue/net income references to a newly opened valuation panel; FCFF margin, shares, debt and discount assumptions stay manual. A failed company remains visibly unavailable rather than receiving invented values.
