@@ -9,6 +9,8 @@ import {
 } from "vitest";
 import pg from "pg";
 import {createBackup,restoreBackup} from "./backup.js";
+import {writeSync} from "../sync.js";
+import {makeWorkspace} from "../../../web/lib/workspaces.js";
 import { randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -125,6 +127,12 @@ suite("real PostgreSQL backend", () => {
       .prepare("SELECT * FROM journal_entries WHERE id=?")
       .get(id))!;
     expect(new Date(row.updated_at + "Z").getTime()).toBeGreaterThan(0);
+  });
+  it("serializes competing device snapshot uploads",async()=>{
+    const w=makeWorkspace("Synced","blank"),payload={format:"openterminal-device",version:1,workspace:{workspaces:[w],activeWorkspaceId:w.id},preferences:{groups:[],screeners:[]},drawings:{}};
+    const outcomes=await Promise.allSettled([writeSync(db,payload,null),writeSync(db,payload,null)]);
+    expect(outcomes.filter(r=>r.status==="fulfilled")).toHaveLength(1);
+    expect(outcomes.filter(r=>r.status==="rejected")).toHaveLength(1);
   });
   it("serializes concurrent ledger writes and rolls back oversells", async () => {
     await call(portfolio, "post", "/:id/transactions", trade);

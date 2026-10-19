@@ -1,3 +1,4 @@
+import {syncRouter} from "./routes/sync.js";
 import {dataRouter} from "./routes/data.js";
 import {tradeCsvRouter} from "./routes/trade-csv.js";
 import express, { type ErrorRequestHandler } from "express";
@@ -42,6 +43,7 @@ app.use(
 );
 app.use("/api/data",requireApiKey,express.json({limit:"34mb"}),dataRouter);
 app.use("/api/portfolios/:id/import",requireApiKey,express.json({limit:"2mb"}),tradeCsvRouter);
+app.use("/api/sync",requireApiKey,express.json({limit:"2300kb"}),syncRouter);
 app.use(express.json());
 app.use("/api/alerts", requireApiKey, alertsRouter);
 app.use(

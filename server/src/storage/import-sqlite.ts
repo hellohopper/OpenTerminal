@@ -1,6 +1,7 @@
 import SQLite from "better-sqlite3";
 import { AppDatabase, type Row } from "./database.js";
 export const TABLE_COLUMNS = {
+  workspace_sync: ["id","payload","version","updated_at"],
   portfolios: ["id", "name", "created_at"],
   transactions: [
     "id",
@@ -76,10 +77,11 @@ export async function importSqlite(filename: string, target: AppDatabase) {
             "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
           )
           .get(table);
+        const present=exists?new Set((source.prepare(`PRAGMA table_info(${table})`).all() as {name:string}[]).map(c=>c.name)):new Set<string>();
         result[table] = exists
           ? (source
               .prepare(
-                `SELECT ${columns.map((c) => `"${c}"`).join(",")} FROM ${table} ORDER BY id`,
+                `SELECT ${columns.filter(c=>present.has(c)).map((c) => `"${c}"`).join(",")} FROM ${table} ORDER BY id`,
               )
               .all() as Row[])
           : [];
@@ -109,9 +111,10 @@ export async function importSqlite(filename: string, target: AppDatabase) {
         );
     const counts: Record<string, number> = {};
     for (const [table, columns] of Object.entries(TABLE_COLUMNS)) {
-      const sql = `INSERT INTO ${table} (${columns.map((c) => `"${c}"`).join(",")}) VALUES (${columns.map(() => "?").join(",")})`;
+      const insertColumns=columns.filter(c=>snapshot[table].length===0||Object.hasOwn(snapshot[table][0],c));
+      const sql = `INSERT INTO ${table} (${insertColumns.map((c) => `"${c}"`).join(",")}) VALUES (${insertColumns.map(() => "?").join(",")})`;
       for (const row of snapshot[table])
-        await target.prepare(sql).run(...columns.map((c) => row[c]));
+        await target.prepare(sql).run(...insertColumns.map((c) => row[c]));
       counts[table] = snapshot[table].length;
     }
     // Explicit IDs do not advance PostgreSQL sequences. Reset before normal inserts.
