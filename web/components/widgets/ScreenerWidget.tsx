@@ -4,6 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { apiGet, fmt, fmtBig, pctClass } from "../../lib/api";
 import { useTerminal } from "../../store/terminal";
+import SavedControls from "../SavedControls";
+import type {ScreenerPreset} from "../../lib/preferences";
 import Flash from "../Flash";
 
 type Row = {
@@ -57,6 +59,7 @@ export default function ScreenerWidget() {
 
   return (
     <div>
+      <SavedControls kind="screeners" value={{market,sector,changeMin,marketCapMinB,volumeMinM,sort,dir}} onLoad={value=>{const p=value as ScreenerPreset;setMarket(p.market);setSector(p.sector);setChangeMin(p.changeMin);setMarketCapMinB(p.marketCapMinB);setVolumeMinM(p.volumeMinM);setSort(p.sort);setDir(p.dir);}} />
       <div className="flex gap-2 p-1 flex-wrap items-center">
         <div className="flex gap-1">
           {(["us", "eu"] as const).map((m) => (
