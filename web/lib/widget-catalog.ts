@@ -17,6 +17,7 @@ export const WIDGET_CATALOG: Record<WidgetType, { title: string; label: string; 
   earningsReview: { title: "Earnings Review Archives", label: "EARNINGS REVIEW", group: "Research", key: "" },
   researchSearch: { title: "Personal Research Search", label: "RESEARCH SEARCH", group: "Research", key: "" },
   peers: { title: "Peer Fundamentals Comparison", label: "PEER FINANCIALS", group: "Research", key: "" },
+  thesisMonitor: { title: "Thesis Evidence Monitor", label: "THESIS MONITOR", group: "Research", key: "" },
   signals: { title: "Technical Signals", label: "SIGNALS", group: "Research", key: "" },
   chart: { title: "Chart", label: "CHART", group: "Markets", key: "⌥1" },
   quote: { title: "Quote", label: "QUOTE", group: "Markets", key: "⌥2" },
