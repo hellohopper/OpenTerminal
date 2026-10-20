@@ -72,3 +72,45 @@ test('does not poll an idle validation workspace every second',async({page})=>{
  await page.waitForTimeout(2200);
  expect(requests).toBe(1);
 });
+
+test('discards late consolidated reports after selection or mark changes and invalidates edited ledgers',async({page})=>{
+ await signIn(page);
+ await blank(page,'Consolidated report isolation');
+ await page.route('**/api/consolidated',route=>route.fulfill({json:{
+  accounts:[101,202].map(id=>({id,payload:{name:`Currency account ${id}`}})),
+  commissions:[],reports:[],
+ }}));
+ await page.route('**/api/consolidated/accounts/101',route=>route.fulfill({
+  json:route.request().method()==='GET'?[]:{id:1},
+ }));
+ let release!:()=>void;
+ const gate=new Promise<void>(resolve=>{release=resolve;});
+ let requests=0;
+ await page.route('**/api/consolidated/report',async route=>{
+  if(++requests===1)await gate;
+  await route.fulfill({json:{
+   asOf:'2026-01-01T00:00:00Z',totals:{nav:111,netDeposits:100,netPnl:11},
+   accounts:[],warnings:[],fxSources:[],
+  }});
+ });
+ await page.getByRole('button',{name:'MULTI LEDGER',exact:true}).click();
+ await page.getByRole('checkbox',{name:'Currency: Currency account 101',exact:true}).check();
+ const requested=page.waitForRequest('**/api/consolidated/report');
+ await page.getByRole('button',{name:'Calculate consolidated report',exact:true}).click();
+ await requested;
+ await page.getByRole('checkbox',{name:'Currency: Currency account 202',exact:true}).check();
+ const response=page.waitForResponse('**/api/consolidated/report');
+ release();
+ await response;
+ await expect(page.getByRole('button',{name:'Calculate consolidated report',exact:true})).toBeEnabled();
+ await expect(page.getByTestId('consolidated-result')).toHaveCount(0);
+ await page.getByRole('button',{name:'Calculate consolidated report',exact:true}).click();
+ await expect(page.getByTestId('consolidated-result')).toContainText('NAV 111.00 USD');
+ await page.getByLabel('Manual currency marks',{exact:true}).fill('AAPL,USD,120,2026-01-01');
+ await expect(page.getByTestId('consolidated-result')).toHaveCount(0);
+ await page.getByRole('button',{name:'Calculate consolidated report',exact:true}).click();
+ await expect(page.getByTestId('consolidated-result')).toBeVisible();
+ await page.getByRole('button',{name:'Record currency entry',exact:true}).click();
+ await expect(page.getByText('Currency ledger entry recorded.',{exact:true})).toBeVisible();
+ await expect(page.getByTestId('consolidated-result')).toHaveCount(0);
+});

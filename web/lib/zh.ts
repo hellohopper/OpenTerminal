@@ -468,7 +468,7 @@ export const zh: Record<string, string> = {
   "Disable desktop notifications": "关闭桌面通知", "Enable desktop notifications": "启用桌面通知",
   "Target price": "目标价格", "Update alert": "更新提醒", "Monitor running": "监测运行中", "Monitor not running": "监测未运行",
   "Fetching fresh quotes…": "正在获取新报价…", "not yet": "尚未", "Triggered": "已触发", "Paused": "已暂停", "Pause": "暂停", "Rearm": "重新设防",
-  "Pause replay": "暂停回放", "Play replay": "开始回放", "invalid": "无效", "Saved snapshot": "已保存快照",
+  "Pause replay": "暂停回放", "Play replay": "开始回放", "invalid": "无效", "Saved snapshot": "已保存快照", "Calculated report": "计算结果",
   "Current": "当前", "Loading comparison…": "正在加载对比…",
   "Not enough shared timestamps to compare these assets.": "共同时间点不足，无法对比这些资产。",
   "Normalized comparison chart": "归一化对比图", "Price chart drawing area": "价格图表绘图区",
