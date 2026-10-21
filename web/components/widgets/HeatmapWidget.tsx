@@ -5,10 +5,12 @@ import { useEffect, useRef, useState } from "react";
 import * as d3 from "d3";
 import { apiGet } from "../../lib/api";
 import { useTerminal } from "../../store/terminal";
+import { DEFAULT_FONT_SIZE, useDisplay } from "../../store/display";
 
 type Cell = { symbol: string; name: string | null; sector: string; marketCap: number | null; changePercent: number | null };
 
 export default function HeatmapWidget() {
+  const scale = useDisplay((state) => state.fontSize) / DEFAULT_FONT_SIZE;
   const ref = useRef<HTMLDivElement>(null);
   const setActiveSymbol = useTerminal((s) => s.setActiveSymbol);
   const [market, setMarket] = useState<"us" | "eu">("us");
@@ -41,7 +43,7 @@ export default function HeatmapWidget() {
         .sum((d) => d.data?.marketCap ?? 0)
         .sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
 
-      d3.treemap<Node>().size([width, height]).paddingInner(1).paddingTop(12)(root);
+      d3.treemap<Node>().size([width, height]).paddingInner(1).paddingTop(12 * scale)(root);
 
       const color = (chg: number) => {
         const clamped = Math.max(-3, Math.min(3, chg));
@@ -66,7 +68,7 @@ export default function HeatmapWidget() {
         .attr("x", (d: any) => d.x0)
         .attr("y", (d: any) => d.y0)
         .attr("width", (d: any) => Math.max(0, d.x1 - d.x0 - 4))
-        .attr("height", 12);
+        .attr("height", 12 * scale);
 
       svg
         .selectAll("text.sector")
@@ -74,10 +76,10 @@ export default function HeatmapWidget() {
         .join("text")
         .attr("class", "sector")
         .attr("x", (d: any) => d.x0 + 3)
-        .attr("y", (d: any) => d.y0 + 9)
+        .attr("y", (d: any) => d.y0 + 9 * scale)
         .attr("clip-path", (d: any) => `url(#${sectorClipId(d.data.name)})`)
         .attr("fill", "#808080")
-        .attr("font-size", 8)
+        .attr("font-size", 8 * scale)
         .text((d: any) => d.data.name.toUpperCase());
 
       const leaf = svg
@@ -98,22 +100,22 @@ export default function HeatmapWidget() {
         .text((d: any) => `${d.data.data.symbol} ${d.data.data.name ?? ""}: ${d.data.data.changePercent?.toFixed(2)}%`);
 
       leaf
-        .filter((d: any) => d.x1 - d.x0 > 32 && d.y1 - d.y0 > 18)
+        .filter((d: any) => d.x1 - d.x0 > Math.max(32, d.data.data.symbol.length * 6 + 6) * scale && d.y1 - d.y0 > 18 * scale)
         .append("text")
         .attr("x", 3)
-        .attr("y", 11)
+        .attr("y", 11 * scale)
         .attr("fill", "#fff")
-        .attr("font-size", 9)
+        .attr("font-size", 9 * scale)
         .attr("font-weight", "bold")
         .text((d: any) => d.data.data.symbol);
 
       leaf
-        .filter((d: any) => d.x1 - d.x0 > 40 && d.y1 - d.y0 > 30)
+        .filter((d: any) => d.x1 - d.x0 > 45 * scale && d.y1 - d.y0 > 30 * scale)
         .append("text")
         .attr("x", 3)
-        .attr("y", 22)
+        .attr("y", 22 * scale)
         .attr("fill", "#ddd")
-        .attr("font-size", 8)
+        .attr("font-size", 8 * scale)
         .text((d: any) => `${d.data.data.changePercent >= 0 ? "+" : ""}${d.data.data.changePercent.toFixed(2)}%`);
     };
 
@@ -121,7 +123,7 @@ export default function HeatmapWidget() {
     const obs = new ResizeObserver(render);
     obs.observe(el);
     return () => obs.disconnect();
-  }, [data, setActiveSymbol]);
+  }, [data, setActiveSymbol, scale]);
 
   return (
     <div className="flex flex-col h-full">

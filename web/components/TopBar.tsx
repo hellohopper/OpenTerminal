@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { apiGet } from "../lib/api";
 import { useTerminal } from "../store/terminal";
+import DisplaySettings from "./DisplaySettings";
 
 type Status = {
   ok: boolean;
@@ -65,6 +66,7 @@ export default function TopBar() {
         {activeSymbol} — search symbols, features… <span className="float-right">⌘K</span>
       </button>
       <button className="term-btn" aria-label={`Research ${activeSymbol}`} onClick={() => useTerminal.getState().openResearch(activeSymbol)}>Research</button>
+      <DisplaySettings />
       <button className="term-btn" onClick={async()=>{await fetch("/api/session",{method:"DELETE"});window.location.assign("/login");}}>Sign out</button>
       <span className="dim ml-auto feed-status">
         feeds:{" "}

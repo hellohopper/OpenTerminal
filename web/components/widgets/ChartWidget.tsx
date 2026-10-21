@@ -2,6 +2,7 @@
 
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { DEFAULT_FONT_SIZE, useDisplay } from "../../store/display";
 import {
   createChart,
   CandlestickSeries,
@@ -67,6 +68,7 @@ const INDICATOR_COLOR: Record<string, string> = {
 };
 
 export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
+  const fontSize = useDisplay((state) => state.fontSize);
   const symbol = useWidgetSymbol(widget);
   const qc = useQueryClient();
   const [snapshotStatus, setSnapshotStatus] = useState("");
@@ -245,7 +247,7 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
       layout: {
         background: { color: "#0a0a0a" },
         textColor: "#808080",
-        fontSize: 10,
+        fontSize: 10 * useDisplay.getState().fontSize / DEFAULT_FONT_SIZE,
         attributionLogo: false,
       },
       grid: {
@@ -524,6 +526,10 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
     comparing,
     comparison,
   ]);
+
+  useEffect(() => {
+    chartRef.current?.applyOptions({ layout: { fontSize: 10 * fontSize / DEFAULT_FONT_SIZE } });
+  }, [fontSize]);
 
   const toggleIndicator = (ind: Indicator) =>
     setActive((prev) => {
