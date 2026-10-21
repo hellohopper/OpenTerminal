@@ -2,9 +2,12 @@
 import { useRef, useState } from "react";
 import { useTerminal } from "../store/terminal";
 import { exportWorkspace, importWorkspace, PRESETS, type Preset } from "../lib/workspaces";
+import { useDisplay } from "../store/display";
 
 export default function WorkspaceBar() {
   const st = useTerminal();
+  const hiddenPanels = useDisplay((state) => state.hiddenPanels);
+  const visibleCount = st.widgets.filter((widget) => !(hiddenPanels[st.activeWorkspaceId] ?? []).includes(widget.id)).length;
   const [name, setName] = useState("");
   const [preset, setPreset] = useState<Preset>("daily");
   const [error, setError] = useState("");
@@ -41,7 +44,7 @@ export default function WorkspaceBar() {
       const selected = e.target.files?.[0]; e.target.value = ""; if (!selected) return;
       try { if (selected.size > 262144) throw new Error("Workspace files must be smaller than 256 KB."); const text = await selected.text(); run(() => st.importWorkspace(importWorkspace(text))); } catch (err) { setError((err as Error).message); }
     }} />
-    <span className="dim ml-auto">{st.widgets.length} panels · auto-saved</span>
+    <span className="dim ml-auto">{visibleCount === st.widgets.length ? `${st.widgets.length} panels` : `${visibleCount}/${st.widgets.length} panels shown`} · auto-saved</span>
     {error && <span role="alert" className="down w-full">{error}</span>}
   </div>;
 }

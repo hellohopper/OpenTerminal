@@ -15,8 +15,11 @@ import Sidebar from "./Sidebar";
 import Workspace from "./Workspace";
 import CommandPalette from "./CommandPalette";
 import { useTerminal } from "../store/terminal";
+import { useDisplay } from "../store/display";
 
 export default function Terminal() {
+  const sidebarVisible = useDisplay((state) => state.sidebarVisible);
+  const workspaceBarVisible = useDisplay((state) => state.workspaceBarVisible);
   const setCommandOpen = useTerminal((s) => s.setCommandOpen);
   const addWidget = useTerminal((s) => s.addWidget);
   const [compact, setCompact] = useState<boolean | null>(null), [tools, setTools] = useState(false);
@@ -65,9 +68,9 @@ export default function Terminal() {
   return (
     <div className="terminal-shell flex flex-col">
       <TopBar />
-      {(!compact || view === "workspace") && <WorkspaceBar />}
+      {workspaceBarVisible && (!compact || view === "workspace") && <WorkspaceBar />}
       <div className="flex flex-1 overflow-hidden min-h-0">
-        {!compact && <Sidebar />}
+        {!compact && sidebarVisible && <Sidebar />}
         <main className="flex-1 overflow-auto min-w-0">
           {!compact || view === "workspace" ? <Workspace key={workspaceId} compact={compact} /> : <section className={`mobile-home mobile-${view} p-2`} aria-label={`Mobile ${view}`}>
             <h1 className="amber text-lg mb-2">{view === "holdings" ? "Holdings" : view === "alerts" ? "Alerts" : "Holdings events"}</h1>
