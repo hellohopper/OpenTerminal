@@ -59,6 +59,7 @@ import TvWidget from "./widgets/TvWidget";
 import RecapWidget from "./widgets/RecapWidget";
 import WidgetErrorBoundary from "./WidgetErrorBoundary";
 import { DEFAULT_FONT_SIZE, useDisplay } from "../store/display";
+import { mergeVisibleLayout } from "../lib/display";
 
 const Grid = WidthProvider(GridLayout);
 
@@ -181,13 +182,18 @@ export default function Workspace({ compact = false }: { compact?: boolean }) {
   const removeWidget = useTerminal((s) => s.removeWidget);
   const toggleLinked = useTerminal((s) => s.toggleLinked);
   const activeSymbol = useTerminal((s) => s.activeSymbol);
+  const workspaceId = useTerminal((s) => s.activeWorkspaceId);
+  const hiddenPanels = useDisplay((state) => state.hiddenPanels);
+  const hiddenIds = hiddenPanels[workspaceId] ?? [];
+  const visibleWidgets = widgets.filter((widget) => !hiddenIds.includes(widget.id));
+  const visibleLayout = layout.filter((item) => !hiddenIds.includes(item.i));
 
   // Reflow only the rendered layout; preserve the user's draggable layout.
-  const reflow = compact || (width > 0 && layout.some((item) => width * item.w / 12 < 300 * scale));
+  const reflow = compact || (width > 0 && visibleLayout.some((item) => width * item.w / 12 < 300 * scale));
   const rowHeight = 30 * scale;
   const symbolAware = new Set(["quote", "chart", "news", "options", "insider", "fundamentals", "journal", "strategy"]);
 
-  const panels = widgets.map((w) => (
+  const panels = visibleWidgets.map((w) => (
         <div key={w.id} className={reflow ? "reflow-workspace-panel" : undefined} style={reflow ? {
           height: Math.max(360 * scale, (layout.find((item) => item.i === w.id)?.h ?? 12) * (rowHeight + 4 * scale)),
           gridColumn: (layout.find((item) => item.i === w.id)?.w ?? 0) >= 10 ? "1 / -1" : undefined,
@@ -209,17 +215,21 @@ export default function Workspace({ compact = false }: { compact?: boolean }) {
           </div>
         </div>
   ));
-  return <div ref={containerRef} className="workspace-container">{reflow ? (
-    <div className="reflow-workspace">{panels.length ? panels : <p className="dim">This workspace is empty. Open Tools to add a panel.</p>}</div>
+  return <div ref={containerRef} className="workspace-container">{panels.length === 0 ? (
+    <div className="p-4 space-y-2"><h2 className="amber">{widgets.length ? "All panels are hidden" : "This workspace is empty"}</h2><p className="dim">{widgets.length ? "Open UI settings → Panels in the header to show your panels again." : "Add a panel from the sidebar, Tools or command search (⌘/Ctrl+K)."}</p></div>
+  ) : reflow ? (
+    <div className="reflow-workspace">{panels}</div>
   ) : (
     <Grid
       className="layout"
-      layout={layout}
+      layout={visibleLayout}
       cols={12}
       rowHeight={rowHeight}
       margin={[4 * scale, 4 * scale]}
       draggableHandle=".panel-title"
-      onLayoutChange={(l) => setLayout(l.map(({ i, x, y, w, h }) => ({ i, x, y, w, h })))}
+      // Only persist deliberate edits, not compaction caused by hiding panels.
+      onDragStop={(next) => setLayout(mergeVisibleLayout(layout, next))}
+      onResizeStop={(next) => setLayout(mergeVisibleLayout(layout, next))}
     >
       {panels}
     </Grid>

@@ -1,0 +1,55 @@
+import { WIDGET_TYPES, type WidgetType, type LayoutItem } from "./workspaces";
+
+export const DEFAULT_FONT_SIZE = 12;
+export const MIN_FONT_SIZE = 12;
+export const MAX_FONT_SIZE = 20;
+
+export type DisplayPreferences = {
+  fontSize: number;
+  sidebarVisible: boolean;
+  workspaceBarVisible: boolean;
+  hiddenSidebarFeatures: WidgetType[];
+  hiddenPanels: Record<string, string[]>;
+};
+
+export const defaultDisplayPreferences = (): DisplayPreferences => ({
+  fontSize: DEFAULT_FONT_SIZE,
+  sidebarVisible: true,
+  workspaceBarVisible: true,
+  hiddenSidebarFeatures: [],
+  hiddenPanels: {},
+});
+
+export function normalizeFontSize(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, Math.round(value)))
+    : DEFAULT_FONT_SIZE;
+}
+
+export function readDisplayPreferences(value: unknown): DisplayPreferences {
+  const defaults = defaultDisplayPreferences();
+  if (!value || typeof value !== "object") return defaults;
+  const saved = value as Record<string, unknown>;
+  const hiddenSidebarFeatures = saved.hiddenSidebarFeatures;
+  const hiddenPanels = saved.hiddenPanels && typeof saved.hiddenPanels === "object"
+    ? Object.fromEntries(Object.entries(saved.hiddenPanels).filter(([id, ids]) =>
+      id.length > 0 && id.length <= 100 && Array.isArray(ids),
+    ).map(([id, ids]) => [id, [...new Set((ids as unknown[]).filter((item): item is string =>
+      typeof item === "string" && item.length > 0 && item.length <= 100,
+    ))].slice(0, 50)])) : {};
+  return {
+    fontSize: normalizeFontSize(saved.fontSize),
+    sidebarVisible: typeof saved.sidebarVisible === "boolean" ? saved.sidebarVisible : true,
+    workspaceBarVisible: typeof saved.workspaceBarVisible === "boolean" ? saved.workspaceBarVisible : true,
+    hiddenSidebarFeatures: Array.isArray(hiddenSidebarFeatures)
+      ? WIDGET_TYPES.filter((type) => hiddenSidebarFeatures.includes(type))
+      : [],
+    hiddenPanels,
+  };
+}
+
+/** Keep hidden panels' saved positions when the visible panels are rearranged. */
+export function mergeVisibleLayout(saved: LayoutItem[], visible: LayoutItem[]): LayoutItem[] {
+  const updates = new Map(visible.map(({ i, x, y, w, h }) => [i, { i, x, y, w, h }]));
+  return saved.map((item) => updates.get(item.i) ?? item);
+}
