@@ -6,6 +6,7 @@ import { apiGet, fmt, pctClass } from "../../lib/api";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from "recharts";
 import { useTerminal } from "../../store/terminal";
 import Flash from "../Flash";
+import { DEFAULT_FONT_SIZE, useDisplay } from "../../store/display";
 
 type MacroData = {
   yields: Array<{ tenor: string; value: number | null }>;
@@ -53,6 +54,7 @@ function MacroBody({
   region: "us" | "eu";
   setActiveSymbol: (s: string) => void;
 }) {
+  const scale = useDisplay((state) => state.fontSize) / DEFAULT_FONT_SIZE;
   return (
     <div>
       <div className="px-2 py-1 dim text-[10px] uppercase flex justify-between">
@@ -77,11 +79,11 @@ function MacroBody({
       </div>
       <div className="h-24 px-1">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data.yields} margin={{ top: 4, right: 12, bottom: 0, left: -22 }}>
-            <XAxis dataKey="tenor" stroke="#808080" fontSize={9} />
-            <YAxis stroke="#808080" fontSize={9} domain={["auto", "auto"]} />
+          <LineChart data={data.yields} margin={{ top: 4 * scale, right: 12 * scale, bottom: 0, left: -22 * scale }}>
+            <XAxis height={30 * scale} minTickGap={20 * scale} dataKey="tenor" stroke="#808080" fontSize={9 * scale} />
+            <YAxis width={60 * scale} stroke="#808080" fontSize={9 * scale} domain={["auto", "auto"]} />
             <Tooltip
-              contentStyle={{ background: "#111", border: "1px solid #262626", fontSize: 10 }}
+              contentStyle={{ background: "#111", border: "1px solid #262626", fontSize: 10 * scale }}
               labelStyle={{ color: "#808080" }}
             />
             <Line type="monotone" dataKey="value" stroke="#ff9900" strokeWidth={1.5} dot={{ r: 2 }} />

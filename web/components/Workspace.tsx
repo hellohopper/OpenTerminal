@@ -58,6 +58,7 @@ import InsiderWidget from "./widgets/InsiderWidget";
 import TvWidget from "./widgets/TvWidget";
 import RecapWidget from "./widgets/RecapWidget";
 import WidgetErrorBoundary from "./WidgetErrorBoundary";
+import { DEFAULT_FONT_SIZE, useDisplay } from "../store/display";
 
 const Grid = WidthProvider(GridLayout);
 
@@ -163,6 +164,17 @@ function SymbolTag({ widget, activeSymbol }: { widget: WidgetInstance; activeSym
 }
 
 export default function Workspace({ compact = false }: { compact?: boolean }) {
+  const fontSize = useDisplay((state) => state.fontSize);
+  const scale = fontSize / DEFAULT_FONT_SIZE;
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
+  useEffect(() => {
+    const element = containerRef.current;
+    if (!element) return;
+    const observer = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
   const widgets = useTerminal((s) => s.widgets);
   const layout = useTerminal((s) => s.layout);
   const setLayout = useTerminal((s) => s.setLayout);
@@ -170,10 +182,16 @@ export default function Workspace({ compact = false }: { compact?: boolean }) {
   const toggleLinked = useTerminal((s) => s.toggleLinked);
   const activeSymbol = useTerminal((s) => s.activeSymbol);
 
+  // Reflow only the rendered layout; preserve the user's draggable layout.
+  const reflow = compact || (width > 0 && layout.some((item) => width * item.w / 12 < 300 * scale));
+  const rowHeight = 30 * scale;
   const symbolAware = new Set(["quote", "chart", "news", "options", "insider", "fundamentals", "journal", "strategy"]);
 
   const panels = widgets.map((w) => (
-        <div key={w.id} className={compact ? "mobile-workspace-panel" : undefined}>
+        <div key={w.id} className={reflow ? "reflow-workspace-panel" : undefined} style={reflow ? {
+          height: Math.max(360 * scale, (layout.find((item) => item.i === w.id)?.h ?? 12) * (rowHeight + 4 * scale)),
+          gridColumn: (layout.find((item) => item.i === w.id)?.w ?? 0) >= 10 ? "1 / -1" : undefined,
+        } : undefined}>
           <div className="terminal-panel">
             <div className="panel-title">
               <span>{WIDGET_CATALOG[w.type].title}{symbolAware.has(w.type) && <SymbolTag widget={w} activeSymbol={activeSymbol} />}</span>
@@ -191,18 +209,19 @@ export default function Workspace({ compact = false }: { compact?: boolean }) {
           </div>
         </div>
   ));
-  if (compact) return <div className="space-y-3 p-2">{panels.length ? panels : <p className="dim">This workspace is empty. Open Tools to add a panel.</p>}</div>;
-  return (
+  return <div ref={containerRef} className="workspace-container">{reflow ? (
+    <div className="reflow-workspace">{panels.length ? panels : <p className="dim">This workspace is empty. Open Tools to add a panel.</p>}</div>
+  ) : (
     <Grid
       className="layout"
       layout={layout}
       cols={12}
-      rowHeight={30}
-      margin={[4, 4]}
+      rowHeight={rowHeight}
+      margin={[4 * scale, 4 * scale]}
       draggableHandle=".panel-title"
       onLayoutChange={(l) => setLayout(l.map(({ i, x, y, w, h }) => ({ i, x, y, w, h })))}
     >
       {panels}
     </Grid>
-  );
+  )}</div>;
 }
