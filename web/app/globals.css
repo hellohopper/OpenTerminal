@@ -226,6 +226,8 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .display-settings { width: min(58rem, 94vw); overflow: hidden; }
 .display-settings[open] { display: flex; flex-direction: column; }
 .display-settings-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1.3333rem; border-bottom: 1px solid var(--border); }
+.display-settings-heading > div { min-width: 0; }
+.display-settings-heading > button { flex-shrink: 0; white-space: nowrap; }
 .display-settings-heading, .ui-settings-tabs, .ui-settings-footer { flex-shrink: 0; }
 .ui-settings-tabs { display: flex; gap: .5rem; padding: .5rem 1.3333rem 0; border-bottom: 1px solid var(--border); overflow-x: auto; }
 .ui-settings-tabs button { padding: .75rem 1rem; border-bottom: 2px solid transparent; white-space: nowrap; cursor: pointer; }

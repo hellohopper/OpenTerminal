@@ -80,7 +80,7 @@ export default function Terminal() {
       <div className="flex flex-1 overflow-hidden min-h-0">
         {!compact && sidebarVisible && <Sidebar />}
         <main className="flex-1 overflow-auto min-w-0">
-          {!compact || view === "workspace" ? <Workspace key={workspaceId} compact={compact} /> : <section className={`mobile-home mobile-${view} p-2`} aria-label={ui("Mobile {value}", { value: view })}>
+          {!compact || view === "workspace" ? <Workspace key={workspaceId} compact={compact} /> : <section className={`mobile-home mobile-${view} p-2`} aria-label={ui("Mobile {value}", { value: ui(view === "holdings" ? "Holdings" : view === "alerts" ? "Alerts" : "Events") })}>
             <h1 className="amber text-lg mb-2">{view === "holdings" ? ui("Holdings") : view === "alerts" ? ui("Alerts") : ui("Holdings events")}</h1>
             <WidgetErrorBoundary key={view} name={view}>{view === "holdings" ? <PortfolioWidget /> : view === "alerts" ? <AlertsWidget /> : <EventsWidget />}</WidgetErrorBoundary>
           </section>}
