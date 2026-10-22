@@ -98,16 +98,18 @@ test("journal drafts survive reload, stay isolated by symbol, and clear on disca
 });
 
 for (const name of ["Quote", "Watchlist", "Macro / Indexes"]) test(`${name} retains data after a failed refresh and recovers manually`, async ({ page }) => {
-  let failing = false;
-  for (const pattern of ["**/api/quotes?*", "**/api/macro?*"]) await page.route(pattern, route => failing ? route.fulfill({ status: 502, json: { error: "API unavailable or timed out." } }) : route.continue());
-  await signIn(page); await refreshSetting(page, "0");
+  await test.step("Sign in before intercepting data requests", () => signIn(page));
+  await refreshSetting(page, "0");
   await test.step(`Refresh ${name} through a failure and recovery`, async () => {
     const panel = page.getByRole("region", { name, exact: true });
     await expect(panel.getByText("Data ready", { exact: true })).toBeVisible();
-    const retained = await panel.locator(name === "Quote" ? ".quote-head" : "table tbody").innerText();
-    failing = true; await panel.getByRole("button", { name: "Refresh data", exact: true }).click();
+    const values = panel.locator(name === "Quote" ? ".quote-head" : "table tbody");
+    const retained = (await values.textContent())!;
+    let failing = true;
+    for (const pattern of ["**/api/quotes?*", "**/api/macro?*"]) await page.route(pattern, route => failing ? route.fulfill({ status: 502, json: { error: "API unavailable or timed out." } }) : route.continue());
+    await panel.getByRole("button", { name: "Refresh data", exact: true }).click();
     await expect(panel.getByRole("alert")).toContainText("Refresh failed. Showing last available data.");
-    await expect(panel.locator(name === "Quote" ? ".quote-head" : "table tbody")).toHaveText(retained);
+    await expect(values).toHaveText(retained);
     failing = false; await panel.getByRole("button", { name: "Retry data refresh", exact: true }).click();
     await expect(panel.getByText("Data ready", { exact: true })).toBeVisible();
   });
