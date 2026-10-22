@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { cached, cacheGet, cacheSet, staleGet, staleSet } from "./cache.js";
 
 describe("cache", () => {
@@ -28,6 +28,46 @@ describe("cache", () => {
 
   it("propagates errors when no stale data exists", async () => {
     await expect(cached("k4", 1000, async () => Promise.reject(new Error("boom")))).rejects.toThrow("boom");
+  });
+
+  it("shares a concurrent refresh without blocking other cache keys", async () => {
+    let resolve!: (value: string) => void;
+    const pending = new Promise<string>((done) => { resolve = done; });
+    const loader = vi.fn(() => pending);
+    const first = cached("shared-refresh", 1000, loader);
+    const second = cached("shared-refresh", 1000, loader);
+    expect(await cached("independent-refresh", 1000, async () => "other")).toBe("other");
+    resolve("fresh");
+    expect(await Promise.all([first, second])).toEqual(["fresh", "fresh"]);
+    expect(loader).toHaveBeenCalledTimes(1);
+    expect(cacheGet("shared-refresh")).toBe("fresh");
+  });
+
+  it("shares failures and releases the pending load so a later request can retry", async () => {
+    let reject!: (error: Error) => void;
+    const pending = new Promise<string>((_resolve, fail) => { reject = fail; });
+    const loader = vi.fn(() => pending);
+    const requests = Promise.allSettled([
+      cached("shared-failure", 1000, loader),
+      cached("shared-failure", 1000, loader),
+    ]);
+    reject(new Error("provider offline"));
+    const results = await requests;
+    expect(results.map(r => r.status)).toEqual(["rejected", "rejected"]);
+    expect(loader).toHaveBeenCalledTimes(1);
+    expect(await cached("shared-failure", 1000, async () => "recovered")).toBe("recovered");
+  });
+
+  it("shares stale fallback without marking it fresh or preventing recovery", async () => {
+    staleSet("shared-stale", "old");
+    const loader = vi.fn(async () => { throw new Error("provider offline"); });
+    expect(await Promise.all([
+      cached("shared-stale", 1000, loader),
+      cached("shared-stale", 1000, loader),
+    ])).toEqual(["old", "old"]);
+    expect(loader).toHaveBeenCalledTimes(1);
+    expect(cacheGet("shared-stale")).toBeUndefined();
+    expect(await cached("shared-stale", 1000, async () => "new")).toBe("new");
   });
 
   it("evicts the oldest entries once the cache exceeds its max size", () => {

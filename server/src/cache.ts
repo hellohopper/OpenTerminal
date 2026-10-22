@@ -17,6 +17,7 @@ function evictLru<V>(map: Map<string, V>, max: number): void {
 }
 
 const store = new Map<string, Entry>();
+const inFlight = new Map<string, Promise<unknown>>();
 
 export function cacheGet<T>(key: string): T | undefined {
   const e = store.get(key);
@@ -58,15 +59,25 @@ export function staleGet<T>(key: string): T | undefined {
 export async function cached<T>(key: string, ttlMs: number, fn: () => Promise<T>): Promise<T> {
   const hit = cacheGet<T>(key);
   if (hit !== undefined) return hit;
-  try {
-    const value = await fn();
+  const pending = inFlight.get(key);
+  if (pending) return pending as Promise<T>;
+
+  // Register before invoking the loader, including when it throws synchronously.
+  const load = Promise.resolve().then(fn).then((value) => {
     cacheSet(key, value, ttlMs);
     staleSet(key, value);
     return value;
-  } catch (err) {
+  }).catch((err) => {
     const stale = staleGet<T>(key);
     if (stale !== undefined) return stale;
     throw err;
+  });
+  // Caller-controlled keys must not grow the pending registry without bound.
+  if (inFlight.size < MAX_STORE_ENTRIES) inFlight.set(key, load);
+  try {
+    return await load;
+  } finally {
+    if (inFlight.get(key) === load) inFlight.delete(key);
   }
 }
 
