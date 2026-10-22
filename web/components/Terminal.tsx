@@ -1,4 +1,6 @@
 "use client";
+import { useI18n } from "../lib/use-i18n";
+
 import {readResearchLink} from "../lib/research-link";
 
 import { useEffect, useState } from "react";
@@ -18,6 +20,8 @@ import { useTerminal } from "../store/terminal";
 import { useDisplay } from "../store/display";
 
 export default function Terminal() {
+  const { t: ui } = useI18n();
+
   const sidebarVisible = useDisplay((state) => state.sidebarVisible);
   const workspaceBarVisible = useDisplay((state) => state.workspaceBarVisible);
   const setCommandOpen = useTerminal((s) => s.setCommandOpen);
@@ -64,7 +68,7 @@ export default function Terminal() {
     return () => window.removeEventListener("keydown", onKey);
   }, [setCommandOpen, addWidget]);
 
-  if (compact === null) return <div className="terminal-shell p-3 dim">Loading terminal…</div>;
+  if (compact === null) return <div className="terminal-shell p-3 dim">{ui("Loading terminal…")}</div>;
   return (
     <div className="terminal-shell flex flex-col">
       <TopBar />
@@ -73,16 +77,16 @@ export default function Terminal() {
         {!compact && sidebarVisible && <Sidebar />}
         <main className="flex-1 overflow-auto min-w-0">
           {!compact || view === "workspace" ? <Workspace key={workspaceId} compact={compact} /> : <section className={`mobile-home mobile-${view} p-2`} aria-label={`Mobile ${view}`}>
-            <h1 className="amber text-lg mb-2">{view === "holdings" ? "Holdings" : view === "alerts" ? "Alerts" : "Holdings events"}</h1>
+            <h1 className="amber text-lg mb-2">{view === "holdings" ? ui("Holdings") : view === "alerts" ? ui("Alerts") : ui("Holdings events")}</h1>
             <WidgetErrorBoundary key={view} name={view}>{view === "holdings" ? <PortfolioWidget /> : view === "alerts" ? <AlertsWidget /> : <EventsWidget />}</WidgetErrorBoundary>
           </section>}
         </main>
       </div>
-      {compact && <nav aria-label="Mobile navigation" className="mobile-nav">
-        {(["holdings", "alerts", "events", "workspace"] as const).map(v => <button key={v} aria-current={view === v ? "page" : undefined} onClick={() => setView(v)}>{v === "holdings" ? "Holdings" : v === "alerts" ? "Alerts" : v === "events" ? "Events" : "Workspace"}</button>)}
-        <button onClick={() => setTools(true)}>Tools</button>
+      {compact && <nav aria-label={ui("Mobile navigation")} className="mobile-nav">
+        {(["holdings", "alerts", "events", "workspace"] as const).map(v => <button key={v} aria-current={view === v ? "page" : undefined} onClick={() => setView(v)}>{v === "holdings" ? ui("Holdings") : v === "alerts" ? ui("Alerts") : v === "events" ? ui("Events") : ui("Workspace")}</button>)}
+        <button onClick={() => setTools(true)}>{ui("Tools")}</button>
       </nav>}
-      {tools && compact && <Modal label="Add a panel" onClose={() => setTools(false)} className="tools-dialog"><div className="flex p-2"><h2 className="amber mr-auto">Widget library</h2><button className="term-btn" onClick={() => setTools(false)}>Close tools</button></div><Sidebar onSelect={() => { setView("workspace"); setTools(false); }} /></Modal>}
+      {tools && compact && <Modal label={ui("Add a panel")} onClose={() => setTools(false)} className="tools-dialog"><div className="flex p-2"><h2 className="amber mr-auto">{ui("Widget library")}</h2><button className="term-btn" onClick={() => setTools(false)}>{ui("Close tools")}</button></div><Sidebar onSelect={() => { setView("workspace"); setTools(false); }} /></Modal>}
       {research && <ResearchView key={research} symbol={research} />}
       <CommandPalette />
       <AlertNotifier />

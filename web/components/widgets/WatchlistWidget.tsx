@@ -1,4 +1,5 @@
 "use client";
+import { useI18n } from "../../lib/use-i18n";
 
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -10,6 +11,8 @@ import SavedControls from "../SavedControls";
 import Flash from "../Flash";
 
 export default function WatchlistWidget() {
+  const { t: ui } = useI18n();
+
   const watchlist = useTerminal((s) => s.watchlist);
   const addToWatchlist = useTerminal((s) => s.addToWatchlist);
   const removeFromWatchlist = useTerminal((s) => s.removeFromWatchlist);
@@ -47,8 +50,8 @@ export default function WatchlistWidget() {
             setInput(e.target.value);
             setInvalid(false);
           }}
-          placeholder="Add ticker…"
-          title={invalid ? "Not a valid ticker symbol" : undefined}
+          placeholder={ui("Add ticker…")}
+          title={invalid ? ui("Not a valid ticker symbol") : undefined}
           aria-invalid={invalid}
           className={`flex-1 ${invalid ? "!border-[var(--down)]" : ""}`}
         />
@@ -56,7 +59,7 @@ export default function WatchlistWidget() {
       </form>
       <table className="data-table">
         <thead>
-          <tr><th>Sym</th><th>Last</th><th>Chg%</th><th>Vol</th><th></th></tr>
+          <tr><th>{ui("Sym")}</th><th>{ui("Last")}</th><th>{ui("Chg%")}</th><th>{ui("Vol")}</th><th></th></tr>
         </thead>
         <tbody>
           {watchlist.map((sym) => {

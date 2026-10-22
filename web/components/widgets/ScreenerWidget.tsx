@@ -1,4 +1,5 @@
 "use client";
+import { useI18n } from "../../lib/use-i18n";
 
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -15,6 +16,8 @@ type Row = {
 };
 
 export default function ScreenerWidget() {
+  const { t: ui } = useI18n();
+
   const setActiveSymbol = useTerminal((s) => s.setActiveSymbol);
   const [trackerName,setTrackerName]=useState("My daily screen"),[trackerMessage,setTrackerMessage]=useState("");
   const [market, setMarket] = useState<"us" | "eu">("us");
@@ -61,7 +64,7 @@ export default function ScreenerWidget() {
   return (
     <div>
       <SavedControls kind="screeners" value={{market,sector,changeMin,marketCapMinB,volumeMinM,sort,dir}} onLoad={value=>{const p=value as ScreenerPreset;setMarket(p.market);setSector(p.sector);setChangeMin(p.changeMin);setMarketCapMinB(p.marketCapMinB);setVolumeMinM(p.volumeMinM);setSort(p.sort);setDir(p.dir);}} />
-      <div className="flex gap-1 p-1 flex-wrap"><input aria-label="Daily tracker name" value={trackerName} maxLength={80} onChange={e=>setTrackerName(e.target.value)}/><button className="term-btn" onClick={async()=>{try{await apiPost("/api/screener-tracking",{name:trackerName,market,sector,changeMin:changeMin===""?null:Number(changeMin),marketCapMin:marketCapMinB===""?null:Number(marketCapMinB)*1e9,volumeMin:volumeMinM===""?null:Number(volumeMinM)*1e6,sort,dir,enabled:true});useTerminal.getState().addWidget("tracking");setTrackerMessage("Daily tracker created.");}catch(e){setTrackerMessage((e as Error).message);}}}>Track daily results</button>{trackerMessage&&<span role="status">{trackerMessage}</span>}</div>
+      <div className="flex gap-1 p-1 flex-wrap"><input aria-label={ui("Daily tracker name")} value={trackerName} maxLength={80} onChange={e=>setTrackerName(e.target.value)}/><button className="term-btn" onClick={async()=>{try{await apiPost("/api/screener-tracking",{name:trackerName,market,sector,changeMin:changeMin===""?null:Number(changeMin),marketCapMin:marketCapMinB===""?null:Number(marketCapMinB)*1e9,volumeMin:volumeMinM===""?null:Number(volumeMinM)*1e6,sort,dir,enabled:true});useTerminal.getState().addWidget("tracking");setTrackerMessage("Daily tracker created.");}catch(e){setTrackerMessage((e as Error).message);}}}>{ui("Track daily results")}</button>{trackerMessage&&<span role="status">{trackerMessage}</span>}</div>
       <div className="flex gap-2 p-1 flex-wrap items-center">
         <div className="flex gap-1">
           {(["us", "eu"] as const).map((m) => (
@@ -71,23 +74,23 @@ export default function ScreenerWidget() {
           ))}
         </div>
         <select value={sector} onChange={(e) => setSector(e.target.value)}>
-          <option value="">All sectors</option>
+          <option value="">{ui("All sectors")}</option>
           {sectors.map((s) => (
             <option key={s} value={s}>{s}</option>
           ))}
         </select>
-        <input className="w-20" placeholder="Chg% min" value={changeMin} onChange={(e) => setChangeMin(e.target.value)} />
-        <input className="w-24" placeholder="MCap min ($B)" value={marketCapMinB} onChange={(e) => setMarketCapMinB(e.target.value)} />
-        <input className="w-24" placeholder="Vol min (M)" value={volumeMinM} onChange={(e) => setVolumeMinM(e.target.value)} />
+        <input className="w-20" placeholder={ui("Chg% min")} value={changeMin} onChange={(e) => setChangeMin(e.target.value)} />
+        <input className="w-24" placeholder={ui("MCap min ($B)")} value={marketCapMinB} onChange={(e) => setMarketCapMinB(e.target.value)} />
+        <input className="w-24" placeholder={ui("Vol min (M)")} value={volumeMinM} onChange={(e) => setVolumeMinM(e.target.value)} />
         <span className="dim ml-auto">{isLoading ? "…" : `${data.length} results`}</span>
       </div>
-      {error && <div className="p-2 down">Error: {(error as Error).message}</div>}
+      {error && <div className="p-2 down">{ui("Error:")} {(error as Error).message}</div>}
       <table className="data-table">
         <thead>
           <tr>
             {th("symbol", "Sym")}
-            <th>Name</th>
-            <th>Sector</th>
+            <th>{ui("Name")}</th>
+            <th>{ui("Sector")}</th>
             {th("price", "Last")}
             {th("changePercent", "Chg%")}
             {th("volume", "Vol")}

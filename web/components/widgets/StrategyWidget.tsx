@@ -1,4 +1,6 @@
 "use client";
+import { useI18n } from "../../lib/use-i18n";
+
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { apiGet, apiPost, fmt } from "../../lib/api";
@@ -25,6 +27,8 @@ export default function StrategyWidget({ widget }: { widget: WidgetInstance }) {
   return <Builder key={symbol} symbol={symbol} />;
 }
 function Builder({ symbol }: { symbol: string }) {
+  const { t: ui } = useI18n();
+
   const qc = useQueryClient();
   const [expiry, setExpiry] = useState(""),
     [legs, setLegs] = useState<StrategyLeg[]>([]),
@@ -110,27 +114,24 @@ function Builder({ symbol }: { symbol: string }) {
       <div className="flex gap-2 items-center flex-wrap">
         <span className="amber">
           {symbol} ·{" "}
-          {data?.underlyingPrice == null ? "spot unavailable" : fmt(spot)}
+          {data?.underlyingPrice == null ? ui("spot unavailable") : fmt(spot)}
         </span>
         <select
-          aria-label="Strategy expiration"
+          aria-label={ui("Strategy expiration")}
           value={expiry || data?.selectedDate || ""}
           onChange={(e) => {
             setExpiry(e.target.value);
             setLegs([]);
           }}
         >
-          <option value="">Select expiration</option>
+          <option value="">{ui("Select expiration")}</option>
           {data?.expirationDates.map((d) => (
             <option key={d}>{d}</option>
           ))}
         </select>
       </div>
       {error && (
-        <p className="down">
-          Option quotes unavailable. You can enter legs manually; confirm
-          strikes, expiry and premiums.
-        </p>
+        <p className="down">{ui("Option quotes unavailable. You can enter legs manually; confirm strikes, expiry and premiums.")} </p>
       )}
       <div className="flex flex-wrap gap-1">
         {[
@@ -163,18 +164,16 @@ function Builder({ symbol }: { symbol: string }) {
               },
             ])
           }
-        >
-          Add leg
-        </button>
+        >{ui("Add leg")} </button>
       </div>
       <table className="data-table">
         <thead>
           <tr>
-            <th>Instrument</th>
-            <th>Side</th>
-            <th>Strike</th>
-            <th>Entry / premium</th>
-            <th>Qty</th>
+            <th>{ui("Instrument")}</th>
+            <th>{ui("Side")}</th>
+            <th>{ui("Strike")}</th>
+            <th>{ui("Entry / premium")}</th>
+            <th>{ui("Qty")}</th>
             <th></th>
           </tr>
         </thead>
@@ -202,8 +201,8 @@ function Builder({ symbol }: { symbol: string }) {
                     patch(i, { side: e.target.value as StrategyLeg["side"] })
                   }
                 >
-                  <option>BUY</option>
-                  <option>SELL</option>
+                  <option>{ui("BUY")}</option>
+                  <option>{ui("SELL")}</option>
                 </select>
               </td>
               <td>
@@ -264,14 +263,12 @@ function Builder({ symbol }: { symbol: string }) {
       {analysis && (
         <>
           <div className="flex gap-4 flex-wrap">
-            <span>Net debit {fmt(analysis.netDebit)} USD</span>
-            <span className="up">
-              Max profit {money(analysis.maximumProfit)}
+            <span>{ui("Net debit")} {fmt(analysis.netDebit)} USD</span>
+            <span className="up">{ui("Max profit")} {money(analysis.maximumProfit)}
             </span>
-            <span className="down">Max loss {money(analysis.maximumLoss)}</span>
-            <span>
-              Break-even{" "}
-              {analysis.breakEvens.map((p) => fmt(p)).join(", ") || "None"}
+            <span className="down">{ui("Max loss")} {money(analysis.maximumLoss)}</span>
+            <span>{ui("Break-even")}{" "}
+              {analysis.breakEvens.map((p) => fmt(p)).join(", ") || ui("None")}
               {analysis.breakEvenIntervals
                 .map(([a, b]) => ` [${fmt(a)}–${money(b)}]`)
                 .join("")}
@@ -300,10 +297,8 @@ function Builder({ symbol }: { symbol: string }) {
                 setMessage((err as Error).message);
               }
             }}
-          >
-            Save strategy to journal
-          </button>
-          <button className="term-btn" onClick={()=>{const options=legs.filter(l=>l.kind!=='stock');if(options.length!==legs.length||!options.length||options.some(l=>l.quantity!==options[0].quantity)){setMessage('Copy requires option-only legs with equal contract quantities. Review the strategy structure first.');return;}sessionStorage.setItem('option-position-draft',JSON.stringify({symbol,expiry:expiry||data?.selectedDate||'',quantity:options[0]?.quantity??1,legs:options.map(({kind,side,strike,premium})=>({kind,side,strike,premium}))}));useTerminal.getState().addWidget('optionPositions');setMessage('Strategy copied to option holdings. Confirm standard contracts and supported debit structure before opening.');}}>Create simulated option holding</button>
+          >{ui("Save strategy to journal")} </button>
+          <button className="term-btn" onClick={()=>{const options=legs.filter(l=>l.kind!=='stock');if(options.length!==legs.length||!options.length||options.some(l=>l.quantity!==options[0].quantity)){setMessage('Copy requires option-only legs with equal contract quantities. Review the strategy structure first.');return;}sessionStorage.setItem('option-position-draft',JSON.stringify({symbol,expiry:expiry||data?.selectedDate||'',quantity:options[0]?.quantity??1,legs:options.map(({kind,side,strike,premium})=>({kind,side,strike,premium}))}));useTerminal.getState().addWidget('optionPositions');setMessage('Strategy copied to option holdings. Confirm standard contracts and supported debit structure before opening.');}}>{ui("Create simulated option holding")}</button>
         </>
       )}
       <StrategyRisk
@@ -317,13 +312,7 @@ function Builder({ symbol }: { symbol: string }) {
           {message}
         </p>
       )}
-      <p className="dim text-[10px]">
-        Expiration-only P&amp;L, USD. All option legs share one underlying and
-        expiry. Quantities mean contracts for options and shares for stock; 100
-        shares per standard contract. Premiums are editable estimates. Excludes
-        fees, early assignment, dividends, margin and adjusted contracts.
-        Unlimited risk is never clipped to the chart range.
-      </p>
+      <p className="dim text-[10px]">{ui("Expiration-only P&L, USD. All option legs share one underlying and expiry. Quantities mean contracts for options and shares for stock; 100 shares per standard contract. Premiums are editable estimates. Excludes fees, early assignment, dividends, margin and adjusted contracts. Unlimited risk is never clipped to the chart range.")} </p>
     </div>
   );
 }

@@ -1,4 +1,6 @@
 "use client";
+import { useI18n } from "../lib/use-i18n";
+
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiPost, fmt } from "../lib/api";
@@ -20,6 +22,8 @@ export default function StrategyRisk({
   expiry: string;
   symbol: string;
 }) {
+  const { t: ui } = useI18n();
+
   const [manualSpot, setManualSpot] = useState(""),
     [date, setDate] = useState(""),
     [vol, setVol] = useState("30"),
@@ -71,7 +75,7 @@ export default function StrategyRisk({
   }
   return (
     <section className="border border-[var(--border)] p-2 space-y-2">
-      <p className="amber">Position Greeks and risk scenarios</p>
+      <p className="amber">{ui("Position Greeks and risk scenarios")}</p>
       <div className="flex flex-wrap gap-2">
         {[
           ["Risk spot", manualSpot, setManualSpot],
@@ -97,10 +101,8 @@ export default function StrategyRisk({
             />
           </label>
         ))}
-        <label>
-          Risk expiration
-          <input
-            aria-label="Risk expiration"
+        <label>{ui("Risk expiration")} <input
+            aria-label={ui("Risk expiration")}
             type="date"
             value={selectedDate}
             onChange={(e) => setDate(e.target.value)}
@@ -110,8 +112,7 @@ export default function StrategyRisk({
       {reason && <p className="dim">{reason}</p>}
       {risk && rows && a && (
         <>
-          <p>
-            Current modeled P&amp;L: {fmt(risk.pnl)} USD · Net modeled value:{" "}
+          <p>{ui("Current modeled P&L:")} {fmt(risk.pnl)} {ui("USD · Net modeled value:")}{" "}
             {fmt(risk.greeks.price)} USD
           </p>
           <table className="data-table">
@@ -140,14 +141,11 @@ export default function StrategyRisk({
               </tr>
             </tbody>
           </table>
-          <p>
-            Modeled P&amp;L after {days} calendar days (USD, relative to entry
-            premiums)
-          </p>
+          <p>{ui("Modeled P&L after")} {days} {ui("calendar days (USD, relative to entry premiums)")} </p>
           <table className="data-table" data-testid="risk-scenarios">
             <thead>
               <tr>
-                <th>Spot move</th>
+                <th>{ui("Spot move")}</th>
                 {[-Number(volShock), 0, Number(volShock)].map((shift, i) => (
                   <th key={i}>IV {fmt(Number(vol) + shift)}%</th>
                 ))}
@@ -166,7 +164,7 @@ export default function StrategyRisk({
                         cell === null ? "dim" : cell >= 0 ? "up" : "down"
                       }
                     >
-                      {cell === null ? "Unavailable" : fmt(cell)}
+                      {cell === null ? ui("Unavailable") : fmt(cell)}
                     </td>
                   ))}
                 </tr>
@@ -206,21 +204,11 @@ export default function StrategyRisk({
                 setMessage((e as Error).message);
               }
             }}
-          >
-            Save risk scenario to journal
-          </button>
+          >{ui("Save risk scenario to journal")} </button>
         </>
       )}
       {message && <p role="status">{message}</p>}
-      <p className="dim text-[10px]">
-        European Black-Scholes estimates with user-supplied common IV and
-        continuous rates/dividend yield. Signed position Greeks include 100
-        shares per option contract and actual stock shares. Future values use
-        remaining time; after expiration they use intrinsic value (cash
-        settlement assumed). Excludes fees, margin, early assignment, discrete
-        dividends and volatility skew. Grid cells with invalid IV are
-        unavailable.
-      </p>
+      <p className="dim text-[10px]">{ui("European Black-Scholes estimates with user-supplied common IV and continuous rates/dividend yield. Signed position Greeks include 100 shares per option contract and actual stock shares. Future values use remaining time; after expiration they use intrinsic value (cash settlement assumed). Excludes fees, margin, early assignment, discrete dividends and volatility skew. Grid cells with invalid IV are unavailable.")} </p>
     </section>
   );
 }

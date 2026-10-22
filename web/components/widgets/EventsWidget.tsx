@@ -1,4 +1,6 @@
 "use client";
+import { useI18n } from "../../lib/use-i18n";
+
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiGet, fmt } from "../../lib/api";
@@ -20,6 +22,8 @@ type Data = {
   }[];
 };
 export default function EventsWidget() {
+  const { t: ui } = useI18n();
+
   const watchlist = useTerminal((s) => s.watchlist),
     [portfolioId, setPortfolioId] = useState(""),
     [includeWatchlist, setIncludeWatchlist] = useState(true),
@@ -49,11 +53,11 @@ export default function EventsWidget() {
     <div className="p-2 space-y-2">
       <div className="flex flex-wrap gap-2">
         <select
-          aria-label="Event portfolio"
+          aria-label={ui("Event portfolio")}
           value={portfolioId}
           onChange={(e) => setPortfolioId(e.target.value)}
         >
-          <option value="">No portfolio selected</option>
+          <option value="">{ui("No portfolio selected")}</option>
           {portfolios.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}
@@ -65,39 +69,34 @@ export default function EventsWidget() {
             type="checkbox"
             checked={includeWatchlist}
             onChange={(e) => setIncludeWatchlist(e.target.checked)}
-          />
-          Include workspace watchlist
-        </label>
+          />{ui("Include workspace watchlist")} </label>
         <select
-          aria-label="Event horizon"
+          aria-label={ui("Event horizon")}
           value={days}
           onChange={(e) => setDays(e.target.value)}
         >
-          <option value="7">Next 7 days</option>
-          <option value="30">Next 30 days</option>
+          <option value="7">{ui("Next 7 days")}</option>
+          <option value="30">{ui("Next 30 days")}</option>
         </select>
         <select
-          aria-label="Event type"
+          aria-label={ui("Event type")}
           value={kind}
           onChange={(e) => setKind(e.target.value)}
         >
-          <option value="all">All upcoming events</option>
-          <option value="earnings">Earnings</option>
-          <option value="macro">Macro</option>
+          <option value="all">{ui("All upcoming events")}</option>
+          <option value="earnings">{ui("Earnings")}</option>
+          <option value="macro">{ui("Macro")}</option>
         </select>
         <button
           className="term-btn"
           disabled={isFetching}
           onClick={() => void refetch()}
         >
-          {isFetching ? "Refreshing…" : "Refresh events"}
+          {isFetching ? ui("Refreshing…") : ui("Refresh events")}
         </button>
       </div>
-      <p className="dim">
-        Earnings dates are expected all-day dates with an unverified release
-        session. Macro events show broad context for all selected holdings.
-        Weights use fresh USD prices and exclude cash. Coverage:{" "}
-        {data?.symbols.join(", ") || "No symbols"}.
+      <p className="dim">{ui("Earnings dates are expected all-day dates with an unverified release session. Macro events show broad context for all selected holdings. Weights use fresh USD prices and exclude cash. Coverage:")}{" "}
+        {data?.symbols.join(", ") || ui("No symbols")}.
       </p>
       {data?.warnings.map((w) => (
         <p key={w} className="amber">
@@ -114,9 +113,7 @@ export default function EventsWidget() {
           type="checkbox"
           checked={reminder}
           onChange={(e) => setReminder(e.target.checked)}
-        />{" "}
-        Include a 24-hour calendar reminder
-      </label>
+        />{" "}{ui("Include a 24-hour calendar reminder")} </label>
       <button
         className="term-btn ml-2"
         disabled={!events.length}
@@ -139,16 +136,14 @@ export default function EventsWidget() {
             setMessage((e as Error).message);
           }
         }}
-      >
-        Export visible events
-      </button>
+      >{ui("Export visible events")} </button>
       {message && <p role="status">{message}</p>}
       <table className="data-table">
         <thead>
           <tr>
-            <th>Date</th>
-            <th>Event / source</th>
-            <th>Related holdings</th>
+            <th>{ui("Date")}</th>
+            <th>{ui("Event / source")}</th>
+            <th>{ui("Related holdings")}</th>
           </tr>
         </thead>
         <tbody>
@@ -158,7 +153,7 @@ export default function EventsWidget() {
                 {e.allDay
                   ? e.date
                   : `${new Date(e.date).toLocaleString()} (local)`}
-                {e.allDay && <div className="dim">Session unknown</div>}
+                {e.allDay && <div className="dim">{ui("Session unknown")}</div>}
               </td>
               <td>
                 <span>{e.title}</span>
@@ -170,28 +165,25 @@ export default function EventsWidget() {
                 {e.exposure.length
                   ? e.exposure.map((h) => (
                       <div key={h.symbol}>
-                        {h.symbol}: {fmt(h.quantity, 4)} shares ·{" "}
+                        {h.symbol}: {fmt(h.quantity, 4)} {ui("shares ·")}{" "}
                         {h.marketValue === null
-                          ? "value unavailable"
+                          ? ui("value unavailable")
                           : `${fmt(h.marketValue)} USD`}
                         {h.weight === null ? "" : ` · ${fmt(h.weight)}%`}
                       </div>
                     ))
-                  : "Watchlist context"}
+                  : ui("Watchlist context")}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
       {!isFetching && !error && !events.length && (
-        <p>No upcoming events available for this filter.</p>
+        <p>{ui("No upcoming events available for this filter.")}</p>
       )}
       <details>
-        <summary>Recorded dividends and splits (historical)</summary>
-        <p className="dim">
-          Most recent 20 ledger entries; these are not upcoming corporate-action
-          forecasts.
-        </p>
+        <summary>{ui("Recorded dividends and splits (historical)")}</summary>
+        <p className="dim">{ui("Most recent 20 ledger entries; these are not upcoming corporate-action forecasts.")} </p>
         <table className="data-table">
           <tbody>
             {data?.recorded.map((e, i) => (
@@ -202,7 +194,7 @@ export default function EventsWidget() {
                 </td>
                 <td>
                   {fmt(e.amount, 4)}{" "}
-                  {e.kind === "SPLIT" ? "ratio" : "USD recorded cash"}
+                  {e.kind === "SPLIT" ? ui("ratio") : ui("USD recorded cash")}
                 </td>
               </tr>
             ))}

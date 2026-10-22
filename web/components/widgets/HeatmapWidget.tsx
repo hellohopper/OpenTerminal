@@ -1,4 +1,5 @@
 "use client";
+import { useI18n } from "../../lib/use-i18n";
 
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
@@ -10,6 +11,8 @@ import { DEFAULT_FONT_SIZE, useDisplay } from "../../store/display";
 type Cell = { symbol: string; name: string | null; sector: string; marketCap: number | null; changePercent: number | null };
 
 export default function HeatmapWidget() {
+  const { t: ui } = useI18n();
+
   const scale = useDisplay((state) => state.fontSize) / DEFAULT_FONT_SIZE;
   const ref = useRef<HTMLDivElement>(null);
   const setActiveSymbol = useTerminal((s) => s.setActiveSymbol);
@@ -136,9 +139,9 @@ export default function HeatmapWidget() {
       </div>
       <div className="flex-1 min-h-0">
         {error ? (
-          <div className="p-2 down">Error: {(error as Error).message}</div>
+          <div className="p-2 down">{ui("Error:")} {(error as Error).message}</div>
         ) : !data ? (
-          <div className="p-2 dim">Loading heatmap…</div>
+          <div className="p-2 dim">{ui("Loading heatmap…")}</div>
         ) : (
           <div ref={ref} className="w-full h-full" />
         )}

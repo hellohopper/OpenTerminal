@@ -1,4 +1,5 @@
 "use client";
+import { useI18n } from "../../lib/use-i18n";
 
 import { useQuery } from "@tanstack/react-query";
 import { Fragment, useMemo, useState } from "react";
@@ -42,6 +43,8 @@ const TIMEZONES: Array<{ label: string; zone: string | undefined }> = [
 ];
 
 export function EconomicTab() {
+  const { t: ui } = useI18n();
+
   const [minImpact, setMinImpact] = useState<"all" | "medium">("medium");
   const [tz, setTz] = useState<string>("Local");
 
@@ -56,20 +59,16 @@ export function EconomicTab() {
     [data, minImpact]
   );
 
-  if (error) return <div className="p-2 down">Error: {(error as Error).message}</div>;
-  if (isLoading) return <div className="p-2 dim">Loading calendar…</div>;
+  if (error) return <div className="p-2 down">{ui("Error:")} {(error as Error).message}</div>;
+  if (isLoading) return <div className="p-2 dim">{ui("Loading calendar…")}</div>;
 
   const zone = TIMEZONES.find((t) => t.label === tz)?.zone;
 
   return (
     <div>
       <div className="flex gap-1 p-1 items-center flex-wrap">
-        <button className={`term-btn ${minImpact === "medium" ? "active" : ""}`} onClick={() => setMinImpact("medium")}>
-          HIGH+MED
-        </button>
-        <button className={`term-btn ${minImpact === "all" ? "active" : ""}`} onClick={() => setMinImpact("all")}>
-          ALL
-        </button>
+        <button className={`term-btn ${minImpact === "medium" ? "active" : ""}`} onClick={() => setMinImpact("medium")}>{ui("HIGH+MED")} </button>
+        <button className={`term-btn ${minImpact === "all" ? "active" : ""}`} onClick={() => setMinImpact("all")}>{ui("ALL")} </button>
         <span className="w-2" />
         <select
           value={tz}
@@ -86,12 +85,12 @@ export function EconomicTab() {
       <table className="data-table">
         <thead>
           <tr>
-            <th>Date</th>
-            <th>Ccy</th>
-            <th>Event</th>
-            <th>Forecast</th>
-            <th>Previous</th>
-            <th>Actual</th>
+            <th>{ui("Date")}</th>
+            <th>{ui("Ccy")}</th>
+            <th>{ui("Event")}</th>
+            <th>{ui("Forecast")}</th>
+            <th>{ui("Previous")}</th>
+            <th>{ui("Actual")}</th>
           </tr>
         </thead>
         <tbody>
@@ -116,7 +115,7 @@ export function EconomicTab() {
           ))}
         </tbody>
       </table>
-      {events.length === 0 && <div className="p-3 dim">No events in this window.</div>}
+      {events.length === 0 && <div className="p-3 dim">{ui("No events in this window.")}</div>}
     </div>
   );
 }
@@ -141,26 +140,28 @@ function surpriseClass(row: EarningsHistoryRow): string {
 }
 
 function EarningsHistoryRows({ symbol }: { symbol: string }) {
+  const { t: ui } = useI18n();
+
   const { data = [], isLoading, error } = useQuery({
     queryKey: ["earnings-history", symbol],
     queryFn: () => apiGet<EarningsHistoryRow[]>(`/api/earnings-history/${encodeURIComponent(symbol)}`),
     staleTime: 3_600_000,
   });
 
-  if (error) return <div className="p-2 down">Error: {(error as Error).message}</div>;
-  if (isLoading) return <div className="p-2 dim">Loading history for {symbol}…</div>;
-  if (data.length === 0) return <div className="p-2 dim">No earnings history for {symbol}.</div>;
+  if (error) return <div className="p-2 down">{ui("Error:")} {(error as Error).message}</div>;
+  if (isLoading) return <div className="p-2 dim">{ui("Loading history for")} {symbol}…</div>;
+  if (data.length === 0) return <div className="p-2 dim">{ui("No earnings history for")} {symbol}.</div>;
 
   return (
     <table className="data-table">
       <thead>
         <tr>
-          <th>Quarter</th>
-          <th>Reported</th>
-          <th>Forecast</th>
-          <th>Actual</th>
-          <th>Surprise</th>
-          <th title="Reported-date close to next session close; release time is unavailable">Day After</th>
+          <th>{ui("Quarter")}</th>
+          <th>{ui("Reported")}</th>
+          <th>{ui("Forecast")}</th>
+          <th>{ui("Actual")}</th>
+          <th>{ui("Surprise")}</th>
+          <th title={ui("Reported-date close to next session close; release time is unavailable")}>{ui("Day After")}</th>
         </tr>
       </thead>
       <tbody>
@@ -182,6 +183,8 @@ function EarningsHistoryRows({ symbol }: { symbol: string }) {
 }
 
 export function EarningsTab({ symbols }: { symbols?: string[] } = {}) {
+  const { t: ui } = useI18n();
+
   const savedWatchlist = useTerminal((s) => s.watchlist);
   const watchlist = symbols ?? savedWatchlist;
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -204,17 +207,17 @@ export function EarningsTab({ symbols }: { symbols?: string[] } = {}) {
     [data]
   );
 
-  if (error) return <div className="p-2 down">Error: {(error as Error).message}</div>;
-  if (isLoading) return <div className="p-2 dim">Loading earnings…</div>;
+  if (error) return <div className="p-2 down">{ui("Error:")} {(error as Error).message}</div>;
+  if (isLoading) return <div className="p-2 dim">{ui("Loading earnings…")}</div>;
 
   return (
     <table className="data-table">
       <thead>
         <tr>
-          <th>Sym</th>
-          <th>Last Earnings</th>
-          <th>Next Earnings</th>
-          <th>EPS Est.</th>
+          <th>{ui("Sym")}</th>
+          <th>{ui("Last Earnings")}</th>
+          <th>{ui("Next Earnings")}</th>
+          <th>{ui("EPS Est.")}</th>
         </tr>
       </thead>
       <tbody>
@@ -223,7 +226,7 @@ export function EarningsTab({ symbols }: { symbols?: string[] } = {}) {
             <tr
               onClick={() => setExpanded(expanded === e.symbol ? null : e.symbol)}
               className="cursor-pointer"
-              title="Click for earnings history"
+              title={ui("Click for earnings history")}
             >
               <td className="!text-left text-[var(--text)] font-bold underline decoration-1">{e.symbol}</td>
               <td className="dim">{fmtDate(e.lastEarningsDate)}</td>
@@ -241,9 +244,7 @@ export function EarningsTab({ symbols }: { symbols?: string[] } = {}) {
         ))}
         {sorted.length === 0 && (
           <tr>
-            <td colSpan={4} className="dim p-3">
-              No upcoming earnings data for your watchlist.
-            </td>
+            <td colSpan={4} className="dim p-3">{ui("No upcoming earnings data for your watchlist.")} </td>
           </tr>
         )}
       </tbody>
@@ -252,17 +253,15 @@ export function EarningsTab({ symbols }: { symbols?: string[] } = {}) {
 }
 
 export default function CalendarWidget() {
+  const { t: ui } = useI18n();
+
   const [tab, setTab] = useState<"econ" | "earnings">("econ");
 
   return (
     <div>
       <div className="flex gap-1 p-1">
-        <button className={`term-btn ${tab === "econ" ? "active" : ""}`} onClick={() => setTab("econ")}>
-          ECONOMIC
-        </button>
-        <button className={`term-btn ${tab === "earnings" ? "active" : ""}`} onClick={() => setTab("earnings")}>
-          EARNINGS
-        </button>
+        <button className={`term-btn ${tab === "econ" ? "active" : ""}`} onClick={() => setTab("econ")}>{ui("ECONOMIC")} </button>
+        <button className={`term-btn ${tab === "earnings" ? "active" : ""}`} onClick={() => setTab("earnings")}>{ui("EARNINGS")} </button>
       </div>
       {tab === "econ" ? <EconomicTab /> : <EarningsTab />}
     </div>

@@ -1,4 +1,5 @@
 "use client";
+import { useI18n } from "../lib/use-i18n";
 
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
@@ -39,6 +40,8 @@ function marketStateNY(): { label: string; open: boolean } {
 }
 
 export default function TopBar() {
+  const { t: ui } = useI18n();
+
   const setCommandOpen = useTerminal((s) => s.setCommandOpen);
   const activeSymbol = useTerminal((s) => s.activeSymbol);
   const { data: status } = useQuery({
@@ -53,7 +56,7 @@ export default function TopBar() {
   return (
     <header className="flex items-center gap-2 px-3 min-h-8 topbar bg-[var(--panel-2)] border-b border-[var(--border)] text-[11px] shrink-0">
       <span className="amber font-bold tracking-widest">OPENTERMINAL</span>
-      <span className={`market-status ${market.open ? "up" : "down"}`}>● {market.label}</span>
+      <span className={`market-status ${market.open ? "up" : "down"}`}>● {ui(market.label)}</span>
       {/* desktop market clocks */}
       <span className="desktop-clocks"><Clock tz="America/New_York" label="NY" /></span>
       <span className="desktop-clocks"><Clock tz="Europe/Rome" label="MIL" /></span>
@@ -63,16 +66,15 @@ export default function TopBar() {
         className="term-btn flex-1 max-w-md min-w-0 text-left dim topbar-search"
         onClick={() => setCommandOpen(true)}
       >
-        {activeSymbol} — search symbols, features… <span className="float-right">⌘K</span>
+        {activeSymbol} {ui("— search symbols, features…")} <span className="float-right">⌘K</span>
       </button>
-      <button className="term-btn" aria-label={`Research ${activeSymbol}`} onClick={() => useTerminal.getState().openResearch(activeSymbol)}>Research</button>
+      <button className="term-btn" aria-label={ui("Research {symbol}", { symbol: activeSymbol })} onClick={() => useTerminal.getState().openResearch(activeSymbol)}>{ui("Research")}</button>
       <DisplaySettings />
-      <button className="term-btn" onClick={async()=>{await fetch("/api/session",{method:"DELETE"});window.location.assign("/login");}}>Sign out</button>
-      <span className="dim ml-auto feed-status">
-        feeds:{" "}
+      <button className="term-btn" onClick={async()=>{await fetch("/api/session",{method:"DELETE"});window.location.assign("/login");}}>{ui("Sign out")}</button>
+      <span className="dim ml-auto feed-status">{ui("feeds:")}{" "}
         {healthy.length > 0
           ? healthy.map((p) => `${p.name} ${p.lastLatencyMs ?? "—"}ms`).join(" · ")
-          : "connecting…"}
+          : ui("connecting…")}
       </span>
       <span className={`ai-status ${status?.ai ? "up" : "dim"}`}>AI {status?.ai ? "●" : "○"}</span>
     </header>

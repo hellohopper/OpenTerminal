@@ -1,4 +1,5 @@
 "use client";
+import { useI18n } from "../../lib/use-i18n";
 
 import { useQuery } from "@tanstack/react-query";
 import { apiGet, fmt, fmtBig, pctClass, type Quote } from "../../lib/api";
@@ -8,6 +9,8 @@ import Flash from "../Flash";
 type ShortVolume = { date: string; shortVolume: number; shortExemptVolume: number; totalVolume: number; shortVolumePercent: number };
 
 export default function QuoteWidget({ widget }: { widget: WidgetInstance }) {
+  const { t: ui } = useI18n();
+
   const symbol = useWidgetSymbol(widget);
   const { data, error } = useQuery({
     queryKey: ["quote", symbol],
@@ -21,8 +24,8 @@ export default function QuoteWidget({ widget }: { widget: WidgetInstance }) {
     staleTime: 3_600_000,
   });
 
-  if (error) return <div className="p-2 down">Error: {(error as Error).message}</div>;
-  if (!data) return <div className="p-2 dim">Loading {symbol}…</div>;
+  if (error) return <div className="p-2 down">{ui("Error:")} {(error as Error).message}</div>;
+  if (!data) return <div className="p-2 dim">{ui("Loading")} {symbol}…</div>;
 
   const rows: Array<[string, string, string?]> = [
     ["Open", fmt(data.open)],
@@ -54,14 +57,14 @@ export default function QuoteWidget({ widget }: { widget: WidgetInstance }) {
         </Flash>
         <span className="dim text-[10px] ml-auto">
           {data.exchange ?? ""} · {data.currency ?? ""} · {data.source}
-          <span className="block dim">Retrieved: {data.retrievedAt??"unknown"} · Observed: {data.time?new Date(data.time*1000).toISOString():"not supplied"}{data.stale?" · STALE FALLBACK":" · indicative feed"}</span>
+          <span className="block dim">{ui("Retrieved:")} {data.retrievedAt??ui("unknown")} {ui("· Observed:")} {data.time?new Date(data.time*1000).toISOString():ui("not supplied")}{data.stale?ui(" · STALE FALLBACK"):ui(" · indicative feed")}</span>
         </span>
       </div>
       <div className="dim text-[11px] mb-2 truncate">{data.name}</div>
       <div className="grid grid-cols-2 gap-x-4">
         {rows.map(([label, value]) => (
           <div key={label} className="flex justify-between border-b border-[#161616] py-0.5">
-            <span className="dim">{label}</span>
+            <span className="dim">{ui(label)}</span>
             <span>{value}</span>
           </div>
         ))}

@@ -1,7 +1,7 @@
 "use client";
+import { useI18n } from "../lib/use-i18n";
 
 import { useEffect, useRef, useState } from "react";
-import { WIDGET_CATALOG } from "../lib/widget-catalog";
 import GridLayout, { WidthProvider } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
@@ -119,6 +119,8 @@ function WidgetBody({ widget }: { widget: WidgetInstance }) {
 }
 
 function SymbolTag({ widget, activeSymbol }: { widget: WidgetInstance; activeSymbol: string }) {
+  const { t: ui } = useI18n();
+
   const setWidgetSymbol = useTerminal((s) => s.setWidgetSymbol);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
@@ -155,7 +157,7 @@ function SymbolTag({ widget, activeSymbol }: { widget: WidgetInstance; activeSym
   return (
     <span
       className="ml-2 text-[var(--text)] cursor-pointer hover:text-[var(--amber)]"
-      title="Click to set this widget's ticker"
+      title={ui("Click to set this widget's ticker")}
       onMouseDown={(e) => e.stopPropagation()}
       onClick={() => setEditing(true)}
     >
@@ -165,6 +167,8 @@ function SymbolTag({ widget, activeSymbol }: { widget: WidgetInstance; activeSym
 }
 
 export default function Workspace({ compact = false }: { compact?: boolean }) {
+  const { t: ui, widgetTitle } = useI18n();
+
   const fontSize = useDisplay((state) => state.fontSize);
   const scale = fontSize / DEFAULT_FONT_SIZE;
   const containerRef = useRef<HTMLDivElement>(null);
@@ -200,23 +204,23 @@ export default function Workspace({ compact = false }: { compact?: boolean }) {
         } : undefined}>
           <div className="terminal-panel">
             <div className="panel-title">
-              <span>{WIDGET_CATALOG[w.type].title}{symbolAware.has(w.type) && <SymbolTag widget={w} activeSymbol={activeSymbol} />}</span>
+              <span>{widgetTitle(w.type)}{symbolAware.has(w.type) && <SymbolTag widget={w} activeSymbol={activeSymbol} />}</span>
               <span className="flex gap-2 items-center">
                 {symbolAware.has(w.type) && <>
-                  <button aria-label={`Research ${w.linked ? activeSymbol : w.symbol ?? activeSymbol}`} onMouseDown={e => e.stopPropagation()} onClick={() => useTerminal.getState().openResearch(w.linked ? activeSymbol : w.symbol ?? activeSymbol)}>Research</button>
-                  <button title={w.linked ? "Linked to active symbol (click to unlink)" : "Unlinked (click to link)"} onMouseDown={e => e.stopPropagation()} onClick={() => toggleLinked(w.id)} className={w.linked ? "amber" : "dim"}>⛓</button>
+                  <button aria-label={ui("Research {symbol}", { symbol: w.linked ? activeSymbol : w.symbol ?? activeSymbol })} onMouseDown={e => e.stopPropagation()} onClick={() => useTerminal.getState().openResearch(w.linked ? activeSymbol : w.symbol ?? activeSymbol)}>{ui("Research")}</button>
+                  <button title={w.linked ? ui("Linked to active symbol (click to unlink)") : ui("Unlinked (click to link)")} onMouseDown={e => e.stopPropagation()} onClick={() => toggleLinked(w.id)} className={w.linked ? "amber" : "dim"}>⛓</button>
                 </>}
-                <button aria-label={`Remove ${WIDGET_CATALOG[w.type].title}`} onMouseDown={e => e.stopPropagation()} onClick={() => removeWidget(w.id)} className="dim">✕</button>
+                <button aria-label={ui("Remove {name}", { name: widgetTitle(w.type) })} onMouseDown={e => e.stopPropagation()} onClick={() => removeWidget(w.id)} className="dim">✕</button>
               </span>
             </div>
             <div className="flex-1 overflow-auto min-h-0">
-              <WidgetErrorBoundary name={WIDGET_CATALOG[w.type].title}><WidgetBody widget={w} /></WidgetErrorBoundary>
+              <WidgetErrorBoundary name={widgetTitle(w.type)}><WidgetBody widget={w} /></WidgetErrorBoundary>
             </div>
           </div>
         </div>
   ));
   return <div ref={containerRef} className="workspace-container">{panels.length === 0 ? (
-    <div className="p-4 space-y-2"><h2 className="amber">{widgets.length ? "All panels are hidden" : "This workspace is empty"}</h2><p className="dim">{widgets.length ? "Open UI settings → Panels in the header to show your panels again." : "Add a panel from the sidebar, Tools or command search (⌘/Ctrl+K)."}</p></div>
+    <div className="p-4 space-y-2"><h2 className="amber">{widgets.length ? ui("All panels are hidden") : ui("This workspace is empty")}</h2><p className="dim">{widgets.length ? ui("Open UI settings → Panels in the header to show your panels again.") : ui("Add a panel from the sidebar, Tools or command search (⌘/Ctrl+K).")}</p></div>
   ) : reflow ? (
     <div className="reflow-workspace">{panels}</div>
   ) : (

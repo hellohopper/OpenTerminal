@@ -1,4 +1,6 @@
 "use client";
+import { useI18n } from "../lib/use-i18n";
+
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { apiGet } from "../lib/api";
@@ -13,6 +15,8 @@ import {
 import { useTerminal } from "../store/terminal";
 
 export default function AlertNotifier() {
+  const { t: ui } = useI18n();
+
   const qc = useQueryClient();
   const [after, setAfter] = useState<number | null>(null);
   const [toasts, setToasts] = useState<AlertEvent[]>([]);
@@ -121,7 +125,7 @@ export default function AlertNotifier() {
   if (!toasts.length && !desktopError) return null;
   return (
     <aside
-      aria-label="Price alert notifications"
+      aria-label={ui("Price alert notifications")}
       aria-live="polite"
       className="fixed top-16 right-3 z-[100] w-80 max-w-[90vw] space-y-2"
     >
@@ -151,19 +155,13 @@ export default function AlertNotifier() {
           <button
             className="term-btn mt-1"
             onClick={() => openAlerts(event.symbol)}
-          >
-            View alerts
-          </button>
+          >{ui("View alerts")} </button>
         </div>
       ))}
       {desktopError && (
         <div className="border border-[var(--border)] bg-[var(--panel-2)] p-2">
-          <p className="dim">
-            Desktop notification unavailable. Alerts are saved in history.
-          </p>
-          <button className="term-btn" onClick={() => setDesktopError(false)}>
-            Dismiss
-          </button>
+          <p className="dim">{ui("Desktop notification unavailable. Alerts are saved in history.")} </p>
+          <button className="term-btn" onClick={() => setDesktopError(false)}>{ui("Dismiss")} </button>
         </div>
       )}
     </aside>

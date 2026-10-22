@@ -18,7 +18,7 @@ html { font-size: var(--terminal-font-size); }
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: "SF Mono", "Menlo", "Consolas", "Liberation Mono", monospace;
+  font-family: "SF Mono", "Menlo", "Consolas", "Liberation Mono", "PingFang SC", "Microsoft YaHei", monospace;
   font-size: 1rem;
   overflow: hidden;
 }

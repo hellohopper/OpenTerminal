@@ -1,4 +1,5 @@
 "use client";
+import { useI18n } from "../../lib/use-i18n";
 
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -17,6 +18,8 @@ type MacroData = {
 };
 
 export default function MacroWidget() {
+  const { t: ui } = useI18n();
+
   const setActiveSymbol = useTerminal((s) => s.setActiveSymbol);
   const [region, setRegion] = useState<"us" | "eu">("us");
   const { data, error } = useQuery({
@@ -30,14 +33,14 @@ export default function MacroWidget() {
       <div className="flex gap-1 p-1">
         {(["us", "eu"] as const).map((r) => (
           <button key={r} className={`term-btn ${region === r ? "active" : ""}`} onClick={() => setRegion(r)}>
-            {r.toUpperCase()}
+            {ui(r.toUpperCase())}
           </button>
         ))}
       </div>
       {error ? (
-        <div className="p-2 down">Error: {(error as Error).message}</div>
+        <div className="p-2 down">{ui("Error:")} {(error as Error).message}</div>
       ) : !data ? (
-        <div className="p-2 dim">Loading macro data…</div>
+        <div className="p-2 dim">{ui("Loading macro data…")}</div>
       ) : (
         <MacroBody data={data} region={region} setActiveSymbol={setActiveSymbol} />
       )}
@@ -54,11 +57,13 @@ function MacroBody({
   region: "us" | "eu";
   setActiveSymbol: (s: string) => void;
 }) {
+  const { t: ui } = useI18n();
+
   const scale = useDisplay((state) => state.fontSize) / DEFAULT_FONT_SIZE;
   return (
     <div>
       <div className="px-2 py-1 dim text-[10px] uppercase flex justify-between">
-        <span>{region === "eu" ? "Euro Area AAA Yield Curve" : "US Treasury Yield Curve"}</span>
+        <span>{region === "eu" ? ui("Euro Area AAA Yield Curve") : ui("US Treasury Yield Curve")}</span>
         {region === "us" && data.vix !== null && (
           <span className="cursor-pointer" onClick={() => setActiveSymbol("^VIX")}>
             VIX <Flash value={data.vix} className="amber">{fmt(data.vix, 2)}</Flash>
@@ -67,7 +72,7 @@ function MacroBody({
         {region === "eu" && (data.policyRate !== null || data.inflation !== null) && (
           <span>
             {data.policyRate !== null && (
-              <>ECB depo <Flash value={data.policyRate} className="amber">{fmt(data.policyRate, 2)}%</Flash></>
+              <>{ui("ECB depo")} <Flash value={data.policyRate} className="amber">{fmt(data.policyRate, 2)}%</Flash></>
             )}
             {data.inflation !== null && (
               <>
@@ -92,7 +97,7 @@ function MacroBody({
       </div>
       <table className="data-table">
         <thead>
-          <tr><th>Index / Commodity</th><th>Last</th><th>Chg%</th></tr>
+          <tr><th>{ui("Index / Commodity")}</th><th>{ui("Last")}</th><th>{ui("Chg%")}</th></tr>
         </thead>
         <tbody>
           {data.indexes.map((q) => (
