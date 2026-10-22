@@ -1,6 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { signIn, blank } from "./helpers";
 const headers = { origin: "http://127.0.0.1:3100" };
+const quoteFixture = (symbol: string) => ({ symbol, name: symbol, price: 110, change: 1, changePercent: 1, open: 109, high: 111, low: 108, previousClose: 109, bid: 109.9, ask: 110.1, volume: 100000, avgVolume: null, marketCap: null, pe: null, eps: null, dividendYield: null, week52High: null, week52Low: null, beta: null, sharesOutstanding: null, currency: "USD", exchange: "FIXTURE", source: "fixture", retrievedAt: new Date().toISOString() });
 async function refreshSetting(page: Page, value: string) {
   await page.getByRole("button", { name: "UI settings", exact: true }).click();
   const settings = page.getByRole("dialog", { name: "UI settings", exact: true });
@@ -98,15 +99,18 @@ test("journal drafts survive reload, stay isolated by symbol, and clear on disca
 });
 
 for (const name of ["Quote", "Watchlist", "Macro / Indexes"]) test(`${name} retains data after a failed refresh and recovers manually`, async ({ page }) => {
-  await test.step("Sign in before intercepting data requests", () => signIn(page));
-  await refreshSetting(page, "0");
+  let failing = false;
+  // Exercise browser recovery independently of the shared API rate-limit window.
+  await page.route("**/api/quotes?*", route => route.fulfill(failing ? { status: 502, json: { error: "API unavailable or timed out." } } : { json: new URL(route.request().url()).searchParams.get("symbols")!.split(",").map(quoteFixture) }));
+  await page.route("**/api/macro?*", route => route.fulfill(failing ? { status: 502, json: { error: "API unavailable or timed out." } } : { json: { yields: [{ tenor: "2Y", value: 4 }], vix: 20, indexes: [{ symbol: "SPY", label: "S&P 500", price: 110, changePercent: 1 }], policyRate: 5, inflation: 3 } }));
+  await test.step("Sign in", () => signIn(page));
+  await test.step("Set manual refresh", () => refreshSetting(page, "0"));
   await test.step(`Refresh ${name} through a failure and recovery`, async () => {
     const panel = page.getByRole("region", { name, exact: true });
     await expect(panel.getByText("Data ready", { exact: true })).toBeVisible();
     const values = panel.locator(name === "Quote" ? ".quote-head" : "table tbody");
     const retained = (await values.textContent())!;
-    let failing = true;
-    for (const pattern of ["**/api/quotes?*", "**/api/macro?*"]) await page.route(pattern, route => failing ? route.fulfill({ status: 502, json: { error: "API unavailable or timed out." } }) : route.continue());
+    failing = true;
     await panel.getByRole("button", { name: "Refresh data", exact: true }).click();
     await expect(panel.getByRole("alert")).toContainText("Refresh failed. Showing last available data.");
     await expect(values).toHaveText(retained);
