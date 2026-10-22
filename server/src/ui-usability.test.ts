@@ -20,9 +20,9 @@ describe("quote provenance and missing values", () => {
 describe("news filtering", () => {
   const item = (title: string, link = "https://example.com/news"): NewsItem => ({ title, link, publisher: "Fixture", publishedAt: null });
   it("removes quote pages and syndicated duplicates while retaining reporting about options", () => {
-    const rows = [item("IWM261231P00287000 Interactive Stock Chart - Yahoo Finance"), item("Russell outlook improves - Yahoo Finance"), item("Russell outlook improves - Yahoo Finance UK"), item("Investors buy puts as volatility rises"), item("IWM stock historical prices and data - Yahoo Finance")];
+    const rows = [item("IWM261231P00287000 Interactive Stock Chart - Yahoo Finance"), item("Russell outlook improves - Yahoo Finance"), item("Russell outlook improves - Yahoo Finance UK"), item("Investors buy puts as volatility rises"), item("IWM stock historical prices and data - Yahoo Finance"), item("IWM 261021 284.00C (IWM261021C284000) Stock Options Chain | Quotes & News - Moomoo")];
     expect(selectNews(rows, true).map(n => n.title)).toEqual([rows[1].title, rows[3].title]);
-    expect(selectNews(rows, false)).toHaveLength(4);
+    expect(selectNews(rows, false)).toHaveLength(5);
     expect(selectNews(rows, true, "volatility")).toEqual([rows[3]]);
   });
 });

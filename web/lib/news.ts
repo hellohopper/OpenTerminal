@@ -2,7 +2,7 @@ export type NewsItem = { title: string; link: string; publisher: string; publish
 
 /** Provider RSS sometimes returns quote landing pages instead of reporting. */
 export function isQuotePage(item: NewsItem) {
-  return /\b[A-Z]{1,6}\d{6}[CP]\d{8}\b/.test(item.title) || /interactive stock chart|stock historical prices?\s*(?:&|and)\s*data|stock price,?\s*news,?\s*quote\s*(?:&|and)\s*history/i.test(item.title);
+  return /\b[A-Z]{1,6}\d{6}[CP]\d{6,8}\b/.test(item.title) || /interactive stock chart|stock options chain|stock historical prices?\s*(?:&|and)\s*data|stock price,?\s*news,?\s*quote\s*(?:&|and)\s*history/i.test(item.title);
 }
 export function selectNews(items: NewsItem[], articlesOnly: boolean, query = "") {
   const seen = new Set<string>();
