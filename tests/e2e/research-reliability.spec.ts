@@ -105,6 +105,8 @@ for (const name of ["Quote", "Watchlist", "Macro / Indexes"]) test(`${name} reta
   await page.route("**/api/macro?*", route => route.fulfill(failing ? { status: 502, json: { error: "API unavailable or timed out." } } : { json: { yields: [{ tenor: "2Y", value: 4 }], vix: 20, indexes: [{ symbol: "SPY", label: "S&P 500", price: 110, changePercent: 1 }], policyRate: 5, inflation: 3 } }));
   await test.step("Sign in", () => signIn(page));
   await test.step("Set manual refresh", () => refreshSetting(page, "0"));
+  const toasts = page.getByRole("button", { name: /^Dismiss alert event / });
+  while (await toasts.count()) await toasts.first().click();
   await test.step(`Refresh ${name} through a failure and recovery`, async () => {
     const panel = page.getByRole("region", { name, exact: true });
     await expect(panel.getByText("Data ready", { exact: true })).toBeVisible();
