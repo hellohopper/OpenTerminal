@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createDisplayStore } from "../../web/store/display";
 import { createTerminalStore } from "../../web/store/terminal";
-import { mergeVisibleLayout, readDisplayPreferences } from "../../web/lib/display";
+import { defaultDisplayPreferences, mergeVisibleLayout, readDisplayPreferences } from "../../web/lib/display";
 
 function memoryStorage(initial?: string) {
   const values = new Map(initial ? [["openterminal-display", initial]] : []);
@@ -51,7 +51,7 @@ describe("UI display preferences", () => {
   });
 
   it("ignores invalid saved visibility values and unknown feature types", () => {
-    expect(readDisplayPreferences({ fontSize: Infinity, sidebarVisible: "false", workspaceBarVisible: false, hiddenSidebarFeatures: ["news", "news", "unknown"], hiddenPanels: { first: ["chart", "chart", null, ""], bad: false } })).toMatchObject({ language: "en", fontSize: 12, sidebarVisible: true, workspaceBarVisible: false, hiddenSidebarFeatures: ["news"], hiddenPanels: { first: ["chart"] } });
+    expect(readDisplayPreferences({ fontSize: Infinity, sidebarVisible: "false", workspaceBarVisible: false, hiddenSidebarFeatures: ["news", "news", "unknown"], hiddenPanels: { first: ["chart", "chart", null, ""], bad: false } })).toEqual({ ...defaultDisplayPreferences(), workspaceBarVisible: false, hiddenSidebarFeatures: ["news"], hiddenPanels: { first: ["chart"] } });
   });
 
   it("persists language and preserves it when restoring visibility", async () => {

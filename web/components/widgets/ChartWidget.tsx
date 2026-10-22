@@ -117,7 +117,7 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
   }, []);
   const library=useQuery({queryKey:["history-library"],queryFn:()=>apiGet<{active:{payload:{symbol:string;datasetId:number|null}}[]}>("/api/history-library")});
   const selectedHistory=library.data?.active.find(a=>a.payload.symbol===symbol)?.payload.datasetId;
-  const { data: candles, error } = useQuery({
+  const { data: candles, error, refetch, isFetching } = useQuery({
     queryKey: ["history", symbol, range,selectedHistory],
     queryFn: () =>
       apiGet<Candle[]>(
@@ -674,7 +674,7 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
         </p>
       )}
       {error && (
-        <div className="p-2 down">{ui("Error:")} {(error as Error).message}</div>
+        <div role="alert" className="p-2 down">{ui("Error:")} {ui((error as Error).message)} <button className="term-btn" disabled={isFetching} onClick={() => refetch()}>{ui("Retry")}</button></div>
       )}
       <div className="relative flex-1 min-h-0">
         {legend && !comparing && (

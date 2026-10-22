@@ -13,7 +13,7 @@ export default function QuoteWidget({ widget }: { widget: WidgetInstance }) {
   const { t: ui, locale } = useI18n();
 
   const symbol = useWidgetSymbol(widget);
-  const { data, error } = useQuery({
+  const { data, error, refetch, isFetching } = useQuery({
     queryKey: ["quote", symbol],
     queryFn: async () => (await apiGet<Quote[]>(`/api/quotes?symbols=${encodeURIComponent(symbol)}`))[0],
     refetchInterval: 1_000,
@@ -25,7 +25,7 @@ export default function QuoteWidget({ widget }: { widget: WidgetInstance }) {
     staleTime: 3_600_000,
   });
 
-  if (error) return <div className="p-2 down">{ui("Error:")} {(error as Error).message}</div>;
+  if (error) return <div role="alert" className="p-2 down">{ui("Error:")} {ui((error as Error).message)} <button className="term-btn" disabled={isFetching} onClick={() => refetch()}>{ui("Retry")}</button></div>;
   if (!data) return <div className="p-2 dim">{ui("Loading")} {symbol}…</div>;
 
   const rows: Array<[string, string, string?]> = [

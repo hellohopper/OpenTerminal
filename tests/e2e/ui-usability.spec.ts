@@ -57,6 +57,7 @@ test("sidebar preferences and independent density survive reload with Chinese la
   await settings.getByLabel("Interface density", { exact: true }).selectOption("comfortable");
   await settings.getByRole("button", { name: "20px", exact: true }).click();
   await settings.getByLabel("Language / 语言", { exact: true }).selectOption("zh");
+  settings = page.getByRole("dialog", { name: "界面设置", exact: true });
   await settings.getByRole("button", { name: "完成", exact: true }).click();
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN");
@@ -74,12 +75,13 @@ test("sidebar preferences and independent density survive reload with Chinese la
 });
 
 test("news defaults to reporting, deduplicates and exposes full results on request", async ({ page }) => {
-  await signIn(page);
+  // Intercept the first request too, so the dashboard cannot seed the query cache with another feed.
   await page.route('**/api/news?*', route => route.fulfill({ json: [
     { title: 'IWM261231P00287000 Interactive Stock Chart - Yahoo Finance', link: 'https://example.com/quote', publisher: 'Fixture', publishedAt: null },
     { title: 'Market outlook improves - Yahoo Finance', link: 'https://example.com/one', publisher: 'Fixture', publishedAt: '2026-01-01T12:00:00Z' },
     { title: 'Market outlook improves - Yahoo Finance UK', link: 'https://example.com/two', publisher: 'Fixture', publishedAt: null },
   ] }));
+  await signIn(page);
   await blank(page, "News filters");
   await page.getByRole("button", { name: /^NEWS/ }).click();
   const news = page.getByRole("region", { name: "News", exact: true });

@@ -1,5 +1,9 @@
 /** UI-owned text only. Symbols, user records and provider content retain their original text. */
 export const zh: Record<string, string> = {
+  "The request could not be completed. Please retry.": "请求未能完成，请重试。",
+  "API unavailable or timed out.": "服务暂不可用或请求超时。",
+  "Sign in required.": "请先登录。",
+  "unavailable": "不可用",
   "UI settings": "界面设置",
   "Font, sidebar and panel visibility": "语言、字体、侧栏和面板显示",
   "Appearance": "外观", "Sidebar": "侧栏", "Panels": "面板",
