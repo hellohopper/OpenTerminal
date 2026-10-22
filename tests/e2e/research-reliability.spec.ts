@@ -124,7 +124,7 @@ for (const name of ["Quote", "Watchlist", "Macro / Indexes"]) test(`${name} reta
 test("refresh cadence persists and stops frequent requests when a panel moves offscreen", async ({ page }) => {
   await signIn(page); await blank(page, "Refresh visibility");
   let requests = 0;
-  await page.route("**/api/quotes?symbols=*", route => { requests++; return route.continue(); });
+  await page.route("**/api/quotes?symbols=*", route => { requests++; return route.fulfill({ json: new URL(route.request().url()).searchParams.get("symbols")!.split(",").map(quoteFixture) }); });
   await page.getByRole("button", { name: "WATCHLIST", exact: true }).click();
   await refreshSetting(page, "1000");
   const initial = requests; await expect.poll(() => requests).toBeGreaterThan(initial + 1);
