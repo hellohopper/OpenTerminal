@@ -1,4 +1,6 @@
 "use client";
+import { useI18n } from "../lib/use-i18n";
+
 import { useEffect, useState } from "react";
 import { parseDrawings, type Drawing } from "../lib/chart-tools";
 import { fmt } from "../lib/api";
@@ -53,11 +55,11 @@ export default function ChartTools({
   message: string;
   disabled: boolean;
 }) {
+  const { t: ui } = useI18n();
+
   return (
     <details className="shrink-0 border-b border-[var(--border)] p-1">
-      <summary className="cursor-pointer amber">
-        Drawing tools · {drawings.length} saved
-      </summary>
+      <summary className="cursor-pointer amber">{ui("Drawing tools ·")} {drawings.length} {ui("saved")} </summary>
       <div className="flex gap-1 flex-wrap py-1">
         {(["navigate", "horizontal", "trend"] as const).map((t) => (
           <button
@@ -67,19 +69,17 @@ export default function ChartTools({
             onClick={() => setTool(t)}
           >
             {t === "navigate"
-              ? "Navigate"
+              ? ui("Navigate")
               : t === "horizontal"
-                ? "Horizontal line"
-                : "Trend line"}
+                ? ui("Horizontal line")
+                : ui("Trend line")}
           </button>
         ))}
         <button
           className="term-btn"
           disabled={!drawings.length}
           onClick={() => update((d) => d.slice(0, -1))}
-        >
-          Undo drawing
-        </button>
+        >{ui("Undo drawing")} </button>
         <button
           className="term-btn"
           disabled={!drawings.length}
@@ -87,15 +87,13 @@ export default function ChartTools({
             if (confirm("Clear drawings for this chart, symbol and range?"))
               update(() => []);
           }}
-        >
-          Clear drawings
-        </button>
+        >{ui("Clear drawings")} </button>
       </div>
       <p role="status" className="dim text-[10px]">
         {disabled
-          ? "Return to price mode to draw."
+          ? ui("Return to price mode to draw.")
           : message ||
-            "Horizontal: click a price. Trend: click two different times in the main price pane. Escape cancels. Up to 50 drawings, saved in this browser per chart, symbol and range."}
+            ui("Horizontal: click a price. Trend: click two different times in the main price pane. Escape cancels. Up to 50 drawings, saved in this browser per chart, symbol and range.")}
       </p>
       {drawings.length > 0 && (
         <ul className="max-h-20 overflow-auto">
@@ -113,9 +111,7 @@ export default function ChartTools({
                 onClick={() =>
                   update((rows) => rows.filter((r) => r.id !== d.id))
                 }
-              >
-                Delete
-              </button>
+              >{ui("Delete")} </button>
             </li>
           ))}
         </ul>

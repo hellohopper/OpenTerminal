@@ -1,4 +1,5 @@
 "use client";
+import { useI18n } from "../../lib/use-i18n";
 
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -9,6 +10,8 @@ import { useTerminal, useWidgetSymbol, type WidgetInstance } from "../../store/t
 type NewsItem = { title: string; link: string; publisher: string; publishedAt: string | null };
 
 export default function NewsWidget({ widget }: { widget: WidgetInstance }) {
+  const { t: ui, locale } = useI18n();
+
   const symbol = useWidgetSymbol(widget);
   const [mode, setMode] = useState<"symbol" | "global">("symbol");
 
@@ -24,19 +27,17 @@ export default function NewsWidget({ widget }: { widget: WidgetInstance }) {
         <button className={`term-btn ${mode === "symbol" ? "active" : ""}`} onClick={() => setMode("symbol")}>
           {symbol}
         </button>
-        <button className={`term-btn ${mode === "global" ? "active" : ""}`} onClick={() => setMode("global")}>
-          GLOBAL
-        </button>
-        <button className="term-btn" onClick={() => useTerminal.getState().openResearch(symbol)}>Research {symbol}</button>
+        <button className={`term-btn ${mode === "global" ? "active" : ""}`} onClick={() => setMode("global")}>{ui("GLOBAL")} </button>
+        <button className="term-btn" onClick={() => useTerminal.getState().openResearch(symbol)}>{ui("Research")} {symbol}</button>
       </div>
-      {isLoading && <div className="p-2 dim">Loading news…</div>}
+      {isLoading && <div className="p-2 dim">{ui("Loading news…")}</div>}
       {data.map((n, i) => {
         const body = (
           <>
             <div className="truncate">{n.title}</div>
             <div className="dim text-[10px]">
               {n.publisher}
-              {n.publishedAt ? " · " + new Date(n.publishedAt).toLocaleString() : ""}
+              {n.publishedAt ? " · " + new Date(n.publishedAt).toLocaleString(locale) : ""}
             </div>
           </>
         );

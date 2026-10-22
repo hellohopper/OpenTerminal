@@ -1,4 +1,6 @@
 "use client";
+import { useI18n } from "../../lib/use-i18n";
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { apiGet, apiPost, apiPut, apiDelete } from "../../lib/api";
@@ -34,6 +36,8 @@ const blank = (symbol: string): Form => ({
   armed: true,
 });
 export default function AlertsWidget({ initialSymbol }: { initialSymbol?: string } = {}) {
+  const { t: ui } = useI18n();
+
   const activeSymbol = useTerminal((s) => s.activeSymbol);
   const symbol = initialSymbol ?? activeSymbol;
   const qc = useQueryClient();
@@ -188,19 +192,18 @@ export default function AlertsWidget({ initialSymbol }: { initialSymbol?: string
           disabled={check.isPending}
           onClick={() => check.mutate()}
         >
-          {check.isPending ? "Checking…" : "Check now"}
+          {check.isPending ? ui("Checking…") : ui("Check now")}
         </button>
         <button
           className={`term-btn ${desktop ? "active" : ""}`}
           onClick={toggleDesktop}
         >
           {desktop
-            ? "Disable desktop notifications"
-            : "Enable desktop notifications"}
+            ? ui("Disable desktop notifications")
+            : ui("Enable desktop notifications")}
         </button>
         <span className="dim">
-          {data?.alerts.filter((r) => r.armed).length ?? 0} enabled
-        </span>
+          {data?.alerts.filter((r) => r.armed).length ?? 0} {ui("enabled")} </span>
       </div>
       {(error || historyError) && (
         <p role="alert" className="down">
@@ -216,7 +219,7 @@ export default function AlertsWidget({ initialSymbol }: { initialSymbol?: string
       >
         <div className="flex gap-2 flex-wrap">
           <input
-            aria-label="Alert symbol"
+            aria-label={ui("Alert symbol")}
             required
             maxLength={20}
             className="w-28"
@@ -229,11 +232,10 @@ export default function AlertsWidget({ initialSymbol }: { initialSymbol?: string
             type="button"
             className="term-btn"
             onClick={() => setForm({ ...form, symbol })}
-          >
-            Use {symbol}
+          >{ui("Use")} {symbol}
           </button>
           <select
-            aria-label="Alert metric"
+            aria-label={ui("Alert metric")}
             value={form.metric ?? "native"}
             onChange={(e) =>
               setForm({
@@ -244,11 +246,11 @@ export default function AlertsWidget({ initialSymbol }: { initialSymbol?: string
               })
             }
           >
-            <option value="native">Price / day change</option>
-            <option value="volume">Volume</option>
+            <option value="native">{ui("Price / day change")}</option>
+            <option value="volume">{ui("Volume")}</option>
           </select>
           <select
-            aria-label="Alert condition"
+            aria-label={ui("Alert condition")}
             value={form.condition}
             onChange={(e) =>
               setForm({
@@ -272,7 +274,7 @@ export default function AlertsWidget({ initialSymbol }: { initialSymbol?: string
               ))}
           </select>
           <input
-            aria-label="Alert threshold"
+            aria-label={ui("Alert threshold")}
             type="number"
             step="any"
             required
@@ -281,7 +283,7 @@ export default function AlertsWidget({ initialSymbol }: { initialSymbol?: string
                 ? "-5"
                 : percent
                   ? "5"
-                  : "Target price"
+                  : ui("Target price")
             }
             min={
               percent
@@ -297,10 +299,8 @@ export default function AlertsWidget({ initialSymbol }: { initialSymbol?: string
             onChange={(e) => setForm({ ...form, threshold: e.target.value })}
           />
         </div>
-        <label>
-          Repeat cooldown (seconds, 0 = once)
-          <input
-            aria-label="Alert repeat seconds"
+        <label>{ui("Repeat cooldown (seconds, 0 = once)")} <input
+            aria-label={ui("Alert repeat seconds")}
             type="number"
             min="0"
             max="86400"
@@ -312,9 +312,9 @@ export default function AlertsWidget({ initialSymbol }: { initialSymbol?: string
         </label>
         <div className="flex gap-2 flex-wrap">
           <input
-            aria-label="Alert label"
+            aria-label={ui("Alert label")}
             maxLength={120}
-            placeholder="Optional label"
+            placeholder={ui("Optional label")}
             className="flex-1 min-w-32"
             value={form.label}
             onChange={(e) => setForm({ ...form, label: e.target.value })}
@@ -324,27 +324,19 @@ export default function AlertsWidget({ initialSymbol }: { initialSymbol?: string
               type="checkbox"
               checked={form.armed}
               onChange={(e) => setForm({ ...form, armed: e.target.checked })}
-            />{" "}
-            Enable / rearm
-          </label>
+            />{" "}{ui("Enable / rearm")} </label>
           <button className="term-btn" disabled={save.isPending}>
-            {form.id ? "Update alert" : "Create alert"}
+            {form.id ? ui("Update alert") : ui("Create alert")}
           </button>
           {form.id && (
             <button
               className="term-btn"
               type="button"
               onClick={() => setForm(blank(symbol))}
-            >
-              Cancel edit
-            </button>
+            >{ui("Cancel edit")} </button>
           )}
         </div>
-        <p className="dim text-[10px]">
-          Price thresholds use the instrument’s quote currency; daily falls use
-          negative percentages. Conditions include equality. If already met, the
-          first fresh check triggers the alert.
-        </p>
+        <p className="dim text-[10px]">{ui("Price thresholds use the instrument’s quote currency; daily falls use negative percentages. Conditions include equality. If already met, the first fresh check triggers the alert.")} </p>
       </form>
       {message && (
         <p role="status" className="amber">
@@ -352,14 +344,13 @@ export default function AlertsWidget({ initialSymbol }: { initialSymbol?: string
         </p>
       )}
       <div className="dim text-[10px]">
-        {data?.monitor.running ? "Monitor running" : "Monitor not running"} ·{" "}
+        {data?.monitor.running ? ui("Monitor running") : ui("Monitor not running")} ·{" "}
         {data?.monitor.checking
-          ? "Fetching fresh quotes…"
-          : `Checks every ${(data?.monitor.intervalMs ?? 15000) / 1000}s`}{" "}
-        · Last completed:{" "}
+          ? ui("Fetching fresh quotes…")
+          : `Checks every ${(data?.monitor.intervalMs ?? 15000) / 1000}s`}{" "}{ui("· Last completed:")}{" "}
         {data?.monitor.lastCheckedAt
           ? new Date(data.monitor.lastCheckedAt).toLocaleString()
-          : "not yet"}
+          : ui("not yet")}
       </div>
       {data?.monitor.lastError && (
         <p className="amber">{data.monitor.lastError}</p>
@@ -367,12 +358,12 @@ export default function AlertsWidget({ initialSymbol }: { initialSymbol?: string
       <table className="data-table">
         <thead>
           <tr>
-            <th>Symbol / label</th>
-            <th>Condition</th>
-            <th>Threshold</th>
-            <th>Last value</th>
-            <th>Status</th>
-            <th>Actions</th>
+            <th>{ui("Symbol / label")}</th>
+            <th>{ui("Condition")}</th>
+            <th>{ui("Threshold")}</th>
+            <th>{ui("Last value")}</th>
+            <th>{ui("Status")}</th>
+            <th>{ui("Actions")}</th>
           </tr>
         </thead>
         <tbody>
@@ -397,11 +388,11 @@ export default function AlertsWidget({ initialSymbol }: { initialSymbol?: string
               </td>
               <td className={rule.armed ? "up" : "dim"}>
                 {rule.armed
-                  ? "Enabled"
+                  ? ui("Enabled")
                   : rule.last_checked_at &&
                       rule.last_checked_at === rule.last_triggered_at
-                    ? "Triggered"
-                    : "Paused"}
+                    ? ui("Triggered")
+                    : ui("Paused")}
               </td>
               <td>
                 <div className="flex gap-1 justify-end">
@@ -414,21 +405,17 @@ export default function AlertsWidget({ initialSymbol }: { initialSymbol?: string
                         threshold: String(rule.threshold),
                       })
                     }
-                  >
-                    Edit
-                  </button>
+                  >{ui("Edit")} </button>
                   <button
                     className="term-btn"
                     onClick={() => void mutateRule(rule)}
                   >
-                    {rule.armed ? "Pause" : "Rearm"}
+                    {rule.armed ? ui("Pause") : ui("Rearm")}
                   </button>
                   <button
                     className="term-btn"
                     onClick={() => void mutateRule(rule, true)}
-                  >
-                    Delete
-                  </button>
+                  >{ui("Delete")} </button>
                 </div>
               </td>
             </tr>
@@ -436,13 +423,10 @@ export default function AlertsWidget({ initialSymbol }: { initialSymbol?: string
         </tbody>
       </table>
       {data?.alerts.length === 0 && (
-        <p className="dim">
-          No alerts yet. Create a rule above; it is shared across your
-          workspaces.
-        </p>
+        <p className="dim">{ui("No alerts yet. Create a rule above; it is shared across your workspaces.")} </p>
       )}
       <details>
-        <summary className="cursor-pointer amber">Trigger history</summary>
+        <summary className="cursor-pointer amber">{ui("Trigger history")}</summary>
         {history?.events.map((event) => (
           <article
             key={event.id}
@@ -450,37 +434,25 @@ export default function AlertsWidget({ initialSymbol }: { initialSymbol?: string
           >
             <p>{describeAlert(event)}</p>
             {event.label && <p className="dim">{event.label}</p>}
-            <p className="dim text-[10px]">
-              Triggered: {new Date(event.created_at).toLocaleString()} ·{" "}
-              {event.source} · Feed as of: {event.observed_at ?? "not supplied"}
+            <p className="dim text-[10px]">{ui("Triggered:")} {new Date(event.created_at).toLocaleString()} ·{" "}
+              {event.source} {ui("· Feed as of:")} {event.observed_at ?? ui("not supplied")}
             </p>
           </article>
         ))}
         {history?.events.length === 0 && (
-          <p className="dim">No triggers recorded.</p>
+          <p className="dim">{ui("No triggers recorded.")}</p>
         )}
         {history?.nextCursor && (
           <button
             className="term-btn"
             onClick={() => setBefore(history.nextCursor!)}
-          >
-            Older events
-          </button>
+          >{ui("Older events")} </button>
         )}
         {before && (
-          <button className="term-btn" onClick={() => setBefore(undefined)}>
-            Latest events
-          </button>
+          <button className="term-btn" onClick={() => setBefore(undefined)}>{ui("Latest events")} </button>
         )}
       </details>
-      <p className="dim text-[10px]">
-        Keep the API running for background checks. Closing the browser keeps
-        trigger history; desktop notifications require an open terminal and
-        browser permission. Reopening shows missed events in-app. At most 100
-        saved rules / 20 enabled symbols. Polling can miss brief crossings;
-        indicative or delayed data, not execution-grade. Failed refreshes never
-        trigger from stale fallback data.
-      </p>
+      <p className="dim text-[10px]">{ui("Keep the API running for background checks. Closing the browser keeps trigger history; desktop notifications require an open terminal and browser permission. Reopening shows missed events in-app. At most 100 saved rules / 20 enabled symbols. Polling can miss brief crossings; indicative or delayed data, not execution-grade. Failed refreshes never trigger from stale fallback data.")} </p>
     </div>
   );
 }

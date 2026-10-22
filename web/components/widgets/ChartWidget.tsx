@@ -1,4 +1,5 @@
 "use client";
+import { useI18n } from "../../lib/use-i18n";
 
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -68,6 +69,8 @@ const INDICATOR_COLOR: Record<string, string> = {
 };
 
 export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
+  const { t: ui, locale } = useI18n();
+
   const fontSize = useDisplay((state) => state.fontSize);
   const symbol = useWidgetSymbol(widget);
   const qc = useQueryClient();
@@ -244,6 +247,7 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
     if (!el || !candles || candles.length === 0) return;
 
     const chart = createChart(el, {
+      localization: { locale: useDisplay.getState().language === "zh" ? "zh-CN" : "en-US" },
       layout: {
         background: { color: "#0a0a0a" },
         textColor: "#808080",
@@ -528,8 +532,8 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
   ]);
 
   useEffect(() => {
-    chartRef.current?.applyOptions({ layout: { fontSize: 10 * fontSize / DEFAULT_FONT_SIZE } });
-  }, [fontSize]);
+    chartRef.current?.applyOptions({ layout: { fontSize: 10 * fontSize / DEFAULT_FONT_SIZE }, localization: { locale } });
+  }, [fontSize, locale]);
 
   const toggleIndicator = (ind: Indicator) =>
     setActive((prev) => {
@@ -542,7 +546,7 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
   return (
     <div className="flex flex-col h-full">
       <div className="flex gap-1 p-1 flex-wrap shrink-0">
-        {selectedHistory&&!["1D","5D","1M"].includes(range)&&<span className="amber">Library version #{selectedHistory}</span>}
+        {selectedHistory&&!["1D","5D","1M"].includes(range)&&<span className="amber">{ui("Library version #")}{selectedHistory}</span>}
           <button
           className="term-btn"
           disabled={
@@ -575,9 +579,7 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
               setSavingSnapshot(false);
             }
           }}
-        >
-          JOURNAL SNAPSHOT
-        </button>
+        >{ui("JOURNAL SNAPSHOT")} </button>
         {RANGES.map((r) => (
           <button
             key={r}
@@ -595,7 +597,7 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
             className={`term-btn ${chartType === t ? "active" : ""}`}
             onClick={() => setChartType(t)}
           >
-            {t.toUpperCase()}
+            {ui(t.toUpperCase())}
           </button>
         ))}
         <span className="w-2" />
@@ -633,25 +635,22 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
         }}
       >
         <input
-          aria-label="Chart comparison symbols"
+          aria-label={ui("Chart comparison symbols")}
           value={overlayDraft}
           onChange={(e) => setOverlayDraft(e.target.value)}
           placeholder="SPY,MSFT"
           className="w-40"
         />
-        <button className="term-btn">Overlay comparison</button>
+        <button className="term-btn">{ui("Overlay comparison")}</button>
         <button
           type="button"
           className={`term-btn ${!comparing ? "active" : ""}`}
           onClick={() => setCompareMode(false)}
-        >
-          Price mode
-        </button>
+        >{ui("Price mode")} </button>
         {comparing && (
           <span className="dim">
-            {[symbol, ...comparisonSymbols].join(" / ")} · start = 100 ·{" "}
-            {comparison.times.length} shared timestamps
-          </span>
+            {[symbol, ...comparisonSymbols].join(" / ")} {ui("· start = 100 ·")}{" "}
+            {comparison.times.length} {ui("shared timestamps")} </span>
         )}
       </form>
       {overlayError && (
@@ -660,12 +659,7 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
         </p>
       )}
       {comparing && (
-        <p className="dim p-1 text-[10px]">
-          Normalized closes at exact shared timestamps; price returns in each
-          quote currency, without FX or dividend adjustment. Sources may differ
-          in split adjustment. Price drawings and indicators resume in price
-          mode.
-        </p>
+        <p className="dim p-1 text-[10px]">{ui("Normalized closes at exact shared timestamps; price returns in each quote currency, without FX or dividend adjustment. Sources may differ in split adjustment. Price drawings and indicators resume in price mode.")} </p>
       )}
       {comparing &&
         (comparisonLoading ||
@@ -673,10 +667,10 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
           comparison.times.length < 2) && (
           <p role="status" className="amber p-1">
             {comparisonLoading
-              ? "Loading comparison…"
+              ? ui("Loading comparison…")
               : comparisonFailed.length
                 ? `Comparison history unavailable: ${comparisonFailed.join(", ")}`
-                : "Not enough shared timestamps to compare these assets."}
+                : ui("Not enough shared timestamps to compare these assets.")}
           </p>
         )}
       <ChartTools
@@ -693,7 +687,7 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
         </p>
       )}
       {error && (
-        <div className="p-2 down">Error: {(error as Error).message}</div>
+        <div className="p-2 down">{ui("Error:")} {(error as Error).message}</div>
       )}
       <div className="relative flex-1 min-h-0">
         {legend && !comparing && (
@@ -714,8 +708,7 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
                   {fmt(legend.close)}
                 </span>
               </span>
-              <span className="dim">
-                Vol{" "}
+              <span className="dim">{ui("Vol")}{" "}
                 <span className="text-[var(--text)]">
                   {fmtBig(legend.volume)}
                 </span>
@@ -736,8 +729,8 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
           ref={containerRef}
           aria-label={
             comparing
-              ? "Normalized comparison chart"
-              : "Price chart drawing area"
+              ? ui("Normalized comparison chart")
+              : ui("Price chart drawing area")
           }
           className="w-full h-full"
         />

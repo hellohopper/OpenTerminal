@@ -1,4 +1,5 @@
 "use client";
+import { useI18n } from "../../lib/use-i18n";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -13,6 +14,8 @@ type Position = { symbol: string; quantity: number; avgCost: number; realizedPnl
 type Tx = { id: number; symbol: string; side: string; quantity: number; price: number; executed_at: string };
 
 export default function PortfolioWidget() {
+  const { t: ui } = useI18n();
+
   const qc = useQueryClient();
   const [portfolioId, setPortfolioId] = useState<number | null>(null);
   const [showTx, setShowTx] = useState(false);
@@ -74,17 +77,14 @@ export default function PortfolioWidget() {
             <option key={p.id} value={p.id}>{p.name}</option>
           ))}
         </select>
-        <button className={`term-btn ${showTx ? "active" : ""}`} onClick={() => setShowTx(!showTx)}>
-          TRANSACTIONS
-        </button>
-        <span className="ml-auto">
-          MV <span className="amber">{fmt(positionsLoading||positionsError?null:totals.marketValue)}</span>{" "}
-          <span className="dim">Unrl</span> <span className={pctClass(unrealized)}>{fmt(unrealized)}</span>{" "}
-          <span className="dim">Rlzd</span> <span className={pctClass(totals.realized)}>{fmt(totals.realized)}</span>
+        <button className={`term-btn ${showTx ? "active" : ""}`} onClick={() => setShowTx(!showTx)}>{ui("TRANSACTIONS")} </button>
+        <span className="ml-auto">{ui("MV")} <span className="amber">{fmt(positionsLoading||positionsError?null:totals.marketValue)}</span>{" "}
+          <span className="dim">{ui("Unrl")}</span> <span className={pctClass(unrealized)}>{fmt(unrealized)}</span>{" "}
+          <span className="dim">{ui("Rlzd")}</span> <span className={pctClass(totals.realized)}>{fmt(totals.realized)}</span>
         </span>
       </div>
 
-      {totals.missing.length>0&&<p role="status" className="amber p-1">Valuation incomplete: {totals.missing.join(", ")}. Missing, expired or unverified-currency quotes are excluded; totals are withheld.</p>}
+      {totals.missing.length>0&&<p role="status" className="amber p-1">{ui("Valuation incomplete:")} {totals.missing.join(", ")}{ui(". Missing, expired or unverified-currency quotes are excluded; totals are withheld.")}</p>}
       <form
         className="flex flex-wrap gap-1 p-1 border-b border-[var(--border)]"
         onSubmit={(e) => {
@@ -92,14 +92,14 @@ export default function PortfolioWidget() {
           if (form.symbol && form.quantity && form.price) addTx.mutate();
         }}
       >
-        <input className="w-20" placeholder="Ticker" value={form.symbol} onChange={(e) => setForm({ ...form, symbol: e.target.value.toUpperCase() })} />
+        <input className="w-20" placeholder={ui("Ticker")} value={form.symbol} onChange={(e) => setForm({ ...form, symbol: e.target.value.toUpperCase() })} />
         <select value={form.side} onChange={(e) => setForm({ ...form, side: e.target.value })}>
-          <option>BUY</option><option>SELL</option>
+          <option>{ui("BUY")}</option><option>{ui("SELL")}</option>
         </select>
-        <input className="w-20" placeholder="Qty" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} />
-        <input className="w-24" placeholder="Price" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} />
-        <input type="date" aria-label="Trade date UTC" value={form.date} max={new Date().toISOString().slice(0,10)} onChange={(e) => setForm({ ...form, date: e.target.value })} />
-        <button className="term-btn" type="submit">ADD</button>
+        <input className="w-20" placeholder={ui("Qty")} value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} />
+        <input className="w-24" placeholder={ui("Price")} value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} />
+        <input type="date" aria-label={ui("Trade date UTC")} value={form.date} max={new Date().toISOString().slice(0,10)} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+        <button className="term-btn" type="submit">{ui("ADD")}</button>
         {addTx.error && <span className="down">{(addTx.error as Error).message}</span>}
       </form>
 
@@ -107,7 +107,7 @@ export default function PortfolioWidget() {
       {!showTx ? (
         <table className="data-table">
           <thead>
-            <tr><th>Sym</th><th>Qty</th><th>Avg Cost</th><th>Last</th><th>Mkt Val</th><th>Unrl PnL</th><th>Rlzd PnL</th></tr>
+            <tr><th>{ui("Sym")}</th><th>{ui("Qty")}</th><th>{ui("Avg Cost")}</th><th>{ui("Last")}</th><th>{ui("Mkt Val")}</th><th>{ui("Unrl PnL")}</th><th>{ui("Rlzd PnL")}</th></tr>
           </thead>
           <tbody>
             {positions.map((p) => {
@@ -130,7 +130,7 @@ export default function PortfolioWidget() {
       ) : (
         <table className="data-table">
           <thead>
-            <tr><th>Date</th><th>Sym</th><th>Side</th><th>Qty</th><th>Price</th><th></th></tr>
+            <tr><th>{ui("Date")}</th><th>{ui("Sym")}</th><th>{ui("Side")}</th><th>{ui("Qty")}</th><th>{ui("Price")}</th><th></th></tr>
           </thead>
           <tbody>
             {txs.map((t) => (

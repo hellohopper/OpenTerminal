@@ -51,7 +51,24 @@ describe("UI display preferences", () => {
   });
 
   it("ignores invalid saved visibility values and unknown feature types", () => {
-    expect(readDisplayPreferences({ fontSize: Infinity, sidebarVisible: "false", workspaceBarVisible: false, hiddenSidebarFeatures: ["news", "news", "unknown"], hiddenPanels: { first: ["chart", "chart", null, ""], bad: false } })).toEqual({ fontSize: 12, sidebarVisible: true, workspaceBarVisible: false, hiddenSidebarFeatures: ["news"], hiddenPanels: { first: ["chart"] } });
+    expect(readDisplayPreferences({ fontSize: Infinity, sidebarVisible: "false", workspaceBarVisible: false, hiddenSidebarFeatures: ["news", "news", "unknown"], hiddenPanels: { first: ["chart", "chart", null, ""], bad: false } })).toEqual({ language: "en", fontSize: 12, sidebarVisible: true, workspaceBarVisible: false, hiddenSidebarFeatures: ["news"], hiddenPanels: { first: ["chart"] } });
+  });
+
+  it("persists language and preserves it when restoring visibility", async () => {
+    const storage = memoryStorage();
+    const store = createDisplayStore(storage);
+    expect(store.getState().language).toBe("en");
+    store.getState().setLanguage("zh");
+    store.getState().setFontSize(18);
+    store.getState().setSidebarVisible(false);
+    const reloaded = createDisplayStore(storage);
+    await reloaded.persist.rehydrate();
+    expect(reloaded.getState()).toMatchObject({ language: "zh", fontSize: 18, sidebarVisible: false });
+    reloaded.getState().resetVisibility();
+    expect(reloaded.getState()).toMatchObject({ language: "zh", fontSize: 18, sidebarVisible: true });
+    reloaded.getState().setLanguage("en");
+    expect(reloaded.getState().language).toBe("en");
+    expect(readDisplayPreferences({ language: "invalid", fontSize: 16 })).toMatchObject({ language: "en", fontSize: 16 });
   });
 
   it("merges visible panel moves while preserving hidden positions and source data", () => {

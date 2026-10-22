@@ -8,6 +8,7 @@ export { DEFAULT_FONT_SIZE, MIN_FONT_SIZE, MAX_FONT_SIZE } from "../lib/display"
 
 export function createDisplayStore(storage?: StateStorage) {
 return create<DisplayPreferences & {
+  setLanguage: (language: DisplayPreferences["language"]) => void;
   setFontSize: (size: number) => void;
   setSidebarVisible: (visible: boolean) => void;
   setWorkspaceBarVisible: (visible: boolean) => void;
@@ -16,6 +17,7 @@ return create<DisplayPreferences & {
   resetVisibility: () => void;
 }>()(persist((set) => ({
   ...defaultDisplayPreferences(),
+  setLanguage: (language) => set({ language: language === "zh" ? "zh" : "en" }),
   setFontSize: (size) => set({ fontSize: normalizeFontSize(size) }),
   setSidebarVisible: (sidebarVisible) => set({ sidebarVisible }),
   setWorkspaceBarVisible: (workspaceBarVisible) => set({ workspaceBarVisible }),
@@ -32,13 +34,13 @@ return create<DisplayPreferences & {
         : [...new Set([...(state.hiddenPanels[workspaceId] ?? []), ...ids])],
     },
   })),
-  resetVisibility: () => set((state) => ({ ...defaultDisplayPreferences(), fontSize: state.fontSize })),
+  resetVisibility: () => set((state) => ({ ...defaultDisplayPreferences(), fontSize: state.fontSize, language: state.language })),
 }), {
   name: "openterminal-display",
   skipHydration: true,
   storage: createJSONStorage(() => storage ?? localStorage),
-  partialize: ({ fontSize, sidebarVisible, workspaceBarVisible, hiddenSidebarFeatures, hiddenPanels }) =>
-    ({ fontSize, sidebarVisible, workspaceBarVisible, hiddenSidebarFeatures, hiddenPanels }),
+  partialize: ({ language, fontSize, sidebarVisible, workspaceBarVisible, hiddenSidebarFeatures, hiddenPanels }) =>
+    ({ language, fontSize, sidebarVisible, workspaceBarVisible, hiddenSidebarFeatures, hiddenPanels }),
   merge: (saved, current) => ({
     ...current,
     ...readDisplayPreferences(saved),

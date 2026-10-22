@@ -1,4 +1,6 @@
 "use client";
+import { useI18n } from "../../lib/use-i18n";
+
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost } from "../../lib/api";
@@ -13,6 +15,8 @@ function capture(): DeviceSnapshot {
   return readDeviceSnapshot({ format: "openterminal-device", version: 1, workspace: { workspaces: s.workspaces, activeWorkspaceId: s.activeWorkspaceId }, preferences: usePreferences.getState().data, drawings });
 }
 export default function SyncWidget() {
+  const { t: ui } = useI18n();
+
   const [message, setMessage] = useState(""), [busy, setBusy] = useState(false), [confirmed, setConfirmed] = useState(false);
   const [scope, setScope] = useState<"all" | "selected">("all"), [selected, setSelected] = useState<string[]>([]), [preferences, setPreferences] = useState(false);
   const [preview, setPreview] = useState<Preview | null>(null), [savedVersion, setSavedVersion] = useState("");
@@ -64,28 +68,28 @@ export default function SyncWidget() {
   const resetReview = () => { setPreview(null); setConfirmed(false); };
   const choices = new Map([...workspaces, ...(remote.data?.payload.workspace.workspaces ?? [])].map(w => [w.id, w]));
   return <div className="p-2 space-y-3">
-    <p>Review changes before syncing. Selective sync replaces matching workspace IDs and keeps other workspaces. An entire snapshot replaces all layouts, preferences and drawings at the destination.</p>
-    <p className="dim">Portfolios and journals already share the server database. Sessions and notification permissions are excluded. The last 10 server versions are retained.</p>
+    <p>{ui("Review changes before syncing. Selective sync replaces matching workspace IDs and keeps other workspaces. An entire snapshot replaces all layouts, preferences and drawings at the destination.")}</p>
+    <p className="dim">{ui("Portfolios and journals already share the server database. Sessions and notification permissions are excluded. The last 10 server versions are retained.")}</p>
     {(remote.error || history.error) && <p role="alert" className="down">{(remote.error || history.error)?.message}</p>}
-    <p>Server snapshot: {remote.isLoading ? "Loading…" : remote.data?.updatedAt ?? "None"}</p>
-    <label>Sync scope <select aria-label="Sync scope" disabled={busy} value={scope} onChange={e => { setScope(e.target.value as typeof scope); resetReview(); }}><option value="all">Entire snapshot</option><option value="selected">Selected workspaces</option></select></label>
-    {scope === "selected" && <fieldset className="space-y-1 border border-[var(--border)] p-2"><legend>Choose source workspaces</legend>
+    <p>{ui("Server snapshot:")} {remote.isLoading ? ui("Loading…") : remote.data?.updatedAt ?? ui("None")}</p>
+    <label>{ui("Sync scope")} <select aria-label={ui("Sync scope")} disabled={busy} value={scope} onChange={e => { setScope(e.target.value as typeof scope); resetReview(); }}><option value="all">{ui("Entire snapshot")}</option><option value="selected">{ui("Selected workspaces")}</option></select></label>
+    {scope === "selected" && <fieldset className="space-y-1 border border-[var(--border)] p-2"><legend>{ui("Choose source workspaces")}</legend>
       {[...choices.values()].map(w => <label className="block" key={w.id}><input type="checkbox" disabled={busy} checked={selected.includes(w.id)} onChange={e => { setSelected(e.target.checked ? [...selected, w.id] : selected.filter(id => id !== w.id)); resetReview(); }} /> {w.name} <span className="dim">{w.id.slice(0,8)}</span></label>)}
-      <label className="block"><input type="checkbox" disabled={busy} checked={preferences} onChange={e => { setPreferences(e.target.checked); resetReview(); }} /> Also replace shared watchlist groups and screener presets</label>
-      <p className="dim">Only drawings for selected panels are included; drawings shared with an unselected destination workspace are kept. The destination’s active workspace is kept. Choose workspaces present on the source device/server.</p>
+      <label className="block"><input type="checkbox" disabled={busy} checked={preferences} onChange={e => { setPreferences(e.target.checked); resetReview(); }} /> {ui("Also replace shared watchlist groups and screener presets")}</label>
+      <p className="dim">{ui("Only drawings for selected panels are included; drawings shared with an unselected destination workspace are kept. The destination’s active workspace is kept. Choose workspaces present on the source device/server.")}</p>
     </fieldset>}
-    <div className="flex flex-wrap gap-2"><button className="term-btn" disabled={busy || remote.isLoading || !!remote.error} onClick={() => review("upload")}>Upload this device</button><button className="term-btn" disabled={busy || !remote.data} onClick={() => review("download")}>Download to this device</button></div>
-    <details><summary className="amber cursor-pointer">Server version history</summary><p className="dim">Restoring creates a new server revision. Local layouts change only after a download.</p>
-      <label>Saved version <select aria-label="Saved sync version" disabled={busy} value={savedVersion} onChange={e => { setSavedVersion(e.target.value); resetReview(); }}><option value="">Select version…</option>{history.data?.map(v => <option key={v.version} value={v.version}>{v.updatedAt} · {v.version.slice(0,8)}{v.version === remote.data?.version ? " (current)" : ""}</option>)}</select></label>
-      <button className="term-btn" disabled={busy || !savedVersion} onClick={() => review("restore")}>Preview server restore</button>
+    <div className="flex flex-wrap gap-2"><button className="term-btn" disabled={busy || remote.isLoading || !!remote.error} onClick={() => review("upload")}>{ui("Upload this device")}</button><button className="term-btn" disabled={busy || !remote.data} onClick={() => review("download")}>{ui("Download to this device")}</button></div>
+    <details><summary className="amber cursor-pointer">{ui("Server version history")}</summary><p className="dim">{ui("Restoring creates a new server revision. Local layouts change only after a download.")}</p>
+      <label>{ui("Saved version")} <select aria-label={ui("Saved sync version")} disabled={busy} value={savedVersion} onChange={e => { setSavedVersion(e.target.value); resetReview(); }}><option value="">{ui("Select version…")}</option>{history.data?.map(v => <option key={v.version} value={v.version}>{v.updatedAt} · {v.version.slice(0,8)}{v.version === remote.data?.version ? ui(" (current)") : ""}</option>)}</select></label>
+      <button className="term-btn" disabled={busy || !savedVersion} onClick={() => review("restore")}>{ui("Preview server restore")}</button>
     </details>
-    {preview && <section aria-label="Sync change preview" className="border border-[var(--amber-dim)] p-2 space-y-2">
-      <h3 className="amber">{preview.direction === "download" ? "Changes on this device" : "Changes on the server"}</h3>
-      <p className="dim">Compared with server revision {preview.baseVersion?.slice(0,8) ?? "none"}. Changed fields and destination watchlists are listed below.</p>
-      <table className="data-table"><thead><tr><th>Item</th><th>Change</th><th>Details</th></tr></thead><tbody>{describeSyncChanges(preview.before, preview.after).map((c,i) => <tr key={i}><td>{c.name}</td><td className={c.status === "Removed" ? "down" : c.status !== "Unchanged" ? "amber" : "dim"}>{c.status}</td><td className="!whitespace-normal">{c.detail}</td></tr>)}</tbody></table>
-      <label className="block"><input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} /> I reviewed these changes</label>
-      <button className="term-btn" disabled={busy || !confirmed} onClick={apply}>{preview.direction === "upload" ? "Confirm upload" : preview.direction === "download" ? "Confirm download" : "Confirm server restore"}</button>
-      <button className="term-btn" disabled={busy} onClick={resetReview}>Cancel preview</button>
+    {preview && <section aria-label={ui("Sync change preview")} className="border border-[var(--amber-dim)] p-2 space-y-2">
+      <h3 className="amber">{preview.direction === "download" ? ui("Changes on this device") : ui("Changes on the server")}</h3>
+      <p className="dim">{ui("Compared with server revision")} {preview.baseVersion?.slice(0,8) ?? ui("none")}{ui(". Changed fields and destination watchlists are listed below.")}</p>
+      <table className="data-table"><thead><tr><th>{ui("Item")}</th><th>{ui("Change")}</th><th>{ui("Details")}</th></tr></thead><tbody>{describeSyncChanges(preview.before, preview.after).map((c,i) => <tr key={i}><td>{c.name}</td><td className={c.status === "Removed" ? "down" : c.status !== "Unchanged" ? "amber" : "dim"}>{c.status}</td><td className="!whitespace-normal">{c.detail}</td></tr>)}</tbody></table>
+      <label className="block"><input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} /> {ui("I reviewed these changes")}</label>
+      <button className="term-btn" disabled={busy || !confirmed} onClick={apply}>{preview.direction === "upload" ? ui("Confirm upload") : preview.direction === "download" ? ui("Confirm download") : ui("Confirm server restore")}</button>
+      <button className="term-btn" disabled={busy} onClick={resetReview}>{ui("Cancel preview")}</button>
     </section>}
     {message && <p role="status" className="amber">{message}</p>}
   </div>;

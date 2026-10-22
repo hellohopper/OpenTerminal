@@ -1,4 +1,5 @@
 "use client";
+import { useI18n } from "../../lib/use-i18n";
 
 import { useQuery } from "@tanstack/react-query";
 import { apiGet, fmt, fmtBig } from "../../lib/api";
@@ -33,6 +34,8 @@ const CODE_LABEL: Record<string, string> = {
 };
 
 export default function InsiderWidget({ widget }: { widget: WidgetInstance }) {
+  const { t: ui } = useI18n();
+
   const symbol = useWidgetSymbol(widget);
   const { data = [], isLoading, error } = useQuery({
     queryKey: ["insider", symbol],
@@ -40,22 +43,22 @@ export default function InsiderWidget({ widget }: { widget: WidgetInstance }) {
     staleTime: 3_600_000,
   });
 
-  if (error) return <div className="p-2 down">Error: {(error as Error).message}</div>;
-  if (isLoading) return <div className="p-2 dim">Loading insider transactions for {symbol}…</div>;
+  if (error) return <div className="p-2 down">{ui("Error:")} {(error as Error).message}</div>;
+  if (isLoading) return <div className="p-2 dim">{ui("Loading insider transactions for")} {symbol}…</div>;
 
   return (
     <div>
       <table className="data-table">
         <thead>
           <tr>
-            <th>Date</th>
-            <th>Insider</th>
-            <th>Title</th>
-            <th>Type</th>
-            <th>Shares</th>
-            <th>Price</th>
-            <th>Value</th>
-            <th>Owned After</th>
+            <th>{ui("Date")}</th>
+            <th>{ui("Insider")}</th>
+            <th>{ui("Title")}</th>
+            <th>{ui("Type")}</th>
+            <th>{ui("Shares")}</th>
+            <th>{ui("Price")}</th>
+            <th>{ui("Value")}</th>
+            <th>{ui("Owned After")}</th>
           </tr>
         </thead>
         <tbody>
@@ -64,7 +67,7 @@ export default function InsiderWidget({ widget }: { widget: WidgetInstance }) {
               <td className="!text-left dim whitespace-nowrap">{t.transactionDate}</td>
               <td className="!text-left">{t.ownerName}</td>
               <td className="!text-left dim truncate max-w-[140px]" title={t.ownerTitle ?? ""}>
-                {t.ownerTitle ?? (t.isDirector ? "Director" : t.isTenPercentOwner ? "10%+ Owner" : "—")}
+                {t.ownerTitle ?? (t.isDirector ? ui("Director") : t.isTenPercentOwner ? ui("10%+ Owner") : "—")}
               </td>
               <td className={t.acquiredDisposed === "A" ? "up" : t.acquiredDisposed === "D" ? "down" : "dim"}>
                 {CODE_LABEL[t.transactionCode] ?? t.transactionCode}
@@ -77,8 +80,7 @@ export default function InsiderWidget({ widget }: { widget: WidgetInstance }) {
           ))}
           {data.length === 0 && (
             <tr>
-              <td colSpan={8} className="dim p-3">
-                No recent open-market insider transactions for {symbol}.
+              <td colSpan={8} className="dim p-3">{ui("No recent open-market insider transactions for")} {symbol}.
               </td>
             </tr>
           )}

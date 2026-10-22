@@ -5,6 +5,7 @@ export const MIN_FONT_SIZE = 12;
 export const MAX_FONT_SIZE = 20;
 
 export type DisplayPreferences = {
+  language: "en" | "zh";
   fontSize: number;
   sidebarVisible: boolean;
   workspaceBarVisible: boolean;
@@ -13,6 +14,7 @@ export type DisplayPreferences = {
 };
 
 export const defaultDisplayPreferences = (): DisplayPreferences => ({
+  language: "en",
   fontSize: DEFAULT_FONT_SIZE,
   sidebarVisible: true,
   workspaceBarVisible: true,
@@ -38,6 +40,7 @@ export function readDisplayPreferences(value: unknown): DisplayPreferences {
       typeof item === "string" && item.length > 0 && item.length <= 100,
     ))].slice(0, 50)])) : {};
   return {
+    language: saved.language === "zh" ? "zh" : "en",
     fontSize: normalizeFontSize(saved.fontSize),
     sidebarVisible: typeof saved.sidebarVisible === "boolean" ? saved.sidebarVisible : true,
     workspaceBarVisible: typeof saved.workspaceBarVisible === "boolean" ? saved.workspaceBarVisible : true,

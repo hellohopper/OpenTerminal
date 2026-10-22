@@ -1,4 +1,6 @@
 "use client";
+import { useI18n } from "../../lib/use-i18n";
+
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost, apiPut, apiDelete } from "../../lib/api";
@@ -15,6 +17,8 @@ type Schedule = {
   last_generated_at: string | null;
 };
 export default function DeliveryWidget() {
+  const { t: ui } = useI18n();
+
   const watchlist = useTerminal((s) => s.watchlist),
     [symbols, setSymbols] = useState(watchlist.slice(0, 12).join(",")),
     [time, setTime] = useState("08:30"),
@@ -43,17 +47,8 @@ export default function DeliveryWidget() {
   };
   return (
     <div className="p-2 space-y-2">
-      <p>
-        Scheduled briefings run while the API server is online, once per
-        selected local calendar day after the configured time. Missed times
-        catch up later that same day. Reports appear in MY BRIEFING history.
-        Weekdays are calendar days; exchange holidays are included.
-      </p>
-      <p className="dim">
-        Uses the existing market/news sources, without paid AI generation or
-        external messages. For repeating price/day-change/volume notifications,
-        configure ALERTS and its cooldown.
-      </p>
+      <p>{ui("Scheduled briefings run while the API server is online, once per selected local calendar day after the configured time. Missed times catch up later that same day. Reports appear in MY BRIEFING history. Weekdays are calendar days; exchange holidays are included.")} </p>
+      <p className="dim">{ui("Uses the existing market/news sources, without paid AI generation or external messages. For repeating price/day-change/volume notifications, configure ALERTS and its cooldown.")} </p>
       <form
         className="space-y-2"
         onSubmit={(e) => {
@@ -75,28 +70,28 @@ export default function DeliveryWidget() {
         }}
       >
         <input
-          aria-label="Briefing schedule symbols"
+          aria-label={ui("Briefing schedule symbols")}
           value={symbols}
           onChange={(e) => setSymbols(e.target.value)}
           placeholder="AAPL,MSFT"
         />
         <select
-          aria-label="Schedule mode"
+          aria-label={ui("Schedule mode")}
           value={mode}
           onChange={(e) => setMode(e.target.value)}
         >
-          <option value="pre-market">Pre-market</option>
-          <option value="after-close">After-close</option>
+          <option value="pre-market">{ui("Pre-market")}</option>
+          <option value="after-close">{ui("After-close")}</option>
         </select>
         <input
-          aria-label="Schedule local time"
+          aria-label={ui("Schedule local time")}
           type="time"
           required
           value={time}
           onChange={(e) => setTime(e.target.value)}
         />
         <input
-          aria-label="Schedule timezone"
+          aria-label={ui("Schedule timezone")}
           required
           value={zone}
           onChange={(e) => setZone(e.target.value)}
@@ -120,9 +115,7 @@ export default function DeliveryWidget() {
             </label>
           ))}
         </div>
-        <button className="term-btn" disabled={busy}>
-          Save briefing schedule
-        </button>
+        <button className="term-btn" disabled={busy}>{ui("Save briefing schedule")} </button>
       </form>
       <button
         className="term-btn"
@@ -138,9 +131,7 @@ export default function DeliveryWidget() {
             );
           }, "Due schedules checked. Reports are in MY BRIEFING.")
         }
-      >
-        Check due schedules
-      </button>
+      >{ui("Check due schedules")} </button>
       {(message || error) && (
         <p role="status" className="amber">
           {message || error?.message}
@@ -149,10 +140,10 @@ export default function DeliveryWidget() {
       <table className="data-table">
         <thead>
           <tr>
-            <th>Symbols</th>
-            <th>Schedule</th>
-            <th>Last report / error</th>
-            <th>Actions</th>
+            <th>{ui("Symbols")}</th>
+            <th>{ui("Schedule")}</th>
+            <th>{ui("Last report / error")}</th>
+            <th>{ui("Actions")}</th>
           </tr>
         </thead>
         <tbody>
@@ -175,7 +166,7 @@ export default function DeliveryWidget() {
                 </div>
               </td>
               <td>
-                {s.last_generated_at ?? "Not yet"}
+                {s.last_generated_at ?? ui("Not yet")}
                 <div className="amber">{s.last_error}</div>
               </td>
               <td>
@@ -191,7 +182,7 @@ export default function DeliveryWidget() {
                     )
                   }
                 >
-                  {s.enabled ? "Pause schedule" : "Resume schedule"}
+                  {s.enabled ? ui("Pause schedule") : ui("Resume schedule")}
                 </button>
                 <button
                   className="term-btn"
@@ -201,9 +192,7 @@ export default function DeliveryWidget() {
                       "Schedule deleted.",
                     )
                   }
-                >
-                  Delete schedule
-                </button>
+                >{ui("Delete schedule")} </button>
               </td>
             </tr>
           ))}

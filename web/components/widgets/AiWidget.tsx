@@ -1,4 +1,6 @@
 "use client";
+import { useI18n } from "../../lib/use-i18n";
+
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { apiGet, apiPost } from "../../lib/api";
@@ -21,10 +23,11 @@ type Reply = {
 };
 type Msg = { role: "user" | "assistant"; content: string; reply?: Reply };
 function SourceList({ sources }: { sources: Source[] }) {
+  const { t: ui } = useI18n();
+
   return (
     <details className="mt-1">
-      <summary className="dim cursor-pointer">
-        Sources & data ({sources.length})
+      <summary className="dim cursor-pointer">{ui("Sources & data (")}{sources.length})
       </summary>
       {sources.map((s) => (
         <details
@@ -40,12 +43,9 @@ function SourceList({ sources }: { sources: Source[] }) {
               target="_blank"
               rel="noopener noreferrer"
               className="amber underline"
-            >
-              Open source
-            </a>
+            >{ui("Open source")} </a>
           )}
-          <p className="dim">
-            As of: {s.asOf ?? "not supplied"} · Retrieved: {s.retrievedAt}
+          <p className="dim">{ui("As of:")} {s.asOf ?? ui("not supplied")} {ui("· Retrieved:")} {s.retrievedAt}
           </p>
           <pre className="whitespace-pre-wrap break-words text-[10px]">
             {JSON.stringify(s.data, null, 2)}
@@ -85,6 +85,8 @@ export default function AiWidget() {
   return <Assistant key={symbol} symbol={symbol} />;
 }
 function Assistant({ symbol }: { symbol: string }) {
+  const { t: ui } = useI18n();
+
   const [messages, setMessages] = useState<Msg[]>([]),
     [input, setInput] = useState("");
   const [validation, setValidation] = useState("");
@@ -164,17 +166,13 @@ function Assistant({ symbol }: { symbol: string }) {
             type="checkbox"
             checked={includeNews}
             onChange={(e) => setNews(e.target.checked)}
-          />{" "}
-          News
-        </label>
+          />{" "}{ui("News")} </label>
         <label>
           <input
             type="checkbox"
             checked={includeFinancials}
             onChange={(e) => setFinancials(e.target.checked)}
-          />{" "}
-          Financials
-        </label>
+          />{" "}{ui("Financials")} </label>
         <label>
           <input
             type="checkbox"
@@ -183,9 +181,7 @@ function Assistant({ symbol }: { symbol: string }) {
               setNotes(e.target.checked);
               clearConversation();
             }}
-          />{" "}
-          My notes
-        </label>
+          />{" "}{ui("My notes")} </label>
         <label>
           <input
             type="checkbox"
@@ -194,12 +190,10 @@ function Assistant({ symbol }: { symbol: string }) {
               setPortfolio(e.target.checked);
               clearConversation();
             }}
-          />{" "}
-          My portfolio
-        </label>
+          />{" "}{ui("My portfolio")} </label>
         {includePortfolio && (
           <select
-            aria-label="AI portfolio context"
+            aria-label={ui("AI portfolio context")}
             value={portfolioId ?? portfolios[0]?.id ?? ""}
             onChange={(e) => {
               setPortfolioId(Number(e.target.value));
@@ -213,22 +207,12 @@ function Assistant({ symbol }: { symbol: string }) {
             ))}
           </select>
         )}
-        <button className="term-btn" onClick={() => preview.mutate()}>
-          Preview sources
-        </button>
-        <button className="term-btn" onClick={clearConversation}>
-          Clear chat
-        </button>
+        <button className="term-btn" onClick={() => preview.mutate()}>{ui("Preview sources")} </button>
+        <button className="term-btn" onClick={clearConversation}>{ui("Clear chat")} </button>
       </fieldset>
       <div ref={scroll} className="flex-1 overflow-auto p-2 space-y-3 min-h-0">
         {!messages.length && (
-          <p className="dim">
-            Ask about {symbol}. Answers can cite server-fetched quotes, SEC
-            statements and headlines. Personal notes and holdings are shared
-            with the configured AI provider only when selected. Source preview
-            needs no AI key. Changing personal-data selections starts a fresh
-            conversation.
-          </p>
+          <p className="dim">{ui("Ask about")} {symbol}{ui(". Answers can cite server-fetched quotes, SEC statements and headlines. Personal notes and holdings are shared with the configured AI provider only when selected. Source preview needs no AI key. Changing personal-data selections starts a fresh conversation.")} </p>
         )}
         {preview.data && (
           <div>
@@ -243,7 +227,7 @@ function Assistant({ symbol }: { symbol: string }) {
         {messages.map((m, i) => (
           <div key={i}>
             <span className={m.role === "user" ? "amber" : "up"}>
-              {m.role === "user" ? "YOU" : "AI"} ›
+              {m.role === "user" ? ui("YOU") : "AI"} ›
             </span>
             <Answer message={m} />
             {m.reply && (
@@ -261,8 +245,8 @@ function Assistant({ symbol }: { symbol: string }) {
         {(chat.isPending || preview.isPending) && (
           <p className="dim">
             {chat.isPending
-              ? "Gathering evidence and researching…"
-              : "Loading sources…"}
+              ? ui("Gathering evidence and researching…")
+              : ui("Loading sources…")}
           </p>
         )}
         {validation && (
@@ -276,15 +260,12 @@ function Assistant({ symbol }: { symbol: string }) {
           </p>
         )}
         {messages.length >= 19 && (
-          <p className="amber">
-            Conversation limit reached. Clear chat to start a new research
-            question.
-          </p>
+          <p className="amber">{ui("Conversation limit reached. Clear chat to start a new research question.")} </p>
         )}
       </div>
       <div className="flex gap-1 p-1 border-t border-[var(--border)]">
         <input
-          aria-label="AI research question"
+          aria-label={ui("AI research question")}
           className="flex-1 min-w-0"
           maxLength={4000}
           value={input}
@@ -303,9 +284,7 @@ function Assistant({ symbol }: { symbol: string }) {
             messages.length >= 19
           }
           onClick={send}
-        >
-          SEND
-        </button>
+        >{ui("SEND")} </button>
       </div>
     </div>
   );
