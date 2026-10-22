@@ -4,11 +4,21 @@ import { WIDGET_GROUPS } from "./widget-catalog";
 export const DEFAULT_FONT_SIZE = 12;
 export const MIN_FONT_SIZE = 12;
 export const MAX_FONT_SIZE = 20;
+export const REFRESH_INTERVALS = [0, 1000, 5000, 15000, 30000] as const;
+export function normalizeRefreshInterval(value: unknown) {
+  return REFRESH_INTERVALS.includes(value as typeof REFRESH_INTERVALS[number]) ? value as typeof REFRESH_INTERVALS[number] : 5000;
+}
+export function pollingInterval(interval: number, visible: boolean, active = true, minimum = 0): number | false {
+  if (!active || interval === 0) return false;
+  return Math.max(interval, minimum, visible ? 0 : 60_000);
+}
 
 export type DisplayPreferences = {
   language: "en" | "zh";
   fontSize: number;
   density: "compact" | "standard" | "comfortable";
+  refreshInterval: number;
+  hideEmptyQuoteFields: boolean;
   favoriteFeatures: WidgetType[];
   recentFeatures: WidgetType[];
   collapsedGroups: string[];
@@ -22,6 +32,8 @@ export const defaultDisplayPreferences = (): DisplayPreferences => ({
   language: "en",
   fontSize: DEFAULT_FONT_SIZE,
   density: "standard",
+  refreshInterval: 5000,
+  hideEmptyQuoteFields: true,
   favoriteFeatures: [],
   recentFeatures: [],
   collapsedGroups: [],
@@ -52,6 +64,8 @@ export function readDisplayPreferences(value: unknown): DisplayPreferences {
     language: saved.language === "zh" ? "zh" : "en",
     fontSize: normalizeFontSize(saved.fontSize),
     density: saved.density === "compact" || saved.density === "comfortable" ? saved.density : "standard",
+    refreshInterval: normalizeRefreshInterval(saved.refreshInterval),
+    hideEmptyQuoteFields: typeof saved.hideEmptyQuoteFields === "boolean" ? saved.hideEmptyQuoteFields : true,
     favoriteFeatures: WIDGET_TYPES.filter(type => Array.isArray(saved.favoriteFeatures) && saved.favoriteFeatures.includes(type)),
     recentFeatures: Array.isArray(saved.recentFeatures) ? [...new Set(saved.recentFeatures.filter((type): type is WidgetType => WIDGET_TYPES.includes(type)))].slice(0, 5) : [],
     collapsedGroups: WIDGET_GROUPS.filter(group => Array.isArray(saved.collapsedGroups) && saved.collapsedGroups.includes(group)),

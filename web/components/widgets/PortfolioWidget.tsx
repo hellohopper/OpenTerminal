@@ -72,7 +72,7 @@ export default function PortfolioWidget() {
     <div>
       {(deleteError || positionsError) && <p role="alert" className="down p-1">{deleteError || (positionsError as Error)?.message}</p>}
       <div className="flex gap-2 p-1 items-center flex-wrap">
-        <select value={pid ?? ""} onChange={(e) => setPortfolioId(Number(e.target.value))}>
+        <select aria-label={ui("Portfolio account")} value={pid ?? ""} onChange={(e) => setPortfolioId(Number(e.target.value))}>
           {portfolios.map((p) => (
             <option key={p.id} value={p.id}>{p.name}</option>
           ))}
@@ -93,8 +93,8 @@ export default function PortfolioWidget() {
         }}
       >
         <input className="w-20" placeholder={ui("Ticker")} value={form.symbol} onChange={(e) => setForm({ ...form, symbol: e.target.value.toUpperCase() })} />
-        <select value={form.side} onChange={(e) => setForm({ ...form, side: e.target.value })}>
-          <option>{ui("BUY")}</option><option>{ui("SELL")}</option>
+        <select aria-label={ui("Trade side")} value={form.side} onChange={(e) => setForm({ ...form, side: e.target.value })}>
+          <option value="BUY">{ui("BUY")}</option><option value="SELL">{ui("SELL")}</option>
         </select>
         <input className="w-20" placeholder={ui("Qty")} value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} />
         <input className="w-24" placeholder={ui("Price")} value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} />
