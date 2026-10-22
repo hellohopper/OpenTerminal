@@ -5,7 +5,9 @@ import { useQuery } from "@tanstack/react-query";
 import { apiGet, fmt, fmtBig, pctClass, type Quote } from "../../lib/api";
 import { useWidgetSymbol, type WidgetInstance } from "../../store/terminal";
 import Flash from "../Flash";
-import RelativeTime from "../RelativeTime";
+import DataStatus from "../DataStatus";
+import { useAdaptiveRefresh } from "../../lib/use-adaptive-refresh";
+import { useDisplay } from "../../store/display";
 
 type ShortVolume = { date: string; shortVolume: number; shortExemptVolume: number; totalVolume: number; shortVolumePercent: number };
 
@@ -13,20 +15,29 @@ export default function QuoteWidget({ widget }: { widget: WidgetInstance }) {
   const { t: ui, locale } = useI18n();
 
   const symbol = useWidgetSymbol(widget);
-  const { data, error, refetch, isFetching } = useQuery({
+  const polling = useAdaptiveRefresh();
+  const hideEmpty = useDisplay(state => state.hideEmptyQuoteFields);
+  const setHideEmpty = useDisplay(state => state.setHideEmptyQuoteFields);
+  const { data, error, refetch, isFetching, isLoading } = useQuery({
     queryKey: ["quote", symbol],
-    queryFn: async () => (await apiGet<Quote[]>(`/api/quotes?symbols=${encodeURIComponent(symbol)}`))[0],
-    refetchInterval: 1_000,
+    queryFn: async () => {
+      const quote = (await apiGet<Quote[]>(`/api/quotes?symbols=${encodeURIComponent(symbol)}`))[0];
+      if (!quote) throw new Error("No quote returned for this symbol.");
+      return quote;
+    },
+    enabled: polling.active,
+    refetchInterval: polling.interval,
   });
   // FINRA's Reg SHO file only updates once a day (next-morning), so no point polling it fast.
   const { data: shortVol } = useQuery({
     queryKey: ["short-volume", symbol],
     queryFn: () => apiGet<ShortVolume | null>(`/api/short-volume/${encodeURIComponent(symbol)}`),
     staleTime: 3_600_000,
+    enabled: polling.active,
   });
 
-  if (error) return <div role="alert" className="p-2 down">{ui("Error:")} {ui((error as Error).message)} <button className="term-btn" disabled={isFetching} onClick={() => refetch()}>{ui("Retry")}</button></div>;
-  if (!data) return <div className="p-2 dim">{ui("Loading")} {symbol}…</div>;
+  const status = <DataStatus hasData={!!data} loading={isLoading} fetching={isFetching} error={error} stale={data?.stale} updatedAt={Date.parse(data?.retrievedAt ?? "")} onRefresh={refetch} />;
+  if (!data) return <div ref={polling.ref} className="p-2">{status}</div>;
 
   const rows: Array<[string, string, string?]> = [
     ["Open", fmt(data.open)],
@@ -49,7 +60,8 @@ export default function QuoteWidget({ widget }: { widget: WidgetInstance }) {
   ];
 
   return (
-    <div className="p-2">
+    <div ref={polling.ref} className="p-2">
+      {status}
       <div className="quote-head">
         <Flash value={data.price} className="text-xl font-bold">{fmt(data.price)}</Flash>
         <Flash value={data.changePercent} className={`${pctClass(data.changePercent)} text-sm`}>
@@ -59,19 +71,23 @@ export default function QuoteWidget({ widget }: { widget: WidgetInstance }) {
       </div>
       <div className="quote-provenance dim mb-2">
         <span>{[data.exchange, data.currency, data.source].filter(Boolean).join(" · ")}</span>
-        <RelativeTime value={data.retrievedAt} />
         <span className={data.stale ? "amber" : ""}>{ui(data.stale ? "STALE FALLBACK" : "Indicative feed")}</span>
         <details><summary>{ui("Data details")}</summary><div>{ui("Retrieved:")} {data.retrievedAt ? new Date(data.retrievedAt).toLocaleString(locale) : ui("unknown")}<br />{ui("Observed:")} {data.time ? new Date(data.time * 1000).toLocaleString(locale) : ui("not supplied")}</div></details>
       </div>
       <div className="dim text-[11px] mb-2 truncate">{data.name}</div>
-      <div className="quote-fields">
-        {rows.map(([label, value]) => (
+      <label className="quote-empty-toggle dim"><input type="checkbox" checked={hideEmpty} onChange={event => setHideEmpty(event.target.checked)} />{ui("Hide unavailable fields")}</label>
+      <div className="quote-fields" aria-label={ui("Key quote metrics")}>
+        {rows.slice(0, 8).filter(([, value]) => !hideEmpty || value !== "—").map(([label, value]) => (
           <div key={label} className="flex justify-between border-b border-[#161616] py-0.5">
             <span className="dim">{ui(label)}</span>
             <span>{value}</span>
           </div>
         ))}
       </div>
+      {rows.slice(0, 8).every(([, value]) => value === "—") && hideEmpty && <p className="dim">{ui("Key metrics are unavailable from this source.")}</p>}
+      <details className="quote-more"><summary>{ui("More indicators")} · {rows.slice(8).filter(([, value]) => !hideEmpty || value !== "—").length}</summary>
+        <div className="quote-fields">{rows.slice(8).filter(([, value]) => !hideEmpty || value !== "—").map(([label, value]) => <div key={label}><span className="dim">{ui(label)}</span><span>{value}</span></div>)}</div>
+      </details>
     </div>
   );
 }

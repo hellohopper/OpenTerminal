@@ -305,3 +305,10 @@ button.sidebar-group-label { cursor: pointer; }
 .chart-advanced > summary { padding: .35rem .65rem; cursor: pointer; color: var(--text-dim); }
 .chart-advanced[open] { max-height: 45%; overflow: auto; }
 .watchlist-active button[aria-pressed="true"] { color: var(--amber); }
+.data-status { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem .75rem; padding: .5rem; font-size: .8333rem; border-bottom: 1px solid var(--border); margin-bottom: .5rem; }
+.data-status > button { margin-left: auto; flex-shrink: 0; }
+.quote-empty-toggle { display: flex; align-items: center; gap: .5rem; margin-block: .5rem; font-size: .8333rem; }
+.quote-fields { grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr)); column-gap: 1rem; }
+.quote-fields > div > span:last-child { white-space: nowrap; }
+.quote-more { margin-top: .75rem; }
+.quote-more > summary { padding-block: .5rem; color: var(--amber); cursor: pointer; }

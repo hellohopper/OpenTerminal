@@ -61,6 +61,7 @@ import WidgetErrorBoundary from "./WidgetErrorBoundary";
 import { DEFAULT_FONT_SIZE, useDisplay } from "../store/display";
 import { mergeVisibleLayout } from "../lib/display";
 import PanelFrame from "./PanelFrame";
+import { PollingScope } from "../lib/use-adaptive-refresh";
 
 const Grid = WidthProvider(GridLayout);
 
@@ -235,7 +236,7 @@ export default function Workspace({ compact = false }: { compact?: boolean }) {
               </span>
             </div>
             <div className="flex-1 overflow-auto min-h-0">
-              <WidgetErrorBoundary name={widgetTitle(w.type)}><WidgetBody widget={w} /></WidgetErrorBoundary>
+              <PollingScope active={!maximized || maximized === w.id}><WidgetErrorBoundary name={widgetTitle(w.type)}><WidgetBody widget={w} /></WidgetErrorBoundary></PollingScope>
             </div>
           </PanelFrame>
         </div>

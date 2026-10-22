@@ -7,6 +7,8 @@ import { apiGet, fmt, pctClass } from "../../lib/api";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from "recharts";
 import { useTerminal } from "../../store/terminal";
 import Flash from "../Flash";
+import DataStatus from "../DataStatus";
+import { useAdaptiveRefresh } from "../../lib/use-adaptive-refresh";
 import { DEFAULT_FONT_SIZE, useDisplay } from "../../store/display";
 
 type MacroData = {
@@ -20,16 +22,18 @@ type MacroData = {
 export default function MacroWidget() {
   const { t: ui } = useI18n();
 
+  const polling = useAdaptiveRefresh();
   const setActiveSymbol = useTerminal((s) => s.setActiveSymbol);
   const [region, setRegion] = useState<"us" | "eu">("us");
-  const { data, error } = useQuery({
+  const { data, error, isLoading, isFetching, dataUpdatedAt, refetch } = useQuery({
     queryKey: ["macro", region],
     queryFn: () => apiGet<MacroData>(`/api/macro?region=${region}`),
-    refetchInterval: 1_000,
+    enabled: polling.active,
+    refetchInterval: polling.interval,
   });
 
   return (
-    <div>
+    <div ref={polling.ref}>
       <div className="flex gap-1 p-1">
         {(["us", "eu"] as const).map((r) => (
           <button key={r} className={`term-btn ${region === r ? "active" : ""}`} onClick={() => setRegion(r)}>
@@ -37,13 +41,8 @@ export default function MacroWidget() {
           </button>
         ))}
       </div>
-      {error ? (
-        <div className="p-2 down">{ui("Error:")} {(error as Error).message}</div>
-      ) : !data ? (
-        <div className="p-2 dim">{ui("Loading macro data…")}</div>
-      ) : (
-        <MacroBody data={data} region={region} setActiveSymbol={setActiveSymbol} />
-      )}
+      <DataStatus hasData={!!data} loading={isLoading} fetching={isFetching} error={error} updatedAt={dataUpdatedAt} onRefresh={refetch} />
+      {data && <MacroBody data={data} region={region} setActiveSymbol={setActiveSymbol} />}
     </div>
   );
 }

@@ -9,10 +9,13 @@ import { useTerminal } from "../../store/terminal";
 import {quoteQuality} from "../../lib/valuation";
 import SavedControls from "../SavedControls";
 import Flash from "../Flash";
+import DataStatus from "../DataStatus";
+import { useAdaptiveRefresh } from "../../lib/use-adaptive-refresh";
 
 export default function WatchlistWidget() {
   const { t: ui, locale } = useI18n();
 
+  const polling = useAdaptiveRefresh();
   const watchlist = useTerminal((s) => s.watchlist);
   const addToWatchlist = useTerminal((s) => s.addToWatchlist);
   const removeFromWatchlist = useTerminal((s) => s.removeFromWatchlist);
@@ -21,15 +24,15 @@ export default function WatchlistWidget() {
   const [input, setInput] = useState("");
   const [invalid, setInvalid] = useState(false);
 
-  const { data = [] } = useQuery({
+  const { data = [], error, isLoading, isFetching, refetch } = useQuery({
     queryKey: ["watchlist", watchlist.join(",")],
     queryFn: () => apiGet<Quote[]>(`/api/quotes?symbols=${symbolsParam(watchlist)}`),
-    enabled: watchlist.length > 0,
-    refetchInterval: 1_000,
+    enabled: watchlist.length > 0 && polling.active,
+    refetchInterval: polling.interval,
   });
 
   return (
-    <div>
+    <div ref={polling.ref}>
       <SavedControls kind="groups" value={watchlist} onLoad={value=>useTerminal.getState().setWatchlist(value as string[])} />
       <form
         className="flex gap-1 p-1"
@@ -59,6 +62,7 @@ export default function WatchlistWidget() {
         />
         <button className="term-btn" type="submit" aria-label={ui("Add ticker")} title={ui("Add ticker")}>+</button>
       </form>
+      {watchlist.length > 0 ? <DataStatus hasData={data.length > 0} loading={isLoading} fetching={isFetching} error={error} stale={data.some(quote => quote.stale)} updatedAt={Math.min(...data.map(quote => Date.parse(quote.retrievedAt ?? "")).filter(Number.isFinite))} onRefresh={refetch} /> : <p className="p-2 dim">{ui("Your watchlist is empty. Add a symbol above.")}</p>}
       <table className="data-table">
         <thead>
           <tr><th>{ui("Sym")}</th><th>{ui("Last")}</th><th>{ui("Chg%")}</th><th>{ui("Vol")}</th><th>{ui("Actions")}</th></tr>

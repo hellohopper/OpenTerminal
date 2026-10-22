@@ -1,5 +1,6 @@
 "use client";
 import { useI18n } from "../../lib/use-i18n";
+import { useAdaptiveRefresh } from "../../lib/use-adaptive-refresh";
 
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -77,6 +78,7 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
   const [snapshotStatus, setSnapshotStatus] = useState("");
   const [savingSnapshot, setSavingSnapshot] = useState(false);
   const [range, setRange] = useState<Range>("6M");
+  const polling = useAdaptiveRefresh(range === "1D" ? 8_000 : 60_000);
   const [chartType, setChartType] = useState<ChartType>("candles");
   const [active, setActive] = useState<Set<Indicator>>(new Set(["SMA20"]));
   const [legend, setLegend] = useState<Candle | null>(null);
@@ -100,6 +102,18 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
   const viewport = useRef<{ key: string; range: LogicalRange | null } | null>(
     null,
   );
+  const activeRef = useRef(polling.active); activeRef.current = polling.active;
+  useEffect(() => {
+    if (!polling.active) return;
+    const saved = viewport.current;
+    let restoreFrame = 0;
+    const frame = requestAnimationFrame(() => {
+      restoreFrame = requestAnimationFrame(() => {
+        if (saved?.range && containerRef.current?.clientWidth) chartRef.current?.timeScale().setVisibleLogicalRange(saved.range);
+      });
+    });
+    return () => { cancelAnimationFrame(frame); cancelAnimationFrame(restoreFrame); };
+  }, [polling.active]);
   const setTool = (next: DrawTool) => {
     pending.current = null;
     setDrawingMessage("");
@@ -115,7 +129,7 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
     window.addEventListener("keydown", cancel);
     return () => window.removeEventListener("keydown", cancel);
   }, []);
-  const library=useQuery({queryKey:["history-library"],queryFn:()=>apiGet<{active:{payload:{symbol:string;datasetId:number|null}}[]}>("/api/history-library")});
+  const library=useQuery({queryKey:["history-library"],queryFn:()=>apiGet<{active:{payload:{symbol:string;datasetId:number|null}}[]}>("/api/history-library"),enabled:polling.active});
   const selectedHistory=library.data?.active.find(a=>a.payload.symbol===symbol)?.payload.datasetId;
   const { data: candles, error, refetch, isFetching } = useQuery({
     queryKey: ["history", symbol, range,selectedHistory],
@@ -123,7 +137,8 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
       apiGet<Candle[]>(
         `/api/history-library/series/${encodeURIComponent(symbol)}?range=${range}`,
       ),
-    refetchInterval: range === "1D" ? 8_000 : 60_000,
+    enabled: polling.active,
+    refetchInterval: polling.interval,
   });
 
   const comparisons = useQueries({
@@ -133,8 +148,8 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
         apiGet<Candle[]>(
           `/api/history-library/series/${encodeURIComponent(s)}?range=${range}`,
         ),
-      enabled: comparing,
-      refetchInterval: range === "1D" ? 8000 : 60000,
+      enabled: comparing && polling.active,
+      refetchInterval: polling.interval,
     })),
   });
   const comparisonSignature = comparisons.map((q) => q.dataUpdatedAt).join(",");
@@ -513,7 +528,7 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
       chart.timeScale().setVisibleLogicalRange(viewport.current.range);
     else chart.timeScale().fitContent();
     chart.timeScale().subscribeVisibleLogicalRangeChange((visible) => {
-      if (visible) viewport.current = { key: viewportKey, range: visible };
+      if (visible && activeRef.current && el.clientWidth > 0) viewport.current = { key: viewportKey, range: visible };
     });
     return () => {
       removeDrawingListeners();
@@ -545,7 +560,7 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
     });
 
   return (
-    <div className="flex flex-col h-full">
+    <div ref={polling.ref} className="flex flex-col h-full">
       <div className="chart-toolbar" aria-label={ui("Chart controls")}>
         {selectedHistory&&!["1D","5D","1M"].includes(range)&&<span className="amber">{ui("Library version #")}{selectedHistory}</span>}
         {RANGES.map((r) => (
