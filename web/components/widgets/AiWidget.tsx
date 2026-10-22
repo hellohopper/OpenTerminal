@@ -273,7 +273,7 @@ function Assistant({ symbol }: { symbol: string }) {
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.nativeEvent.isComposing) send();
           }}
-          placeholder={`Research ${symbol}…`}
+          placeholder={ui("Research {value}…", { value: symbol })}
         />
         <button
           className="term-btn"

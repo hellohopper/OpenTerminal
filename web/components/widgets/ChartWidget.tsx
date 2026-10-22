@@ -117,7 +117,7 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
   }, []);
   const library=useQuery({queryKey:["history-library"],queryFn:()=>apiGet<{active:{payload:{symbol:string;datasetId:number|null}}[]}>("/api/history-library")});
   const selectedHistory=library.data?.active.find(a=>a.payload.symbol===symbol)?.payload.datasetId;
-  const { data: candles, error } = useQuery({
+  const { data: candles, error, refetch, isFetching } = useQuery({
     queryKey: ["history", symbol, range,selectedHistory],
     queryFn: () =>
       apiGet<Candle[]>(
@@ -261,6 +261,7 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
       crosshair: { mode: 0 },
       timeScale: {
         borderColor: "#262626",
+        lockVisibleTimeRangeOnResize: true,
         timeVisible: range === "1D" || range === "5D",
       },
       rightPriceScale: { borderColor: "#262626" },
@@ -545,8 +546,25 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex gap-1 p-1 flex-wrap shrink-0">
+      <div className="chart-toolbar" aria-label={ui("Chart controls")}>
         {selectedHistory&&!["1D","5D","1M"].includes(range)&&<span className="amber">{ui("Library version #")}{selectedHistory}</span>}
+        {RANGES.map((r) => (
+          <button
+            key={r}
+            className={`term-btn ${range === r ? "active" : ""}`}
+            onClick={() => setRange(r)}
+          >
+            {r}
+          </button>
+        ))}
+        <select aria-label={ui("Chart type")} value={chartType} disabled={comparing} onChange={event => setChartType(event.target.value as ChartType)}>
+          {CHART_TYPES.map(type => <option key={type} value={type}>{ui(type.toUpperCase())}</option>)}
+        </select>
+        <details><summary>{ui("Indicators")} · {active.size}</summary><div className="chart-menu">
+          {INDICATORS.map(ind => <label key={ind}><input type="checkbox" checked={active.has(ind)} disabled={comparing} onChange={() => toggleIndicator(ind)} />{ind}</label>)}
+        </div></details>
+      </div>
+      <details className="chart-advanced shrink-0"><summary>{ui("Comparison & snapshot")}</summary><div className="p-1 space-y-2">
           <button
           className="term-btn"
           disabled={
@@ -580,38 +598,6 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
             }
           }}
         >{ui("JOURNAL SNAPSHOT")} </button>
-        {RANGES.map((r) => (
-          <button
-            key={r}
-            className={`term-btn ${range === r ? "active" : ""}`}
-            onClick={() => setRange(r)}
-          >
-            {r}
-          </button>
-        ))}
-        <span className="w-2" />
-        {CHART_TYPES.map((t) => (
-          <button
-            key={t}
-            disabled={comparing}
-            className={`term-btn ${chartType === t ? "active" : ""}`}
-            onClick={() => setChartType(t)}
-          >
-            {ui(t.toUpperCase())}
-          </button>
-        ))}
-        <span className="w-2" />
-        {INDICATORS.map((ind) => (
-          <button
-            key={ind}
-            disabled={comparing}
-            className={`term-btn ${active.has(ind) ? "active" : ""}`}
-            onClick={() => toggleIndicator(ind)}
-          >
-            {ind}
-          </button>
-        ))}
-      </div>
       <form
         className="flex gap-1 p-1 flex-wrap shrink-0"
         onSubmit={(e) => {
@@ -653,9 +639,10 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
             {comparison.times.length} {ui("shared timestamps")} </span>
         )}
       </form>
+      </div></details>
       {overlayError && (
         <p role="alert" className="down p-1">
-          {overlayError}
+          {ui(overlayError)}
         </p>
       )}
       {comparing && (
@@ -669,7 +656,7 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
             {comparisonLoading
               ? ui("Loading comparison…")
               : comparisonFailed.length
-                ? `Comparison history unavailable: ${comparisonFailed.join(", ")}`
+                ? ui("Comparison history unavailable: {symbols}", { symbols: comparisonFailed.join(", ") })
                 : ui("Not enough shared timestamps to compare these assets.")}
           </p>
         )}
@@ -683,16 +670,16 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
       />
       {snapshotStatus && (
         <p role="status" className="p-1 dim">
-          {snapshotStatus}
+          {ui(snapshotStatus)}
         </p>
       )}
       {error && (
-        <div className="p-2 down">{ui("Error:")} {(error as Error).message}</div>
+        <div role="alert" className="p-2 down">{ui("Error:")} {ui((error as Error).message)} <button className="term-btn" disabled={isFetching} onClick={() => refetch()}>{ui("Retry")}</button></div>
       )}
       <div className="relative flex-1 min-h-0">
         {legend && !comparing && (
           <div className="absolute top-1 left-2 z-10 flex flex-col gap-0.5 text-[11px] pointer-events-none bg-[rgba(10,10,10,0.7)] px-2 py-1 rounded max-w-[95%]">
-            <div className="flex gap-3">
+            <div className="flex gap-3 flex-wrap">
               <span className="dim">
                 O <span className="text-[var(--text)]">{fmt(legend.open)}</span>
               </span>

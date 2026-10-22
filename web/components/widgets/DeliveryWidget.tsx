@@ -100,7 +100,7 @@ export default function DeliveryWidget() {
           {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day, i) => (
             <label key={day} className="mr-2">
               <input
-                aria-label={`Schedule ${day}`}
+                aria-label={ui("Schedule {value}", { value: day })}
                 type="checkbox"
                 checked={days.includes(i)}
                 onChange={(e) =>

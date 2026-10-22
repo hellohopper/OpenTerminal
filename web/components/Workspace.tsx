@@ -60,6 +60,7 @@ import RecapWidget from "./widgets/RecapWidget";
 import WidgetErrorBoundary from "./WidgetErrorBoundary";
 import { DEFAULT_FONT_SIZE, useDisplay } from "../store/display";
 import { mergeVisibleLayout } from "../lib/display";
+import PanelFrame from "./PanelFrame";
 
 const Grid = WidthProvider(GridLayout);
 
@@ -155,14 +156,15 @@ function SymbolTag({ widget, activeSymbol }: { widget: WidgetInstance; activeSym
   }
 
   return (
-    <span
+    <button type="button"
       className="ml-2 text-[var(--text)] cursor-pointer hover:text-[var(--amber)]"
       title={ui("Click to set this widget's ticker")}
+      aria-label={ui("Change panel symbol {symbol}", { symbol: shown })}
       onMouseDown={(e) => e.stopPropagation()}
       onClick={() => setEditing(true)}
     >
       {shown}
-    </span>
+    </button>
   );
 }
 
@@ -171,6 +173,8 @@ export default function Workspace({ compact = false }: { compact?: boolean }) {
 
   const fontSize = useDisplay((state) => state.fontSize);
   const scale = fontSize / DEFAULT_FONT_SIZE;
+  const density = useDisplay(state => state.density);
+  const [maximized, setMaximized] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   useEffect(() => {
@@ -187,6 +191,16 @@ export default function Workspace({ compact = false }: { compact?: boolean }) {
   const toggleLinked = useTerminal((s) => s.toggleLinked);
   const activeSymbol = useTerminal((s) => s.activeSymbol);
   const workspaceId = useTerminal((s) => s.activeWorkspaceId);
+  const lastAddedWidgetId = useTerminal(s => s.lastAddedWidgetId);
+  useEffect(() => {
+    if (!lastAddedWidgetId) return;
+    const frame = requestAnimationFrame(() => {
+      const panel = containerRef.current?.querySelector<HTMLElement>(`[data-panel-id="${CSS.escape(lastAddedWidgetId)}"]`);
+      panel?.scrollIntoView({ block: "center", behavior: "instant" });
+      panel?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [lastAddedWidgetId]);
   const hiddenPanels = useDisplay((state) => state.hiddenPanels);
   const hiddenIds = hiddenPanels[workspaceId] ?? [];
   const visibleWidgets = widgets.filter((widget) => !hiddenIds.includes(widget.id));
@@ -194,29 +208,36 @@ export default function Workspace({ compact = false }: { compact?: boolean }) {
 
   // Reflow only the rendered layout; preserve the user's draggable layout.
   const reflow = compact || (width > 0 && visibleLayout.some((item) => width * item.w / 12 < 300 * scale));
-  const rowHeight = 30 * scale;
+  const rowHeight = 30 * scale * (density === "comfortable" ? 1.2 : density === "compact" ? .9 : 1);
   const symbolAware = new Set(["quote", "chart", "news", "options", "insider", "fundamentals", "journal", "strategy"]);
 
   const panels = visibleWidgets.map((w) => (
-        <div key={w.id} className={reflow ? "reflow-workspace-panel" : undefined} style={reflow ? {
+        <div key={w.id} data-panel-id={w.id} tabIndex={-1} className={reflow ? "reflow-workspace-panel" : undefined} style={reflow ? {
           height: Math.max(360 * scale, (layout.find((item) => item.i === w.id)?.h ?? 12) * (rowHeight + 4 * scale)),
           gridColumn: (layout.find((item) => item.i === w.id)?.w ?? 0) >= 10 ? "1 / -1" : undefined,
         } : undefined}>
-          <div className="terminal-panel">
+          <PanelFrame label={widgetTitle(w.type)} maximized={maximized === w.id} onRestore={() => setMaximized(null)}>
             <div className="panel-title">
               <span>{widgetTitle(w.type)}{symbolAware.has(w.type) && <SymbolTag widget={w} activeSymbol={activeSymbol} />}</span>
               <span className="flex gap-2 items-center">
                 {symbolAware.has(w.type) && <>
                   <button aria-label={ui("Research {symbol}", { symbol: w.linked ? activeSymbol : w.symbol ?? activeSymbol })} onMouseDown={e => e.stopPropagation()} onClick={() => useTerminal.getState().openResearch(w.linked ? activeSymbol : w.symbol ?? activeSymbol)}>{ui("Research")}</button>
-                  <button title={w.linked ? ui("Linked to active symbol (click to unlink)") : ui("Unlinked (click to link)")} onMouseDown={e => e.stopPropagation()} onClick={() => toggleLinked(w.id)} className={w.linked ? "amber" : "dim"}>⛓</button>
+                  <button aria-label={w.linked ? ui("Unlink panel from current symbol") : ui("Link panel to current symbol")} aria-pressed={w.linked} title={w.linked ? ui("Linked to active symbol (click to unlink)") : ui("Unlinked (click to link)")} onMouseDown={e => e.stopPropagation()} onClick={() => toggleLinked(w.id)} className={w.linked ? "amber" : "dim"}>⛓</button>
                 </>}
-                <button aria-label={ui("Remove {name}", { name: widgetTitle(w.type) })} onMouseDown={e => e.stopPropagation()} onClick={() => removeWidget(w.id)} className="dim">✕</button>
+                <button title={ui(maximized === w.id ? "Restore panel size" : "Maximize panel")} aria-label={ui(maximized === w.id ? "Restore {name} panel" : "Maximize {name} panel", { name: widgetTitle(w.type) })} onMouseDown={e => e.stopPropagation()} onClick={() => setMaximized(maximized === w.id ? null : w.id)}>{maximized === w.id ? "⊡" : "⛶"}</button>
+                <details className="panel-actions" onMouseDown={e => e.stopPropagation()}>
+                  <summary title={ui("Panel actions")} aria-label={ui("Actions for {name}", { name: widgetTitle(w.type) })}>⋯</summary>
+                  <div className="panel-action-list">
+                    <button onClick={() => { setMaximized(null); useDisplay.getState().setPanelsVisible(workspaceId, [w.id], false); }}>{ui("Hide panel")}</button>
+                    <button onClick={() => { setMaximized(null); removeWidget(w.id); }}>{ui("Remove panel")}</button>
+                  </div>
+                </details>
               </span>
             </div>
             <div className="flex-1 overflow-auto min-h-0">
               <WidgetErrorBoundary name={widgetTitle(w.type)}><WidgetBody widget={w} /></WidgetErrorBoundary>
             </div>
-          </div>
+          </PanelFrame>
         </div>
   ));
   return <div ref={containerRef} className="workspace-container">{panels.length === 0 ? (

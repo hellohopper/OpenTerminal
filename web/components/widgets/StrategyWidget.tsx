@@ -182,7 +182,7 @@ function Builder({ symbol }: { symbol: string }) {
             <tr key={i}>
               <td>
                 <select
-                  aria-label={`Leg ${i + 1} instrument`}
+                  aria-label={ui("Leg {value} instrument", { value: i + 1 })}
                   value={leg.kind}
                   onChange={(e) =>
                     patch(i, { kind: e.target.value as StrategyLeg["kind"] })
@@ -195,7 +195,7 @@ function Builder({ symbol }: { symbol: string }) {
               </td>
               <td>
                 <select
-                  aria-label={`Leg ${i + 1} side`}
+                  aria-label={ui("Leg {value} side", { value: i + 1 })}
                   value={leg.side}
                   onChange={(e) =>
                     patch(i, { side: e.target.value as StrategyLeg["side"] })
@@ -207,7 +207,7 @@ function Builder({ symbol }: { symbol: string }) {
               </td>
               <td>
                 <input
-                  aria-label={`Leg ${i + 1} strike`}
+                  aria-label={ui("Leg {value} strike", { value: i + 1 })}
                   className="w-20"
                   type="number"
                   min={0}
@@ -219,7 +219,7 @@ function Builder({ symbol }: { symbol: string }) {
               </td>
               <td>
                 <input
-                  aria-label={`Leg ${i + 1} premium`}
+                  aria-label={ui("Leg {value} premium", { value: i + 1 })}
                   className="w-20"
                   type="number"
                   min={0}
@@ -232,7 +232,7 @@ function Builder({ symbol }: { symbol: string }) {
               </td>
               <td>
                 <input
-                  aria-label={`Leg ${i + 1} quantity`}
+                  aria-label={ui("Leg {value} quantity", { value: i + 1 })}
                   className="w-16"
                   type="number"
                   min={1}
@@ -245,7 +245,7 @@ function Builder({ symbol }: { symbol: string }) {
               </td>
               <td>
                 <button
-                  aria-label={`Remove leg ${i + 1}`}
+                  aria-label={ui("Remove leg {value}", { value: i + 1 })}
                   onClick={() => setLegs(legs.filter((_, j) => j !== i))}
                 >
                   ✕

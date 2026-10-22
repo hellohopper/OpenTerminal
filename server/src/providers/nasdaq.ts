@@ -34,9 +34,11 @@ async function nfetch(url: string, signal?: AbortSignal): Promise<any> {
   }
 }
 
-const money = (s: unknown): number | null => {
+export const money = (s: unknown): number | null => {
   if (typeof s !== "string") return null;
-  const n = Number(s.replace(/[$,]/g, ""));
+  const cleaned = s.replace(/[$,]/g, "").trim();
+  if (!/^[+-]?(?:\d+\.?\d*|\.\d+)$/.test(cleaned)) return null;
+  const n = Number(cleaned);
   return isFinite(n) ? n : null;
 };
 
@@ -84,7 +86,7 @@ export async function quote(symbol: string, signal?: AbortSignal): Promise<Quote
   const prevClose = money(info.primaryData?.previousClose) ?? money(summary?.summaryData?.PreviousClose?.value);
   const change = money(info.primaryData?.netChange);
   const pctChange = typeof info.primaryData?.percentageChange === "string"
-    ? Number(info.primaryData.percentageChange.replace(/[%+]/g, ""))
+    ? money(info.primaryData.percentageChange.replace(/%/g, ""))
     : null;
 
   const [dayLow, dayHigh] = (info.keyStats?.dayrange?.value ?? "").split(" - ").map((s: string) => money(s));
@@ -92,7 +94,7 @@ export async function quote(symbol: string, signal?: AbortSignal): Promise<Quote
 
   const marketCap = money(summary?.summaryData?.MarketCap?.value?.replace(/,/g, ""));
   const avgVolume = money(summary?.summaryData?.AverageVolume?.value?.replace(/,/g, ""));
-  const yieldPct = summary?.summaryData?.Yield?.value ? Number(String(summary.summaryData.Yield.value).replace("%", "")) : null;
+  const yieldPct = money(String(summary?.summaryData?.Yield?.value ?? "").replace("%", ""));
 
   return {
     symbol,

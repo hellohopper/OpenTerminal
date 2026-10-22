@@ -20,7 +20,11 @@ import { useTerminal } from "../store/terminal";
 import { useDisplay } from "../store/display";
 
 export default function Terminal() {
-  const { t: ui } = useI18n();
+  const { t: ui, widgetTitle } = useI18n();
+  const lastAddedWidgetId = useTerminal(s => s.lastAddedWidgetId);
+  const lastRemovedPanel = useTerminal(s => s.lastRemovedPanel);
+  const addedPanel = useTerminal(s => s.widgets.find(w => w.id === s.lastAddedWidgetId));
+  const undoAvailable = useTerminal(s => !!s.lastRemovedPanel && s.workspaces.some(w => w.id === s.lastRemovedPanel?.workspaceId && w.widgets.length < 50));
 
   const sidebarVisible = useDisplay((state) => state.sidebarVisible);
   const workspaceBarVisible = useDisplay((state) => state.workspaceBarVisible);
@@ -76,7 +80,7 @@ export default function Terminal() {
       <div className="flex flex-1 overflow-hidden min-h-0">
         {!compact && sidebarVisible && <Sidebar />}
         <main className="flex-1 overflow-auto min-w-0">
-          {!compact || view === "workspace" ? <Workspace key={workspaceId} compact={compact} /> : <section className={`mobile-home mobile-${view} p-2`} aria-label={`Mobile ${view}`}>
+          {!compact || view === "workspace" ? <Workspace key={workspaceId} compact={compact} /> : <section className={`mobile-home mobile-${view} p-2`} aria-label={ui("Mobile {value}", { value: ui(view === "holdings" ? "Holdings" : view === "alerts" ? "Alerts" : "Events") })}>
             <h1 className="amber text-lg mb-2">{view === "holdings" ? ui("Holdings") : view === "alerts" ? ui("Alerts") : ui("Holdings events")}</h1>
             <WidgetErrorBoundary key={view} name={view}>{view === "holdings" ? <PortfolioWidget /> : view === "alerts" ? <AlertsWidget /> : <EventsWidget />}</WidgetErrorBoundary>
           </section>}
@@ -90,6 +94,11 @@ export default function Terminal() {
       {research && <ResearchView key={research} symbol={research} />}
       <CommandPalette />
       <AlertNotifier />
+      {(lastAddedWidgetId && addedPanel || lastRemovedPanel) && <div className="panel-notice" role="status">
+        <span>{lastRemovedPanel ? ui("Removed {name} panel", { name: widgetTitle(lastRemovedPanel.widget.type) }) : ui("Added {name} panel", { name: widgetTitle(addedPanel!.type) })}</span>
+        {lastRemovedPanel && <button className="term-btn" disabled={!undoAvailable} onClick={() => useTerminal.getState().undoRemoveWidget()}>{ui("Undo removal")}</button>}
+        <button aria-label={ui("Dismiss panel notice")} title={ui("Dismiss panel notice")} onClick={() => useTerminal.getState().dismissPanelNotice()}>✕</button>
+      </div>}
     </div>
   );
 }

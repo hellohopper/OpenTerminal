@@ -139,7 +139,7 @@ export default function AlertNotifier() {
               {event.label || `${event.symbol} alert`}
             </strong>
             <button
-              aria-label={`Dismiss alert event ${event.id}`}
+              aria-label={ui("Dismiss alert event {value}", { value: event.id })}
               className="ml-auto dim"
               onClick={() =>
                 setToasts((t) => t.filter((e) => e.id !== event.id))
