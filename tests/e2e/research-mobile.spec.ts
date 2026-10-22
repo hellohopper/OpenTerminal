@@ -66,7 +66,7 @@ test("mobile navigation and command search preserve the desktop layout", async (
   await page.getByRole("button", { name: /search symbols, features/ }).click();
   await page.getByRole("combobox", { name: "Search symbols, features and workspaces" }).fill("> backup");
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("button", { name: "Remove Backup / Restore" })).toBeVisible();
+  await expect(page.getByLabel("Actions for Backup / Restore", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: /search symbols, features/ }).click();
   await page.getByRole("combobox", { name: "Search symbols, features and workspaces" }).fill("@ My workspace");
   await page.keyboard.press("Enter");

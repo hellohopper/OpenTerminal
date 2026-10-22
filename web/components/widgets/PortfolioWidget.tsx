@@ -115,7 +115,7 @@ export default function PortfolioWidget() {
               const last=valued.last,mv=valued.marketValue,upnl=valued.unrealized;
               return (
                 <tr key={p.symbol}>
-                  <td className="font-bold"><button aria-label={`Research ${p.symbol}`} className="amber underline" onClick={() => useTerminal.getState().openResearch(p.symbol)}>{p.symbol}</button></td>
+                  <td className="font-bold"><button aria-label={ui("Research {value}", { value: p.symbol })} className="amber underline" onClick={() => useTerminal.getState().openResearch(p.symbol)}>{p.symbol}</button></td>
                   <td>{fmt(p.quantity, 4)}</td>
                   <td>{fmt(p.avgCost)}</td>
                   <td title={valued.reason??undefined}>{fmt(last)}{valued.reason&&<span className="amber"> ⚠</span>}</td>
@@ -142,6 +142,8 @@ export default function PortfolioWidget() {
                 <td>{fmt(t.price)}</td>
                 <td>
                   <button
+                    aria-label={ui("Delete transaction {id}", { id: t.id })}
+                    title={ui("Delete transaction {id}", { id: t.id })}
                     className="dim hover:text-[var(--down)]"
                     onClick={async () => {
                       try {

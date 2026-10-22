@@ -10,6 +10,10 @@ export function createDisplayStore(storage?: StateStorage) {
 return create<DisplayPreferences & {
   setLanguage: (language: DisplayPreferences["language"]) => void;
   setFontSize: (size: number) => void;
+  setDensity: (density: DisplayPreferences["density"]) => void;
+  toggleFavorite: (type: WidgetType) => void;
+  recordFeatureUsed: (type: WidgetType) => void;
+  toggleGroup: (group: string) => void;
   setSidebarVisible: (visible: boolean) => void;
   setWorkspaceBarVisible: (visible: boolean) => void;
   setSidebarFeaturesVisible: (types: readonly WidgetType[], visible: boolean) => void;
@@ -19,6 +23,10 @@ return create<DisplayPreferences & {
   ...defaultDisplayPreferences(),
   setLanguage: (language) => set({ language: language === "zh" ? "zh" : "en" }),
   setFontSize: (size) => set({ fontSize: normalizeFontSize(size) }),
+  setDensity: (density) => set({ density }),
+  toggleFavorite: (type) => set(state => ({ favoriteFeatures: state.favoriteFeatures.includes(type) ? state.favoriteFeatures.filter(item => item !== type) : [...state.favoriteFeatures, type] })),
+  recordFeatureUsed: (type) => set(state => ({ recentFeatures: [type, ...state.recentFeatures.filter(item => item !== type)].slice(0, 5) })),
+  toggleGroup: (group) => set(state => ({ collapsedGroups: state.collapsedGroups.includes(group) ? state.collapsedGroups.filter(item => item !== group) : [...state.collapsedGroups, group] })),
   setSidebarVisible: (sidebarVisible) => set({ sidebarVisible }),
   setWorkspaceBarVisible: (workspaceBarVisible) => set({ workspaceBarVisible }),
   setSidebarFeaturesVisible: (types, visible) => set((state) => ({
@@ -34,13 +42,13 @@ return create<DisplayPreferences & {
         : [...new Set([...(state.hiddenPanels[workspaceId] ?? []), ...ids])],
     },
   })),
-  resetVisibility: () => set((state) => ({ ...defaultDisplayPreferences(), fontSize: state.fontSize, language: state.language })),
+  resetVisibility: () => set({ sidebarVisible: true, workspaceBarVisible: true, hiddenSidebarFeatures: [], hiddenPanels: {}, collapsedGroups: [] }),
 }), {
   name: "openterminal-display",
   skipHydration: true,
   storage: createJSONStorage(() => storage ?? localStorage),
-  partialize: ({ language, fontSize, sidebarVisible, workspaceBarVisible, hiddenSidebarFeatures, hiddenPanels }) =>
-    ({ language, fontSize, sidebarVisible, workspaceBarVisible, hiddenSidebarFeatures, hiddenPanels }),
+  partialize: ({ language, fontSize, density, favoriteFeatures, recentFeatures, collapsedGroups, sidebarVisible, workspaceBarVisible, hiddenSidebarFeatures, hiddenPanels }) =>
+    ({ language, fontSize, density, favoriteFeatures, recentFeatures, collapsedGroups, sidebarVisible, workspaceBarVisible, hiddenSidebarFeatures, hiddenPanels }),
   merge: (saved, current) => ({
     ...current,
     ...readDisplayPreferences(saved),

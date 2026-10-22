@@ -1,4 +1,5 @@
 import { WIDGET_TYPES, type WidgetType, type LayoutItem } from "./workspaces";
+import { WIDGET_GROUPS } from "./widget-catalog";
 
 export const DEFAULT_FONT_SIZE = 12;
 export const MIN_FONT_SIZE = 12;
@@ -7,6 +8,10 @@ export const MAX_FONT_SIZE = 20;
 export type DisplayPreferences = {
   language: "en" | "zh";
   fontSize: number;
+  density: "compact" | "standard" | "comfortable";
+  favoriteFeatures: WidgetType[];
+  recentFeatures: WidgetType[];
+  collapsedGroups: string[];
   sidebarVisible: boolean;
   workspaceBarVisible: boolean;
   hiddenSidebarFeatures: WidgetType[];
@@ -16,6 +21,10 @@ export type DisplayPreferences = {
 export const defaultDisplayPreferences = (): DisplayPreferences => ({
   language: "en",
   fontSize: DEFAULT_FONT_SIZE,
+  density: "standard",
+  favoriteFeatures: [],
+  recentFeatures: [],
+  collapsedGroups: [],
   sidebarVisible: true,
   workspaceBarVisible: true,
   hiddenSidebarFeatures: [],
@@ -42,6 +51,10 @@ export function readDisplayPreferences(value: unknown): DisplayPreferences {
   return {
     language: saved.language === "zh" ? "zh" : "en",
     fontSize: normalizeFontSize(saved.fontSize),
+    density: saved.density === "compact" || saved.density === "comfortable" ? saved.density : "standard",
+    favoriteFeatures: WIDGET_TYPES.filter(type => Array.isArray(saved.favoriteFeatures) && saved.favoriteFeatures.includes(type)),
+    recentFeatures: Array.isArray(saved.recentFeatures) ? [...new Set(saved.recentFeatures.filter((type): type is WidgetType => WIDGET_TYPES.includes(type)))].slice(0, 5) : [],
+    collapsedGroups: WIDGET_GROUPS.filter(group => Array.isArray(saved.collapsedGroups) && saved.collapsedGroups.includes(group)),
     sidebarVisible: typeof saved.sidebarVisible === "boolean" ? saved.sidebarVisible : true,
     workspaceBarVisible: typeof saved.workspaceBarVisible === "boolean" ? saved.workspaceBarVisible : true,
     hiddenSidebarFeatures: Array.isArray(hiddenSidebarFeatures)

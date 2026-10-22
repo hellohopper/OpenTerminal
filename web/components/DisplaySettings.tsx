@@ -64,13 +64,16 @@ export default function DisplaySettings() {
       {tab === "appearance" && <>
         <label className="block">Language / 语言<select aria-label="Language / 语言" className="block w-full mt-2" value={display.language} onChange={(event) => display.setLanguage(event.target.value === "zh" ? "zh" : "en")}><option value="en" lang="en">English</option><option value="zh" lang="zh-CN">中文</option></select></label>
         <h3 className="amber font-bold">{ui("Font & spacing")}</h3>
+        <label className="block">{ui("Interface density")}<select aria-label={ui("Interface density")} className="block w-full mt-2" value={display.density} onChange={event => display.setDensity(event.target.value as typeof display.density)}>
+          <option value="compact">{ui("Compact")}</option><option value="standard">{ui("Standard")}</option><option value="comfortable">{ui("Comfortable")}</option>
+        </select><span className="dim block mt-1">{ui("Adjust spacing independently of font size.")}</span></label>
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <label htmlFor="terminal-font-size">{ui("Global font size")}</label>
           <output htmlFor="terminal-font-size" className="amber" aria-live="polite">{fontSize}px · {Math.round(fontSize / DEFAULT_FONT_SIZE * 100)}%</output>
         </div>
         <div className="display-size-controls">
           <button className="term-btn" aria-label={ui("Decrease font size")} disabled={fontSize <= MIN_FONT_SIZE} onClick={() => setFontSize(fontSize - 1)}>A−</button>
-          <input id="terminal-font-size" type="range" min={MIN_FONT_SIZE} max={MAX_FONT_SIZE} step={1} value={fontSize} onChange={(e) => setFontSize(Number(e.target.value))} aria-valuetext={`${fontSize} pixels`} />
+          <input id="terminal-font-size" type="range" min={MIN_FONT_SIZE} max={MAX_FONT_SIZE} step={1} value={fontSize} onChange={(e) => setFontSize(Number(e.target.value))} aria-valuetext={ui("Pixels {size}", { size: fontSize })} />
           <button className="term-btn" aria-label={ui("Increase font size")} disabled={fontSize >= MAX_FONT_SIZE} onClick={() => setFontSize(fontSize + 1)}>A+</button>
         </div>
         <div className="display-size-presets">

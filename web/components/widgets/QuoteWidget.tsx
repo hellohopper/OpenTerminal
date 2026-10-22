@@ -5,11 +5,12 @@ import { useQuery } from "@tanstack/react-query";
 import { apiGet, fmt, fmtBig, pctClass, type Quote } from "../../lib/api";
 import { useWidgetSymbol, type WidgetInstance } from "../../store/terminal";
 import Flash from "../Flash";
+import RelativeTime from "../RelativeTime";
 
 type ShortVolume = { date: string; shortVolume: number; shortExemptVolume: number; totalVolume: number; shortVolumePercent: number };
 
 export default function QuoteWidget({ widget }: { widget: WidgetInstance }) {
-  const { t: ui } = useI18n();
+  const { t: ui, locale } = useI18n();
 
   const symbol = useWidgetSymbol(widget);
   const { data, error } = useQuery({
@@ -49,19 +50,21 @@ export default function QuoteWidget({ widget }: { widget: WidgetInstance }) {
 
   return (
     <div className="p-2">
-      <div className="flex items-baseline gap-3 mb-1">
+      <div className="quote-head">
         <Flash value={data.price} className="text-xl font-bold">{fmt(data.price)}</Flash>
         <Flash value={data.changePercent} className={`${pctClass(data.changePercent)} text-sm`}>
           {data.change !== null && data.change >= 0 ? "+" : ""}
           {fmt(data.change)} ({fmt(data.changePercent)}%)
         </Flash>
-        <span className="dim text-[10px] ml-auto">
-          {data.exchange ?? ""} · {data.currency ?? ""} · {data.source}
-          <span className="block dim">{ui("Retrieved:")} {data.retrievedAt??ui("unknown")} {ui("· Observed:")} {data.time?new Date(data.time*1000).toISOString():ui("not supplied")}{data.stale?ui(" · STALE FALLBACK"):ui(" · indicative feed")}</span>
-        </span>
+      </div>
+      <div className="quote-provenance dim mb-2">
+        <span>{[data.exchange, data.currency, data.source].filter(Boolean).join(" · ")}</span>
+        <RelativeTime value={data.retrievedAt} />
+        <span className={data.stale ? "amber" : ""}>{ui(data.stale ? "STALE FALLBACK" : "Indicative feed")}</span>
+        <details><summary>{ui("Data details")}</summary><div>{ui("Retrieved:")} {data.retrievedAt ? new Date(data.retrievedAt).toLocaleString(locale) : ui("unknown")}<br />{ui("Observed:")} {data.time ? new Date(data.time * 1000).toLocaleString(locale) : ui("not supplied")}</div></details>
       </div>
       <div className="dim text-[11px] mb-2 truncate">{data.name}</div>
-      <div className="grid grid-cols-2 gap-x-4">
+      <div className="quote-fields">
         {rows.map(([label, value]) => (
           <div key={label} className="flex justify-between border-b border-[#161616] py-0.5">
             <span className="dim">{ui(label)}</span>

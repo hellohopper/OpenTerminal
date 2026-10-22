@@ -107,7 +107,7 @@ function Side({
         {show && row && (
           <div
             className="dim text-[9px]"
-            title={analytics?.reason ?? undefined}
+            title={analytics?.reason ? ui(analytics.reason) : undefined}
           >
             {analytics?.source ?? ui("IV unavailable")}
           </div>
@@ -118,8 +118,8 @@ function Side({
           <td
             key={c.key}
             className={background}
-            title={analytics?.reason ?? c.title}
-            aria-label={`${c.label}: ${analytics?.greeks ? fmt(analytics.greeks[c.key], c.digits) : "unavailable"}`}
+            title={ui(analytics?.reason ?? c.title)}
+            aria-label={`${c.label}: ${analytics?.greeks ? fmt(analytics.greeks[c.key], c.digits) : ui("unavailable")}`}
           >
             {analytics?.greeks ? fmt(analytics.greeks[c.key], c.digits) : "—"}
           </td>

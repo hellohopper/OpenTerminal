@@ -5,10 +5,15 @@ import { create } from "zustand";
 import { persist, createJSONStorage, type StateStorage } from "zustand/middleware";
 import { readSymbols } from "../lib/preferences";
 import { normalizeSymbol } from "../lib/symbol";
+import { useDisplay } from "./display";
 import { makeWorkspace, readWorkspace, restoreWorkspaces, workspaceName, newId, SIZE_BY_TYPE, MAX_WORKSPACES, type Preset, type SavedWorkspace, type WorkspaceData, type WidgetType, type LayoutItem } from "../lib/workspaces";
 export type { WidgetType, WidgetInstance, LayoutItem } from "../lib/workspaces";
 
 type TerminalState = WorkspaceData & {
+  lastAddedWidgetId: string | null;
+  lastRemovedPanel: { workspaceId: string; widget: import("../lib/workspaces").WidgetInstance; layout: LayoutItem; index: number } | null;
+  undoRemoveWidget: () => void;
+  dismissPanelNotice: () => void;
   workspaces: SavedWorkspace[];
   activeWorkspaceId: string;
   commandOpen: boolean;
@@ -48,7 +53,8 @@ export function createTerminalStore(storage?: StateStorage) {
     };
     return {
       ...initial, workspaces: [initial], activeWorkspaceId: initial.id, commandOpen: false,
-      researchSymbol: null, researchTarget: null, mobileView: "holdings",
+      researchSymbol: null, researchTarget: null, mobileView: "holdings", lastAddedWidgetId: null, lastRemovedPanel: null,
+      dismissPanelNotice: () => set({ lastAddedWidgetId: null, lastRemovedPanel: null }),
       openResearch: (symbol,target) => { const sym = normalizeSymbol(symbol); if (sym) { get().setActiveSymbol(sym); set({ researchSymbol: sym, researchTarget: target??null, commandOpen: false }); if(typeof window!=="undefined")window.history.replaceState(null,"",researchLink(sym,target)); } },
       closeResearch: () => {set({ researchSymbol: null,researchTarget:null });if(typeof window!=="undefined")window.history.replaceState(null,"",window.location.pathname);},
       setMobileView: (mobileView) => set({ mobileView }),
@@ -59,9 +65,21 @@ export function createTerminalStore(storage?: StateStorage) {
         const id = newId();
         const sym = symbol ? normalizeSymbol(symbol) : undefined;
         const maxY = st.layout.reduce((m, l) => Math.max(m, l.y + l.h), 0);
-        return { mobileView: "workspace" as const, ...activePatch(st, { widgets: [...st.widgets, { id, type, ...(sym ? { symbol: sym } : {}), linked: !sym }], layout: [...st.layout, { i: id, x: 0, y: maxY, ...SIZE_BY_TYPE[type] }] }) };
+        useDisplay.getState().recordFeatureUsed(type);
+        return { lastAddedWidgetId: id, lastRemovedPanel: null, mobileView: "workspace" as const, ...activePatch(st, { widgets: [...st.widgets, { id, type, ...(sym ? { symbol: sym } : {}), linked: !sym }], layout: [...st.layout, { i: id, x: 0, y: maxY, ...SIZE_BY_TYPE[type] }] }) };
       }),
-      removeWidget: (id) => set((st) => activePatch(st, { widgets: st.widgets.filter((w) => w.id !== id), layout: st.layout.filter((l) => l.i !== id) })),
+      removeWidget: (id) => set((st) => {
+        const index = st.widgets.findIndex(w => w.id === id), layout = st.layout.find(l => l.i === id);
+        if (index < 0 || !layout) return st;
+        return { lastAddedWidgetId: null, lastRemovedPanel: { workspaceId: st.activeWorkspaceId, widget: st.widgets[index], layout, index }, ...activePatch(st, { widgets: st.widgets.filter(w => w.id !== id), layout: st.layout.filter(l => l.i !== id) }) };
+      }),
+      undoRemoveWidget: () => set(st => {
+        const removed = st.lastRemovedPanel, workspace = st.workspaces.find(w => w.id === removed?.workspaceId);
+        if (!removed || !workspace || workspace.widgets.length >= 50) return st;
+        const widgets = [...workspace.widgets]; widgets.splice(removed.index, 0, removed.widget);
+        const restored = { ...workspace, widgets, layout: [...workspace.layout, removed.layout] };
+        return { ...(st.activeWorkspaceId === workspace.id ? { widgets, layout: restored.layout } : {}), workspaces: st.workspaces.map(w => w.id === workspace.id ? restored : w), lastRemovedPanel: null };
+      }),
       setWidgetSymbol: (id, symbol) => { const sym = normalizeSymbol(symbol); if (sym) set((st) => activePatch(st, { widgets: st.widgets.map((w) => w.id === id ? { ...w, symbol: sym, linked: false } : w) })); },
       toggleLinked: (id) => set((st) => activePatch(st, { widgets: st.widgets.map((w) => w.id === id ? { ...w, linked: !w.linked } : w) })),
       setLayout: (layout) => set((st) => activePatch(st, { layout })),

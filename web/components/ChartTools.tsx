@@ -84,7 +84,7 @@ export default function ChartTools({
           className="term-btn"
           disabled={!drawings.length}
           onClick={() => {
-            if (confirm("Clear drawings for this chart, symbol and range?"))
+            if (confirm(ui("Clear drawings for this chart, symbol and range?")))
               update(() => []);
           }}
         >{ui("Clear drawings")} </button>
@@ -102,12 +102,12 @@ export default function ChartTools({
               <span>
                 {i + 1}.{" "}
                 {d.kind === "horizontal"
-                  ? `Horizontal ${fmt(d.price)}`
-                  : `Trend ${fmt(d.start.price)} → ${fmt(d.end.price)}`}
+                  ? ui("Horizontal {price}", { price: fmt(d.price) })
+                  : ui("Trend {start} → {end}", { start: fmt(d.start.price), end: fmt(d.end.price) })}
               </span>
               <button
                 className="term-btn"
-                aria-label={`Delete drawing ${i + 1}`}
+                aria-label={ui("Delete drawing {value}", { value: i + 1 })}
                 onClick={() =>
                   update((rows) => rows.filter((r) => r.id !== d.id))
                 }
