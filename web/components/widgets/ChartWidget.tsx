@@ -1,4 +1,5 @@
 "use client";
+import { useWidgetSetting } from "../../lib/use-widget-setting";
 import { useI18n } from "../../lib/use-i18n";
 import { useAdaptiveRefresh } from "../../lib/use-adaptive-refresh";
 
@@ -77,18 +78,20 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
   const qc = useQueryClient();
   const [snapshotStatus, setSnapshotStatus] = useState("");
   const [savingSnapshot, setSavingSnapshot] = useState(false);
-  const [range, setRange] = useState<Range>("6M");
+  const [range, setRange] = useWidgetSetting(widget, "chartRange", "6M");
   const polling = useAdaptiveRefresh(range === "1D" ? 8_000 : 60_000);
-  const [chartType, setChartType] = useState<ChartType>("candles");
-  const [active, setActive] = useState<Set<Indicator>>(new Set(["SMA20"]));
+  const [chartType, setChartType] = useWidgetSetting(widget, "chartType", "candles");
+  const [savedIndicators, setSavedIndicators] = useWidgetSetting(widget, "chartIndicators", ["SMA20"]);
+  const active = useMemo(() => new Set(savedIndicators as Indicator[]), [savedIndicators]);
+  const setActive = (update: (previous: Set<Indicator>) => Set<Indicator>) => setSavedIndicators(previous => [...update(new Set(previous as Indicator[]))]);
   const [legend, setLegend] = useState<Candle | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
 
-  const [overlayDraft, setOverlayDraft] = useState("SPY");
-  const [overlaySymbols, setOverlaySymbols] = useState<string[]>([]);
+  const [overlayDraft, setOverlayDraft] = useWidgetSetting(widget, "chartOverlayDraft", "SPY");
+  const [overlaySymbols, setOverlaySymbols] = useWidgetSetting(widget, "chartOverlaySymbols", []);
   const [overlayError, setOverlayError] = useState("");
-  const [compareMode, setCompareMode] = useState(false);
+  const [compareMode, setCompareMode] = useWidgetSetting(widget, "chartCompareMode", false);
   const comparisonSymbols = overlaySymbols.filter((s) => s !== symbol);
   const comparing = compareMode && comparisonSymbols.length > 0;
   const { drawings, update, storageError } = useDrawings(

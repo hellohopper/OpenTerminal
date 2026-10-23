@@ -1,8 +1,9 @@
+import { readPanelSettings, type PanelSettings } from "./panel-settings";
 import { normalizeSymbol } from "./symbol";
 
 export const WIDGET_TYPES = ["quote", "chart", "watchlist", "news", "heatmap", "screener", "crypto", "macro", "options", "portfolio", "ai", "calendar", "insider", "tv", "recap", "comparison", "fundamentals", "journal", "performance", "strategy", "briefing", "alerts", "quality", "backup", "sync", "delivery", "events", "signals", "thesis", "reviews", "rebalance", "filings", "notifications", "tracking", "backtest", "today", "historyLibrary", "valuationLab", "portfolioRisk", "paper", "consolidated", "filingReader", "earningsReview", "researchSearch", "peers", "thesisMonitor", "accountImport", "portfolioGuards", "optionPositions", "walkforward"] as const;
 export type WidgetType = typeof WIDGET_TYPES[number];
-export type WidgetInstance = { id: string; type: WidgetType; symbol?: string; linked: boolean };
+export type WidgetInstance = { id: string; type: WidgetType; symbol?: string; linked: boolean; settings?: PanelSettings };
 export type LayoutItem = { i: string; x: number; y: number; w: number; h: number };
 export type WorkspaceData = { activeSymbol: string; widgets: WidgetInstance[]; layout: LayoutItem[]; watchlist: string[] };
 export type SavedWorkspace = WorkspaceData & { id: string; name: string };
@@ -72,7 +73,7 @@ export function readWorkspace(value: unknown): SavedWorkspace {
     const ownSymbol = w.symbol === undefined ? undefined : typeof w.symbol === "string" ? normalizeSymbol(w.symbol) : null;
     if (ownSymbol === null) throw new Error("Invalid widget symbol.");
     ids.add(w.id);
-    return { id: w.id, type: w.type as WidgetType, linked: w.linked, ...(ownSymbol ? { symbol: ownSymbol } : {}) };
+    return { id: w.id, type: w.type as WidgetType, linked: w.linked, ...(ownSymbol ? { symbol: ownSymbol } : {}), ...(w.settings ? { settings: readPanelSettings(w.settings) } : {}) };
   });
   const placed = new Set<string>();
   const layout = raw.layout.map((value): LayoutItem => {

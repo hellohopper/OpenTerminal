@@ -27,6 +27,8 @@ test("chart controls and panel actions preserve state and support undo and resto
   await settings.getByRole("tab", { name: "Panels", exact: true }).click();
   await settings.getByRole("switch", { name: "Show Chart panel 1", exact: true }).check();
   await settings.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(chart.getByLabel("Chart type", { exact: true })).toHaveValue("line");
+  await expect(chart.getByRole("button", { name: "1Y", exact: true })).toHaveClass(/active/);
   await chart.getByLabel("Actions for Chart", { exact: true }).click();
   await chart.getByRole("button", { name: "Remove panel", exact: true }).click();
   await expect(chart).toHaveCount(0);

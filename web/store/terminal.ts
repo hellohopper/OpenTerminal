@@ -9,6 +9,8 @@ import { useDisplay } from "./display";
 import { makeWorkspace, readWorkspace, restoreWorkspaces, workspaceName, newId, SIZE_BY_TYPE, MAX_WORKSPACES, type Preset, type SavedWorkspace, type WorkspaceData, type WidgetType, type LayoutItem } from "../lib/workspaces";
 export type { WidgetType, WidgetInstance, LayoutItem } from "../lib/workspaces";
 
+import { readPanelSettings, type PanelSettings } from "../lib/panel-settings";
+
 type TerminalState = WorkspaceData & {
   lastAddedWidgetId: string | null;
   lastRemovedPanel: { workspaceId: string; widget: import("../lib/workspaces").WidgetInstance; layout: LayoutItem; index: number } | null;
@@ -28,6 +30,7 @@ type TerminalState = WorkspaceData & {
   addWidget: (type: WidgetType, symbol?: string) => void;
   removeWidget: (id: string) => void;
   setWidgetSymbol: (id: string, symbol: string) => void;
+  setWidgetSetting: <K extends keyof PanelSettings>(id: string, key: K, value: PanelSettings[K]) => void;
   toggleLinked: (id: string) => void;
   setLayout: (layout: LayoutItem[]) => void;
   addToWatchlist: (s: string) => void;
@@ -81,6 +84,7 @@ export function createTerminalStore(storage?: StateStorage) {
         return { ...(st.activeWorkspaceId === workspace.id ? { widgets, layout: restored.layout } : {}), workspaces: st.workspaces.map(w => w.id === workspace.id ? restored : w), lastRemovedPanel: null };
       }),
       setWidgetSymbol: (id, symbol) => { const sym = normalizeSymbol(symbol); if (sym) set((st) => activePatch(st, { widgets: st.widgets.map((w) => w.id === id ? { ...w, symbol: sym, linked: false } : w) })); },
+      setWidgetSetting: (id, key, value) => set(st => activePatch(st, { widgets: st.widgets.map(w => w.id === id ? { ...w, settings: readPanelSettings({ ...w.settings, [key]: value }) } : w) })),
       toggleLinked: (id) => set((st) => activePatch(st, { widgets: st.widgets.map((w) => w.id === id ? { ...w, linked: !w.linked } : w) })),
       setLayout: (layout) => set((st) => activePatch(st, { layout })),
       addToWatchlist: (s) => { const sym = normalizeSymbol(s); if (sym) set((st) => activePatch(st, { watchlist: st.watchlist.includes(sym) || st.watchlist.length >= 200 ? st.watchlist : [...st.watchlist, sym] })); },

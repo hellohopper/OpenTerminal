@@ -312,3 +312,34 @@ button.sidebar-group-label { cursor: pointer; }
 .quote-fields > div > span:last-child { white-space: nowrap; }
 .quote-more { margin-top: .75rem; }
 .quote-more > summary { padding-block: .5rem; color: var(--amber); cursor: pointer; }
+
+/* Labeled fields keep their units and controls together when text grows. */
+.ledger-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: 1rem; }
+.ledger-field { display: flex; flex-direction: column; align-items: stretch; min-width: 0; gap: .4rem; }
+.ledger-field > span { color: var(--text-dim); overflow-wrap: anywhere; }
+.ledger-field input, .ledger-field select, .ledger-field textarea { width: 100%; min-width: 0; max-width: 100%; }
+.ledger-widget fieldset { min-width: 0; }
+.ledger-advanced { border: 1px solid var(--border); padding: .7rem; }
+.ledger-advanced summary { cursor: pointer; color: var(--amber); }
+.ledger-advanced[open] .ledger-field { margin-block: .8rem; }
+.ledger-entry { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; padding-block: .5rem; }
+.visibility-undo { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; width: 100%; }
+.options-panel { min-width: 0; display: flex; flex-direction: column; height: 100%; }
+.options-panel > :not(.option-table-scroll) { flex-shrink: 0; }
+.option-controls { display: flex; flex-wrap: wrap; align-items: center; gap: .8rem; padding: .65rem; }
+.option-controls > label { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+.option-controls input[type="number"] { width: 8rem; max-width: 100%; }
+.option-controls select { max-width: 100%; }
+.option-side-switch { display: flex; align-items: center; flex-wrap: wrap; gap: .6rem; padding: .4rem .65rem; }
+.option-model, .option-notes { padding: .5rem .65rem; border-top: 1px solid var(--border); }
+.option-model summary, .option-notes summary, .option-columns summary { cursor: pointer; color: var(--amber); }
+.option-notes p { padding-block: .5rem; color: var(--text-dim); }
+.option-columns > div { display: flex; flex-wrap: wrap; gap: .8rem; padding-top: .5rem; }
+.option-table-scroll { overflow: auto; min-height: 8rem; flex: 1 1 12rem; isolation: isolate; border-top: 1px solid var(--border); }
+.option-table-scroll:focus-visible { outline: 2px solid var(--amber); outline-offset: -2px; }
+.option-chain thead { position: sticky; top: 0; z-index: 3; background: var(--panel-2); }
+.option-chain .option-strike { position: sticky; left: 0; background: var(--panel-2); z-index: 2; text-align: right; border-right: 1px solid var(--border); }
+.option-chain thead .option-strike { z-index: 4; }
+.option-chain .option-side-heading { text-align: center; color: var(--amber); }
+.option-chain td.option-itm { background: #142016; }
+.option-chain th, .option-chain tbody tr:hover { cursor: default; }

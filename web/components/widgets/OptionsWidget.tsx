@@ -1,8 +1,12 @@
 "use client";
+import DataStatus from "../DataStatus";
+import { useAdaptiveRefresh } from "../../lib/use-adaptive-refresh";
+import { useWidgetSetting } from "../../lib/use-widget-setting";
+import { useDisplay } from "../../store/display";
 import { useI18n } from "../../lib/use-i18n";
 
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { apiGet, fmt, fmtBig } from "../../lib/api";
 import {
   optionAnalytics,
@@ -73,288 +77,115 @@ const COLUMNS: Array<{
     digits: 4,
   },
 ];
-const numberInput = (value: string) => (value.trim() ? Number(value) : NaN);
-function Side({
-  row,
-  analytics,
-  show,
-  put = false,
-}: {
-  row?: OptionRow;
-  analytics?: Analytics;
-  show: boolean;
-  put?: boolean;
-}) {
+const numberInput = (value: string) => value.trim() ? Number(value) : NaN;
+const QUOTE_COLUMNS = [
+  { key: 'last', label: 'Last' }, { key: 'bid', label: 'Bid' }, { key: 'ask', label: 'Ask' },
+  { key: 'volume', label: 'Vol' }, { key: 'oi', label: 'Open interest' }, { key: 'iv', label: 'IV' },
+];
+function Side({ row, analytics, show, columns }: { row?: OptionRow; analytics?: Analytics; show: boolean; columns: string[] }) {
   const { t: ui } = useI18n();
-
-  const background = row?.inTheMoney
-    ? put
-      ? "bg-[#200d0d]"
-      : "bg-[#0d2010]"
-    : "";
   const iv = show ? analytics?.volatility : row?.impliedVolatility;
-  return (
-    <>
-      <td className={background}>{fmt(row?.lastPrice)}</td>
-      <td className={background}>{fmt(row?.bid)}</td>
-      <td className={background}>{fmt(row?.ask)}</td>
-      <td className={background}>{fmtBig(row?.volume)}</td>
-      <td className={background}>
-        {fmtBig(row?.openInterest)} ·{" "}
-        {typeof iv === "number" && Number.isFinite(iv) && iv > 0
-          ? `${fmt(iv * 100, 1)}%`
-          : "—"}
-        {show && row && (
-          <div
-            className="dim text-[9px]"
-            title={analytics?.reason ? ui(analytics.reason) : undefined}
-          >
-            {analytics?.source ?? ui("IV unavailable")}
-          </div>
-        )}
-      </td>
-      {show &&
-        COLUMNS.map((c) => (
-          <td
-            key={c.key}
-            className={background}
-            title={ui(analytics?.reason ?? c.title)}
-            aria-label={`${c.label}: ${analytics?.greeks ? fmt(analytics.greeks[c.key], c.digits) : ui("unavailable")}`}
-          >
-            {analytics?.greeks ? fmt(analytics.greeks[c.key], c.digits) : "—"}
-          </td>
-        ))}
-    </>
-  );
+  const values: Record<string, string> = {
+    last: fmt(row?.lastPrice), bid: fmt(row?.bid), ask: fmt(row?.ask), volume: fmtBig(row?.volume), oi: fmtBig(row?.openInterest),
+    iv: typeof iv === 'number' && Number.isFinite(iv) && iv > 0 ? `${fmt(iv * 100, 1)}%` : '—',
+  };
+  return <>
+    {columns.map(key => <td key={key} className={row?.inTheMoney ? 'option-itm' : ''}>{values[key]}{key === 'iv' && show && row && <div className="dim text-[9px]" title={analytics?.reason ? ui(analytics.reason) : undefined}>{analytics?.source ? ui(analytics.source) : ui('IV unavailable')}</div>}</td>)}
+    {show && COLUMNS.map(column => <td key={column.key} title={ui(analytics?.reason ?? column.title)} aria-label={`${ui(column.label)}: ${analytics?.greeks ? fmt(analytics.greeks[column.key], column.digits) : ui("unavailable")}`}>{analytics?.greeks ? fmt(analytics.greeks[column.key], column.digits) : '—'}</td>)}
+  </>;
 }
 export default function OptionsWidget({ widget }: { widget: WidgetInstance }) {
-  const { t: ui } = useI18n();
-
+  const { t: ui, locale } = useI18n();
   const symbol = useWidgetSymbol(widget);
-  const [selection, setSelection] = useState<{
-    symbol: string;
-    date: string;
-  } | null>(null);
-  const expiry = selection?.symbol === symbol ? selection.date : undefined;
-  const [show, setShow] = useState(false);
-  const [rate, setRate] = useState("0");
-  const [dividend, setDividend] = useState("0");
-  const [override, setOverride] = useState("");
+  const [selection, setSelection] = useWidgetSetting(widget, 'optionExpiry', { symbol: '', date: '' });
+  const expiry = selection.symbol === symbol ? selection.date || undefined : undefined;
+  const [show, setShow] = useWidgetSetting(widget, 'optionGreeks', false);
+  const [rate, setRate] = useWidgetSetting(widget, 'optionRate', '0');
+  const [dividend, setDividend] = useWidgetSetting(widget, 'optionDividend', '0');
+  const [override, setOverride] = useWidgetSetting(widget, 'optionIv', '');
+  const [view, setView] = useWidgetSetting(widget, 'optionView', 'auto');
+  const [columns, setColumns] = useWidgetSetting(widget, 'optionColumns', ['last', 'bid', 'ask', 'iv']);
   const [now, setNow] = useState(() => Date.now());
+  const [width, setWidth] = useState(0);
+  const fontSize = useDisplay(state => state.fontSize);
+  const container = useRef<HTMLDivElement>(null);
+  const polling = useAdaptiveRefresh(20_000);
   useEffect(() => {
-    if (!show) return;
+    const element = container.current;
+    if (!element) return;
+    const observer = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  useEffect(() => {
+    if (!show || !polling.active) return;
     setNow(Date.now());
-    const timer = setInterval(() => setNow(Date.now()), 30000);
+    const timer = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(timer);
-  }, [show]);
-  const { data, error, isLoading } = useQuery({
-    queryKey: ["options", symbol, expiry],
-    queryFn: () =>
-      apiGet<Chain>(
-        `/api/options/${encodeURIComponent(symbol)}${expiry ? `?expiry=${encodeURIComponent(expiry)}` : ""}`,
-      ),
-    refetchInterval: 20_000,
-    retry: 0,
+  }, [show, polling.active]);
+  const query = useQuery({
+    queryKey: ['options', symbol, expiry],
+    queryFn: () => apiGet<Chain>(`/api/options/${encodeURIComponent(symbol)}${expiry ? `?expiry=${encodeURIComponent(expiry)}` : ''}`),
+    enabled: polling.active, refetchInterval: polling.interval, retry: 0,
   });
-  if (error)
-    return (
-      <div className="p-2">
-        <div className="down">{ui("Option chain unavailable for")} {symbol}</div>
-        <div className="dim">{(error as Error).message}</div>
-      </div>
-    );
-  if (isLoading || !data)
-    return <div className="p-2 dim">{ui("Loading option chain…")}</div>;
-  const r = numberInput(rate) / 100,
-    q = numberInput(dividend) / 100,
-    v = override.trim() ? numberInput(override) / 100 : undefined;
-  const validAssumptions =
-    Number.isFinite(r) &&
-    r >= -0.2 &&
-    r <= 1 &&
-    Number.isFinite(q) &&
-    q >= 0 &&
-    q <= 1 &&
-    (v === undefined || (Number.isFinite(v) && v > 0 && v <= 5));
-  const years = expiryYears(data.selectedDate, now);
+  const { data, error, isLoading, isFetching, dataUpdatedAt, refetch } = query;
+  const r = numberInput(rate) / 100, q = numberInput(dividend) / 100, v = override.trim() ? numberInput(override) / 100 : undefined;
+  const validAssumptions = Number.isFinite(r) && r >= -0.2 && r <= 1 && Number.isFinite(q) && q >= 0 && q <= 1 && (v === undefined || (Number.isFinite(v) && v > 0 && v <= 5));
+  const years = expiryYears(data?.selectedDate ?? null, now);
   const byStrike = new Map<number, { call?: OptionRow; put?: OptionRow }>();
-  for (const c of data.calls)
-    if (c.strike !== null)
-      byStrike.set(c.strike, { ...byStrike.get(c.strike), call: c });
-  for (const p of data.puts)
-    if (p.strike !== null)
-      byStrike.set(p.strike, { ...byStrike.get(p.strike), put: p });
+  for (const call of data?.calls ?? []) if (call.strike !== null) byStrike.set(call.strike, { ...byStrike.get(call.strike), call });
+  for (const put of data?.puts ?? []) if (put.strike !== null) byStrike.set(put.strike, { ...byStrike.get(put.strike), put });
   const strikes = [...byStrike.keys()].sort((a, b) => a - b);
-  function analyze(
-    row: OptionRow | undefined,
-    kind: "call" | "put",
-  ): Analytics | undefined {
+  const resolvedView = view === 'auto' ? (width / fontSize < 75 ? 'calls' : 'both') : view;
+  const sides = resolvedView === 'both' ? ['calls', 'puts'] as const : [resolvedView] as ('calls' | 'puts')[];
+  const visibleColumns = QUOTE_COLUMNS.filter(c => columns.includes(c.key));
+  const columnCount = visibleColumns.length + (show ? COLUMNS.length : 0);
+  function analyze(row: OptionRow | undefined, kind: 'call' | 'put'): Analytics | undefined {
     if (!show || !row) return;
-    if (!validAssumptions)
-      return {
-        greeks: null,
-        volatility: null,
-        source: null,
-        reason: "Invalid model assumptions.",
-      };
-    return optionAnalytics(
-      {
-        kind,
-        spot: data!.underlyingPrice ?? NaN,
-        strike: row.strike ?? NaN,
-        years: years ?? NaN,
-        rate: r,
-        dividend: q,
-      },
-      row,
-      v,
-    );
+    if (!validAssumptions) return { greeks: null, volatility: null, source: null, reason: 'Invalid model assumptions.' };
+    return optionAnalytics({ kind, spot: data?.underlyingPrice ?? NaN, strike: row.strike ?? NaN, years: years ?? NaN, rate: r, dividend: q }, row, v);
   }
-  const headings = (
-    <>
-      <th>{ui("Last")}</th>
-      <th>{ui("Bid")}</th>
-      <th>{ui("Ask")}</th>
-      <th>{ui("Vol")}</th>
-      <th>{ui("OI · IV")}</th>
-      {show &&
-        COLUMNS.map((c) => (
-          <th key={c.key} title={c.title}>
-            {c.label}
-          </th>
-        ))}
-    </>
-  );
-  return (
-    <div>
-      <div className="flex gap-2 items-center p-1 flex-wrap">
-        <span className="dim">{ui("Underlying")}</span>
-        <span className="amber font-bold">{fmt(data.underlyingPrice)}</span>
-        <label className="dim ml-2">{ui("Expiry")}{" "}
-          <select
-            aria-label={ui("Option expiry")}
-            value={data.selectedDate ?? ""}
-            onChange={(e) => setSelection({ symbol, date: e.target.value })}
-          >
-            {data.expirationDates.map((d) => (
-              <option key={d} value={d}>
-                {d}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="ml-2">
-          <input
-            type="checkbox"
-            checked={show}
-            onChange={(e) => setShow(e.target.checked)}
-          />{" "}{ui("Show Greeks")} </label>
+  return <div ref={container} className="options-panel">
+    <div ref={polling.ref}><DataStatus hasData={!!data} loading={isLoading} fetching={isFetching} error={error} updatedAt={dataUpdatedAt} onRefresh={refetch} /></div>
+    {data && <>
+      <div className="option-controls">
+        <span>{ui('Underlying')} <strong className="amber">{fmt(data.underlyingPrice)}</strong></span>
+        <label>{ui('Expiry')} <select aria-label={ui('Option expiry')} value={data.selectedDate ?? ''} onChange={e => setSelection({ symbol, date: e.target.value })}>{data.expirationDates.map(date => <option key={date} value={date}>{date}</option>)}</select></label>
+        <label>{ui('Option view')} <select aria-label={ui('Option view')} value={view} onChange={e => setView(e.target.value as typeof view)}><option value="auto">{ui('Automatic')}</option><option value="both">{ui('Calls and puts')}</option><option value="calls">{ui('Calls only')}</option><option value="puts">{ui('Puts only')}</option></select></label>
+        <label><input type="checkbox" checked={show} onChange={e => setShow(e.target.checked)} /> {ui('Show Greeks')}</label>
+        <details className="option-columns"><summary>{ui('Option columns')}</summary><div>{QUOTE_COLUMNS.map(column => <label key={column.key}><input type="checkbox" checked={columns.includes(column.key)} disabled={columns.length === 1 && columns.includes(column.key)} onChange={e => setColumns(previous => e.target.checked ? [...previous, column.key] : previous.filter(key => key !== column.key))} /> {ui(column.label)}</label>)}</div></details>
       </div>
-      {show && (
-        <div className="p-1 space-y-1">
-          <div className="flex gap-2 flex-wrap">
-            <label>{ui("Rate %")}{" "}
-              <input
-                className="w-20"
-                aria-label={ui("Risk-free rate percent")}
-                type="number"
-                step="any"
-                min="-20"
-                max="100"
-                value={rate}
-                onChange={(e) => setRate(e.target.value)}
-              />
-            </label>
-            <label>{ui("Dividend %")}{" "}
-              <input
-                className="w-20"
-                aria-label={ui("Dividend yield percent")}
-                type="number"
-                step="any"
-                min="0"
-                max="100"
-                value={dividend}
-                onChange={(e) => setDividend(e.target.value)}
-              />
-            </label>
-            <label>{ui("IV override %")}{" "}
-              <input
-                className="w-24"
-                aria-label={ui("IV override percent")}
-                type="number"
-                step="any"
-                min="0.0001"
-                max="500"
-                placeholder={ui("Auto")}
-                value={override}
-                onChange={(e) => setOverride(e.target.value)}
-              />
-            </label>
-            <button
-              className="term-btn"
-              onClick={() => {
-                setRate("0");
-                setDividend("0");
-                setOverride("");
-              }}
-            >{ui("Reset model")} </button>
-          </div>
-          {!validAssumptions && (
-            <p role="alert" className="down">{ui("Enter rate −20% to 100%, dividend 0% to 100%, and optional IV greater than 0% up to 500%. Blank rate/dividend is invalid.")} </p>
-          )}
-          {years === null && (
-            <p role="status" className="amber">{ui("Greeks unavailable: expiration is missing, expired or outside the model’s 20-year horizon.")} </p>
-          )}
-          {(!Number.isFinite(data.underlyingPrice) ||
-            !data.underlyingPrice ||
-            data.underlyingPrice <= 0) && (
-            <p role="status" className="amber">{ui("Greeks unavailable: valid underlying price is missing.")} </p>
-          )}
-          <p className="dim text-[10px]">{ui("European Black-Scholes estimate; American early exercise and discrete dividends are excluded. Rate and dividend are annual continuous assumptions (default 0%, not live rates). IV: user override → provider → valid bid/ask midpoint fit; no last-trade fallback.")} </p>
-          <p className="dim text-[10px]">{ui("Per underlying unit, not contract: Δ/Γ per 1 price unit, Θ per calendar day, Vega/Rho per 1 percentage point. ACT/365; expiry assumed 16:00 New York (DST-aware), not AM settlement or early closes.")}{" "}
-            {years !== null ? `${fmt(years * 365, 3)} days remaining · ` : ""}{ui("Model as of")} {new Date(now).toISOString()}{ui(". Missing inputs or unsolvable IV show —; hover for details. Quotes may be delayed.")} </p>
-        </div>
-      )}
-      <div className="overflow-x-auto">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th
-                colSpan={5 + (show ? COLUMNS.length : 0)}
-                className="!text-center up"
-              >{ui("CALLS")} </th>
-              <th className="!text-center">{ui("STRIKE")}</th>
-              <th
-                colSpan={5 + (show ? COLUMNS.length : 0)}
-                className="!text-center down"
-              >{ui("PUTS")} </th>
-            </tr>
-            <tr>
-              {headings}
-              <th></th>
-              {headings}
-            </tr>
-          </thead>
-          <tbody>
-            {strikes.map((strike) => {
-              const { call, put } = byStrike.get(strike)!;
-              return (
-                <tr key={strike}>
-                  <Side
-                    row={call}
-                    analytics={analyze(call, "call")}
-                    show={show}
-                  />
-                  <td className="!text-center font-bold amber">
-                    {fmt(strike)}
-                  </td>
-                  <Side row={put} put analytics={analyze(put, "put")} show={show} />
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      {resolvedView !== 'both' && <div className="option-side-switch" role="group" aria-label={ui('Option side')}>
+        <button className={`term-btn ${resolvedView === 'calls' ? 'active' : ''}`} aria-pressed={resolvedView === 'calls'} onClick={() => setView('calls')}>{ui('CALLS')}</button>
+        <button className={`term-btn ${resolvedView === 'puts' ? 'active' : ''}`} aria-pressed={resolvedView === 'puts'} onClick={() => setView('puts')}>{ui('PUTS')}</button>
+        {view === 'auto' && <span className="dim">{ui('Single-side view fits this panel. Switch sides above.')}</span>}
+      </div>}
+      {show && <details className="option-model" open><summary>{ui('Model assumptions')}</summary><div className="option-controls">
+        <label>{ui('Rate %')} <input aria-label={ui('Risk-free rate percent')} type="number" step="any" min="-20" max="100" value={rate} onChange={e => setRate(e.target.value)} /></label>
+        <label>{ui('Dividend %')} <input aria-label={ui('Dividend yield percent')} type="number" step="any" min="0" max="100" value={dividend} onChange={e => setDividend(e.target.value)} /></label>
+        <label>{ui('IV override %')} <input aria-label={ui('IV override percent')} type="number" step="any" min="0.0001" max="500" placeholder={ui('Auto')} value={override} onChange={e => setOverride(e.target.value)} /></label>
+        <button className="term-btn" onClick={() => { setRate('0'); setDividend('0'); setOverride(''); }}>{ui('Reset model')}</button>
       </div>
-    </div>
-  );
+      {!validAssumptions && <p role="alert" className="down">{ui('Enter rate −20% to 100%, dividend 0% to 100%, and optional IV greater than 0% up to 500%. Blank rate/dividend is invalid.')}</p>}
+      {years === null && <p role="status" className="amber">{ui('Greeks unavailable: expiration is missing, expired or outside the model’s 20-year horizon.')}</p>}
+      {(!data.underlyingPrice || !Number.isFinite(data.underlyingPrice) || data.underlyingPrice <= 0) && <p role="status" className="amber">{ui('Greeks unavailable: valid underlying price is missing.')}</p>}
+      <p className="dim">{ui('Model as of')} {new Date(now).toLocaleString(locale)}</p>
+      </details>}
+      {show && <details className="option-notes"><summary>{ui('Model methodology and units')}</summary>
+        <p>{ui('European Black-Scholes estimate; American early exercise and discrete dividends are excluded. Rate and dividend are annual continuous assumptions (default 0%, not live rates). IV: user override → provider → valid bid/ask midpoint fit; no last-trade fallback.')}</p>
+        <p>{ui('Per underlying unit, not contract: Δ/Γ per 1 price unit, Θ per calendar day, Vega/Rho per 1 percentage point. ACT/365; expiry assumed 16:00 New York (DST-aware), not AM settlement or early closes.')}</p>
+        <p>{ui('Missing inputs or unsolvable IV show —; hover for details. Quotes may be delayed.')}</p>
+      </details>}
+      <div className="option-table-scroll" tabIndex={0} role="region" aria-label={ui('Option chain table')}>
+        <table className="data-table option-chain"><thead>
+          <tr><th rowSpan={2} className="option-strike">{ui('STRIKE')}</th>{sides.map(side => <th key={side} colSpan={columnCount} className="option-side-heading">{ui(side === 'calls' ? 'CALLS' : 'PUTS')}</th>)}</tr>
+          <tr>{sides.map(side => <Fragment key={side}>{visibleColumns.map(column => <th key={column.key}>{ui(column.label)}</th>)}{show && COLUMNS.map(column => <th key={column.key} title={ui(column.title)}>{ui(column.label)}</th>)}</Fragment>)}</tr>
+        </thead><tbody>{strikes.map(strike => {
+          const row = byStrike.get(strike)!;
+          return <tr key={strike}><td className="option-strike amber">{fmt(strike)}</td>{sides.map(side => <Side key={side} row={side === 'calls' ? row.call : row.put} analytics={analyze(side === 'calls' ? row.call : row.put, side === 'calls' ? 'call' : 'put')} columns={visibleColumns.map(c => c.key)} show={show} />)}</tr>;
+        })}</tbody></table>
+        {strikes.length === 0 && <p className="p-2 dim">{ui('No contracts available for this expiry.')}</p>}
+      </div>
+    </>}
+  </div>;
 }
