@@ -1,8 +1,8 @@
 "use client";
+import { useWidgetSetting } from "../../lib/use-widget-setting";
 import { useI18n } from "../../lib/use-i18n";
 
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
 import { apiGet } from "../../lib/api";
 import { isSafeHttpUrl } from "../../lib/links";
 import { useTerminal, useWidgetSymbol, type WidgetInstance } from "../../store/terminal";
@@ -12,9 +12,9 @@ export default function NewsWidget({ widget }: { widget: WidgetInstance }) {
   const { t: ui, locale } = useI18n();
 
   const symbol = useWidgetSymbol(widget);
-  const [mode, setMode] = useState<"symbol" | "global">("symbol");
-  const [articlesOnly, setArticlesOnly] = useState(true);
-  const [filter, setFilter] = useState("");
+  const [mode, setMode] = useWidgetSetting(widget, "newsMode", "symbol");
+  const [articlesOnly, setArticlesOnly] = useWidgetSetting(widget, "newsArticlesOnly", true);
+  const [filter, setFilter] = useWidgetSetting(widget, "newsFilter", "");
 
   const { data = [], isLoading, error, refetch } = useQuery({
     queryKey: ["news", mode, symbol],

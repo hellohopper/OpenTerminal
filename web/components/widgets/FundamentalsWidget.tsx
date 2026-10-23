@@ -1,8 +1,8 @@
 "use client";
+import { useWidgetSetting } from "../../lib/use-widget-setting";
 import { useI18n } from "../../lib/use-i18n";
 
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
 import { apiGet, fmt, fmtBig } from "../../lib/api";
 import { useWidgetSymbol, type WidgetInstance } from "../../store/terminal";
 import AnalysisChart from "../AnalysisChart";
@@ -13,7 +13,7 @@ export default function FundamentalsWidget({ widget }: { widget: WidgetInstance 
   const { t: ui } = useI18n();
 
   const symbol = useWidgetSymbol(widget);
-  const [frequency, setFrequency] = useState("quarterly");
+  const [frequency, setFrequency] = useWidgetSetting(widget, "fundamentalFrequency", "quarterly");
   const { data, error, isLoading } = useQuery({ queryKey: ["fundamentals", symbol, frequency], queryFn: () => apiGet<Financials>(`/api/fundamentals/${encodeURIComponent(symbol)}?frequency=${frequency}`), staleTime: 3600000 });
   const cell = (value: Value | null) => value ? <a href={value.filingUrl} target="_blank" rel="noopener noreferrer" title={ui("Filed {date}", { date: value.filed }) + (value.derived ? ui("; quarter derived from cumulative disclosures") : "")} className="underline decoration-dotted">{fmtBig(value.value)}{value.derived ? "*" : ""}</a> : "—";
   return <div className="p-2 space-y-2"><div className="flex gap-2 items-center"><span className="amber">{data?.name ?? symbol}</span><select aria-label={ui("Financial statement frequency")} value={frequency} onChange={(e) => setFrequency(e.target.value)}><option value="quarterly">{ui("Quarterly")}</option><option value="annual">{ui("Annual")}</option></select></div>

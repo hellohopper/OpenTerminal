@@ -101,7 +101,7 @@ function WidgetBody({ widget }: { widget: WidgetInstance }) {
     case "performance": return <PerformanceWidget />;
     case "journal": return <JournalWidget widget={widget} />;
     case "fundamentals": return <FundamentalsWidget widget={widget} />;
-    case "comparison": return <ComparisonWidget />;
+    case "comparison": return <ComparisonWidget widget={widget} />;
     case "quote": return <QuoteWidget widget={widget} />;
     case "chart": return <ChartWidget widget={widget} />;
     case "watchlist": return <WatchlistWidget />;

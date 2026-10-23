@@ -1,0 +1,133 @@
+import { test, expect, type Page } from '@playwright/test';
+import { signIn, blank } from './helpers';
+const expiry = ['2027-06-18', '2027-12-17'];
+const row = { strike: 100, lastPrice: 5, bid: 4, ask: 6, volume: 123, openInterest: 456, impliedVolatility: .25, inTheMoney: true };
+async function settings(page: Page) {
+  await page.getByRole('button', { name: 'UI settings', exact: true }).click();
+  return page.getByRole('dialog', { name: 'UI settings', exact: true });
+}
+async function optionFixture(page: Page) {
+  await page.route('**/api/options/**', route => route.fulfill({ json: { symbol: 'AAPL', underlyingPrice: 110, expirationDates: expiry, selectedDate: new URL(route.request().url()).searchParams.get('expiry') ?? expiry[0], calls: [row], puts: [{ ...row, lastPrice: 7 }] } }));
+}
+
+test('panel choices survive hiding, large-font reflow and reload independently for each panel', async ({ page }) => {
+  await optionFixture(page); await signIn(page); await blank(page, 'Retained panel choices');
+  await page.getByRole('button', { name: /^OPTIONS/ }).click();
+  let option = page.getByRole('region', { name: 'Option Chain', exact: true }).first();
+  await option.getByLabel('Option expiry', { exact: true }).selectOption(expiry[1]);
+  await option.getByLabel('Show Greeks', { exact: true }).check();
+  await option.getByLabel('Risk-free rate percent', { exact: true }).fill('4.5');
+  await option.getByLabel('Option view', { exact: true }).selectOption('puts');
+  await option.locator('summary').filter({ hasText: 'Option columns' }).click();
+  await option.getByRole('checkbox', { name: 'Ask', exact: true }).uncheck();
+  await page.getByRole('button', { name: /^OPTIONS/ }).click();
+  await expect(page.getByRole('region', { name: 'Option Chain', exact: true }).nth(1).getByLabel('Show Greeks', { exact: true })).not.toBeChecked();
+  await page.getByRole('button', { name: 'COMPARE', exact: true }).click();
+  const comparison = page.getByRole('region', { name: 'Comparison', exact: true });
+  await comparison.getByLabel('Comparison symbols', { exact: true }).fill('MSFT,SPY');
+  await comparison.getByLabel('Comparison range', { exact: true }).selectOption('1Y');
+  await comparison.getByRole('button', { name: 'Compare', exact: true }).click();
+  await option.getByLabel('Actions for Option Chain', { exact: true }).click();
+  await option.getByRole('button', { name: 'Hide panel', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Option Chain', exact: true })).toHaveCount(1);
+  let dialog = await settings(page);
+  await dialog.getByRole('tab', { name: 'Panels', exact: true }).click();
+  await dialog.getByRole('switch', { name: 'Show Option Chain panel 1', exact: true }).check();
+  await dialog.getByRole('tab', { name: 'Appearance', exact: true }).click();
+  await dialog.getByRole('button', { name: '20px', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Done', exact: true }).click();
+  await expect(option.getByLabel('Option expiry', { exact: true })).toHaveValue(expiry[1]);
+  await expect(option.getByLabel('Risk-free rate percent', { exact: true })).toHaveValue('4.5');
+  await page.reload();
+  option = page.getByRole('region', { name: 'Option Chain', exact: true }).first();
+  await expect(comparison.getByLabel('Comparison symbols', { exact: true })).toHaveValue('MSFT,SPY');
+  await expect(comparison.getByLabel('Comparison range', { exact: true })).toHaveValue('1Y');
+  await expect(option.getByLabel('Option view', { exact: true })).toHaveValue('puts');
+  await expect(option.getByLabel('Risk-free rate percent', { exact: true })).toHaveValue('4.5');
+  await expect(option.getByLabel('Option expiry', { exact: true })).toHaveValue(expiry[1]);
+  await option.locator('summary').filter({ hasText: 'Option columns' }).click();
+  await expect(option.getByRole('checkbox', { name: 'Ask', exact: true })).not.toBeChecked();
+});
+
+test('option refresh errors retain cached contracts and retry without losing view controls', async ({ page }) => {
+  let fail = false;
+  await page.route('**/api/options/**', route => fail ? route.fulfill({ status: 503, json: { error: 'Fixture options offline' } }) : route.fulfill({ json: { symbol: 'AAPL', underlyingPrice: 110, expirationDates: expiry, selectedDate: expiry[0], calls: [row], puts: [row] } }));
+  await signIn(page); await blank(page, 'Option recovery');
+  const dialog = await settings(page);
+  await dialog.getByLabel('Automatic data refresh', { exact: true }).selectOption('0');
+  await dialog.getByRole('button', { name: 'Done', exact: true }).click();
+  await page.getByRole('button', { name: /^OPTIONS/ }).click();
+  const option = page.getByRole('region', { name: 'Option Chain', exact: true });
+  await expect(option.locator('tbody tr')).toHaveCount(1);
+  await option.getByLabel('Option view', { exact: true }).selectOption('both');
+  await expect(option.locator('.option-side-heading')).toHaveCount(2);
+  fail = true;
+  await option.getByRole('button', { name: 'Refresh data', exact: true }).click();
+  await expect(option.getByRole('alert')).toContainText('Refresh failed. Showing last available data.');
+  await expect(option.locator('tbody tr')).toHaveCount(1);
+  await expect(option.getByLabel('Option view', { exact: true })).toHaveValue('both');
+  fail = false;
+  await option.getByRole('button', { name: 'Retry data refresh', exact: true }).click();
+  await expect(option.getByText('Data ready', { exact: true })).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('navigation', { name: 'Mobile navigation', exact: true }).getByRole('button', { name: 'Workspace', exact: true }).click();
+  await option.getByLabel('Option view', { exact: true }).selectOption('auto');
+  await expect(option.locator('.option-side-heading')).toHaveCount(1);
+  await option.getByRole('group', { name: 'Option side', exact: true }).getByRole('button', { name: 'PUTS', exact: true }).click();
+  await expect(option.locator('.option-side-heading')).toHaveText('PUTS');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('ledger has visible labeled fields and translates success and validation feedback', async ({ page }) => {
+  await signIn(page); await blank(page, 'Readable ledger');
+  await page.getByRole('button', { name: 'MULTI LEDGER', exact: true }).click();
+  await page.getByRole('button', { name: 'COMPARE', exact: true }).click();
+  const dialog = await settings(page);
+  await dialog.getByRole('button', { name: '20px', exact: true }).click();
+  await dialog.getByLabel('Language / 语言', { exact: true }).selectOption('zh');
+  await page.getByRole('dialog', { name: '界面设置', exact: true }).getByRole('button', { name: '完成', exact: true }).click();
+  const ledger = page.getByRole('region', { name: '多币种账本', exact: true });
+  await ledger.getByLabel('币种账户名称', { exact: true }).fill('可读账本');
+  await ledger.getByRole('button', { name: '创建币种账户', exact: true }).click();
+  await expect(ledger.getByRole('status')).toHaveText('币种账户已创建。');
+  await ledger.getByRole('button', { name: '记录币种流水', exact: true }).click();
+  await expect(ledger.getByRole('status')).toHaveText('币种账本记录已保存。');
+  await ledger.getByLabel('币种记录类型', { exact: true }).selectOption('BUY');
+  await expect(ledger.locator('.ledger-field > span').filter({ hasText: '每股价格' })).toBeVisible();
+  await expect(ledger.locator('.ledger-field > span').filter({ hasText: '数量（股）' })).toBeVisible();
+  await expect(ledger.getByLabel('手动指定记录的美元汇率', { exact: true })).not.toBeVisible();
+  await ledger.getByText('高级汇率设置', { exact: true }).click();
+  await expect(ledger.getByLabel('手动指定记录的美元汇率', { exact: true })).toBeVisible();
+  await ledger.getByLabel('手动币种估价', { exact: true }).fill('invalid');
+  await ledger.getByRole('button', { name: '计算合并报告', exact: true }).click();
+  await expect(ledger.getByRole('alert')).toContainText('手动估值格式无效');
+  const comparison = page.getByRole('region', { name: '资产对比', exact: true });
+  await comparison.getByLabel('对比代码', { exact: true }).fill('AAPL');
+  await comparison.getByRole('button', { name: '对比', exact: true }).click();
+  await expect(comparison.getByRole('alert')).toContainText('请输入 2–5');
+});
+
+test('settings restore only the selected workspace, can undo, and offer an explicit all-workspaces action', async ({ page }) => {
+  await signIn(page); await blank(page, 'Visibility first');
+  await page.getByRole('button', { name: /^OPTIONS/ }).click();
+  let dialog = await settings(page);
+  await dialog.getByRole('tab', { name: 'Panels', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Hide all panels', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Done', exact: true }).click();
+  await blank(page, 'Visibility second');
+  await page.getByRole('button', { name: 'COMPARE', exact: true }).click();
+  dialog = await settings(page);
+  await dialog.getByRole('tab', { name: 'Panels', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Hide all panels', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Restore current workspace panels', exact: true }).click();
+  await expect(dialog.getByRole('switch', { name: 'Show Comparison panel 1', exact: true })).toBeChecked();
+  await dialog.getByRole('button', { name: 'Undo visibility restore', exact: true }).click();
+  await expect(dialog.getByRole('switch', { name: 'Show Comparison panel 1', exact: true })).not.toBeChecked();
+  await dialog.getByRole('button', { name: 'Restore current workspace panels', exact: true }).click();
+  await dialog.getByLabel('Panel settings workspace', { exact: true }).selectOption({ label: 'Visibility first' });
+  await expect(dialog.getByRole('switch', { name: 'Show Option Chain panel 1', exact: true })).not.toBeChecked();
+  await dialog.getByRole('button', { name: 'Restore panels in all workspaces', exact: true }).click();
+  await expect(dialog.getByRole('switch', { name: 'Show Option Chain panel 1', exact: true })).toBeChecked();
+  await dialog.getByRole('button', { name: 'Undo visibility restore', exact: true }).click();
+  await expect(dialog.getByRole('switch', { name: 'Show Option Chain panel 1', exact: true })).not.toBeChecked();
+});
