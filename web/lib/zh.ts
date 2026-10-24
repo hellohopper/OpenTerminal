@@ -1,5 +1,12 @@
 /** UI-owned text only. Symbols, user records and provider content retain their original text. */
 export const zh: Record<string, string> = {
+  "Create empty list": "新建空列表", "Manage shared lists": "管理共享列表", "Shared list order": "共享列表顺序", "Shared symbol order": "共享股票顺序",
+  "Move up": "上移", "Move down": "下移", "Delete shared list": "删除共享列表", "Rename shared list": "重命名共享列表", "New list name": "新列表名称",
+  "List and symbol order sync across devices. Deleting a shared list restores your local workspace list.": "列表和股票顺序会跨设备同步。删除当前共享列表后，会恢复工作区的本地列表。",
+  "This removes the shared list from every device. Local workspace lists are preserved.": "此操作会从所有设备删除该共享列表，本地工作区列表会保留。",
+  "This watchlist changed. Refresh and try again.": "此列表已被修改，请刷新后重试。",
+  "This watchlist changed. Refresh and review it before deleting.": "此列表已被修改，请刷新并查看最新内容后再删除。",
+  "Watchlist no longer exists.": "此列表已不存在。", "Maximum 20 shared watchlists.": "最多支持 20 个共享列表。",
   "Devices": "设备", "Paired phones": "已授权手机", "Revoke device": "撤销设备", "Revoked": "已撤销", "Expires": "有效期至", "No phones paired yet.": "尚未授权手机。",
   "Revoke a phone to stop API access and native notifications. Password or session-secret changes invalidate all phone credentials.": "撤销手机后将停止其 API 访问和原生通知。修改密码或会话密钥将使所有手机凭据失效。",
   "Open this server in the iOS app": "在 iOS 应用中连接此服务器", "Shared watchlists": "共享自选列表", "Watchlist source": "自选列表来源", "Local workspace": "当前工作区本地列表",

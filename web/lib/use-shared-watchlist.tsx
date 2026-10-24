@@ -12,6 +12,13 @@ export function useSharedWatchlist() {
   const id = useSource(s=>s.selected[workspace] ?? 0), qc = useQueryClient();
   const lists = useQuery({queryKey:["shared-watchlists"],queryFn:()=>apiGet<SharedWatchlist[]>("/api/watchlists"),refetchInterval:15000});
   const selected = lists.data?.find(row=>row.id===id);
+  useEffect(()=>{
+    if (!id || !lists.isSuccess || lists.isFetching || selected) return;
+    const saved = useSource.getState();
+    if (saved.selected[workspace] !== id) return;
+    saved.choose(workspace, 0);
+    if (useTerminal.getState().activeWorkspaceId === workspace) useTerminal.getState().setWatchlist(saved.locals[workspace] ?? []);
+  },[id,lists.isSuccess,lists.isFetching,selected,workspace]);
   useEffect(()=>{if(selected && useTerminal.getState().activeWorkspaceId===workspace && selected.payload.symbols.join(",")!==useTerminal.getState().watchlist.join(","))useTerminal.getState().setWatchlist(selected.payload.symbols);},[selected,workspace]);
   const mutation = useMutation({onMutate:()=>qc.cancelQueries({queryKey:["shared-watchlists"]}),mutationFn:async({symbol,action}:{symbol:string;action:"add"|"remove"})=>apiPost<SharedWatchlist>(`/api/watchlists/${id}/symbols`,{symbol,action}),onSuccess:row=>{qc.setQueryData<SharedWatchlist[]>(["shared-watchlists"],old=>old?.map(v=>v.id===row.id&&v.version<=row.version?row:v));void qc.invalidateQueries({queryKey:["shared-watchlists"]});}});
   const change = (symbol:string,action:"add"|"remove")=>{if(id)mutation.mutate({symbol,action});else action==="add"?useTerminal.getState().addToWatchlist(symbol):useTerminal.getState().removeFromWatchlist(symbol);};

@@ -13,7 +13,7 @@ The app pairs through `/api/mobile/session` and sends a device Bearer token plus
 ## Features
 
 - Today: personal briefing, market indexes, headlines and position-only holdings summary.
-- Watchlist: choose a backend shared list, add/remove symbols atomically and open native research. Web workspaces can select the same list. The first phone creates a shared list from its legacy local list, or defaults, only if the server has no lists.
+- Watchlist: choose a backend shared list, add/remove symbols atomically and open native research. **Manage shared lists** creates, copies, renames, deletes and orders lists. Long-press a symbol to move it up or down. Web workspaces share both orders. Deletion requires confirmation; stale rename/delete/reorder requests refresh the latest list for review. The first phone initializes a list from legacy symbols or defaults only on a server that has never had shared lists. Deleting the last list keeps it empty until you explicitly create another.
 - Holdings: choose an existing portfolio, inspect positions and open company research. Values exclude cash and withhold totals for missing, expired, stale or non-USD quotes. Use the full web terminal for transaction management.
 - Alerts: create price-above/below rules and pause/rearm existing rules on the shared server.
 - Research: native Swift Charts price history, news links, persistent server research notes and the native share sheet for authenticated research links. A provider error does not block other research sections.

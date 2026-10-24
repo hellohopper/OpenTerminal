@@ -90,11 +90,16 @@ private struct WatchlistView: View {
     @EnvironmentObject private var model: TerminalModel
     @ViewState<String> private var symbol = ""
     @ViewState<Bool> private var invalid = false
+    @ViewState<Bool> private var manage = false
     var body: some View {
         List {
             Section {
                 DataSectionStatus(section: .watchlist)
-                Picker("Shared watchlist",selection:Binding(get:{model.sharedListID ?? 0},set:{model.chooseList($0)})){ForEach(model.sharedLists){Text($0.payload.name).tag($0.id)}}
+                if !model.sharedLists.isEmpty {
+                    Picker("Shared watchlist",selection:Binding(get:{model.sharedListID ?? 0},set:{model.chooseList($0)})){ForEach(model.sharedLists){Text($0.payload.name).tag($0.id)}}
+                }
+                Button("Manage shared lists") { manage = true }
+                if let error = model.listManagementError { Text(error).foregroundStyle(.orange) }
                 HStack {
                     TextField("Ticker", text: $symbol).terminalInput().onSubmit(add)
                     Button("Add", action: add).disabled(model.watchlist.count >= 150 || model.sharedListID == nil)
@@ -105,15 +110,63 @@ private struct WatchlistView: View {
                 NavigationLink { ResearchView(symbol: symbol) } label: {
                     if let quote = model.quotes.first(where: { $0.symbol == symbol }) { QuoteRow(quote: quote) }
                     else { HStack { Text(symbol); Spacer(); Text("—").foregroundStyle(.secondary) } }
+                }.contextMenu {
+                    Button("Move up") { Task { await model.moveSymbol(symbol, direction: -1) } }.disabled(model.managingLists || model.watchlist.first == symbol)
+                    Button("Move down") { Task { await model.moveSymbol(symbol, direction: 1) } }.disabled(model.managingLists || model.watchlist.last == symbol)
                 }
             }.onDelete { offsets in let symbols=offsets.map{model.watchlist[$0]};Task{for symbol in symbols{await model.changeSymbol(symbol,action:"remove")}} }
             if model.watchlist.isEmpty && !model.loadingSections.contains(.watchlist) && model.sectionErrors[.watchlist] == nil { Text("Your watchlist is empty.").foregroundStyle(.secondary) }
-        }.refreshable { await model.refresh() }
+        }.refreshable { await model.refresh() }.sheet(isPresented: $manage) { SharedListsView() }
     }
     private func add() {
         guard let value = normalizedSymbol(symbol) else { invalid = true; return }
         symbol = ""; invalid = false
         Task { await model.changeSymbol(value,action:"add") }
+    }
+}
+private struct SharedListsView: View {
+    @EnvironmentObject private var model: TerminalModel
+    @Environment(\.dismiss) private var dismiss
+    @ViewState<String> private var name = ""
+    @ViewState<SharedWatchlist?> private var renaming = nil
+    @ViewState<SharedWatchlist?> private var deleting = nil
+    @ViewState<String> private var renamed = ""
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("New shared list") {
+                    TextField("List name", text: $name)
+                    Button("Create empty list") { Task { if await model.createList(name: name) { name = "" } } }.disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.managingLists)
+                    Button("Copy current list") { Task { if await model.createList(name: name, copyCurrent: true) { name = "" } } }.disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.managingLists || model.sharedListID == nil)
+                }
+                if let error = model.listManagementError { Section { Text(error).foregroundStyle(.orange) } }
+                Section("Shared on all devices") {
+                    ForEach(model.sharedLists) { row in
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(row.payload.name).font(.headline)
+                            Text("\(row.payload.symbols.count) symbols").font(.caption).foregroundStyle(.secondary)
+                            HStack {
+                                Button { Task { await model.moveList(row, direction: "up") } } label: { Image(systemName: "arrow.up") }.accessibilityLabel("Move up \(row.payload.name)").disabled(model.sharedLists.first?.id == row.id)
+                                Button { Task { await model.moveList(row, direction: "down") } } label: { Image(systemName: "arrow.down") }.accessibilityLabel("Move down \(row.payload.name)").disabled(model.sharedLists.last?.id == row.id)
+                                Button("Rename") { renamed = row.payload.name; renaming = row }
+                                Button("Delete", role: .destructive) { deleting = row }
+                            }.buttonStyle(.borderless).disabled(model.managingLists)
+                        }
+                    }
+                    Text("Order syncs to the web terminal. Long-press a symbol in Watchlist to move it up or down.").font(.caption).foregroundStyle(.secondary)
+                }
+            }.navigationTitle("Shared watchlists")
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+                .alert("Rename shared list", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+                    TextField("New list name", text: $renamed)
+                    Button("Save") { if let row = renaming { let value = renamed; Task { await model.renameList(row, name: value) } }; renaming = nil }
+                    Button("Cancel", role: .cancel) { renaming = nil }
+                }
+                .confirmationDialog("Delete \(deleting?.payload.name ?? "shared list") from every device?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible) {
+                    Button("Delete shared list", role: .destructive) { if let row = deleting { Task { await model.deleteList(row) } }; deleting = nil }
+                    Button("Cancel", role: .cancel) { deleting = nil }
+                } message: { Text("Local web workspace lists are preserved.") }
+        }
     }
 }
 private struct HoldingsView: View {

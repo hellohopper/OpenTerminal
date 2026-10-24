@@ -71,6 +71,10 @@ The iOS app stores a 30-day, revocable device token in Keychain when Remember th
 
 On the web Watchlist panel, expand Shared watchlists, enter a name and Publish current list. Select that list as the source in any web workspace and in the phone's Watchlist picker. Shared list contents live in the Mac database and refresh on active clients. Symbol additions/removals are atomic, so simultaneous edits do not replace one another. Full-list replacement checks the current version and rejects stale writes. Up to 20 shared lists with 150 symbols each are supported.
 
+Use **Create empty list** to start fresh, or **Manage shared lists** to rename, delete and change list order with the arrow buttons. The selected shared list also exposes symbol-order buttons. On iOS, Watchlist → **Manage shared lists** offers creation, copying, renaming, deletion and list ordering; long-press a watchlist symbol to move it up or down. Both orders are saved in the existing Mac database and included in its backups.
+
+Deletion asks for confirmation and affects every device. Renaming, deletion and symbol ordering reject stale versions, then refresh the latest list for review. After a selected list disappears, the web workspace restores its saved local list; iOS selects the next available list or shows an empty state. Deleting the last list intentionally keeps the server empty: an older or newly connected phone cannot recreate defaults on refresh. Create a new list explicitly to resume. The default list is initialized only on a server that has never had shared lists.
+
 Local workspace lists remain available as a separate source; switching back restores the original local symbols. Named page layouts, simple/professional mode, and reviewed layout snapshots continue to use the existing settings/sync tools. On iOS, importing a published layout's symbols asks before replacing the selected shared watchlist.
 
 ## Optional native push notifications

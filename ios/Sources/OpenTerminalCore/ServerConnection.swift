@@ -85,7 +85,7 @@ public actor TerminalAPI {
         let next = MobileCredential(id:value.id,name:value.name,token:current.token,expiresAt:value.expiresAt)
         credential=next; return next
     }
-    public func delete(_ path: String) async throws { let _: Acknowledgement = try await send(path, method:"DELETE") }
+    public func delete(_ path: String, query: [String: String] = [:]) async throws { let _: Acknowledgement = try await send(path, query: query, method:"DELETE") }
     public func get<T: Decodable & Sendable>(_ path: String, query: [String: String] = [:], as: T.Type = T.self) async throws -> T {
         try await send(path, query: query)
     }
