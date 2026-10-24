@@ -14,3 +14,9 @@ data/.api-key
 
 /test-results/
 /playwright-report/
+
+# Native app build output and local signing state
+ios/.build/
+ios/.swiftpm/
+ios/DerivedData/
+**/xcuserdata/

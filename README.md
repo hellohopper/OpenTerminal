@@ -35,6 +35,9 @@ No signup. No credit card. No rate‑limited demo tier. Clone it, `npm install`,
 
 ## ✨ Features
 
+- **Simple and professional interfaces** — switch between a focused home/watchlist/holdings experience and the full terminal. Save named page layouts with sidebar and visibility choices, optionally including appearance. Install the mobile web app on your Home Screen with a public offline fallback. [UI and mobile guide](docs/ui-modes-mobile.md).
+- **Native iOS companion** — SwiftUI iPhone/iPad app with shared-server login, briefings, watchlists, holdings, price alerts, charts and research notes. [Xcode project and setup](ios/README.md).
+
 - **Workflow recovery and coverage** — persistent research drafts, optional UI preference sync, scheduled backups and complete migration, broader TODAY coverage, combined account exposure and technical-signal catch-up. [Usage and limits](docs/workflow-reliability.md).
 
 - **Connected research and validation** — per-stock timelines and record links, private research search, peer fundamentals, thesis evidence monitors, account reconciliation, portfolio risk policies, option holdings and rolling sample-out strategy validation. [Usage and limits](docs/round-5.md).

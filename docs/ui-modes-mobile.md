@@ -25,3 +25,7 @@ A fresh phone session starts in simple mode. A saved mode choice is respected. S
 The worker caches only a public, bilingual offline page and its icon. It never caches authenticated HTML or API/account responses. An open page shows an offline warning; navigating or reloading offline displays the fallback. Reconnect and retry to return to the app. This is not offline market data or offline transaction editing.
 
 Background notifications reuse `/sw.js` and the existing Notifications panel. Configure WEB_PUSH_PUBLIC_KEY, WEB_PUSH_PRIVATE_KEY and WEB_PUSH_SUBJECT on the API, enable background delivery and register the installed device. iOS/iPadOS home-screen Web Push requires a supported OS (16.4+) and explicit notification permission. Device delivery and connectivity must be tested on the target phone.
+
+## Native iOS companion
+
+The [native app](../ios/README.md) adds SwiftUI screens for Today, Watchlist, Holdings, Alerts and stock research, using the same authenticated web API. It includes an Xcode project and a Swift package with core connection/valuation tests. Native research supports chart history, news, server notes and sharing research links. Published web snapshots can supply a local watchlist after review. Advanced desktop tools open in the web terminal. Native push/APNs and App Store distribution are not included; use the PWA for existing Web Push. See the app guide for Xcode, signing and validation requirements.
