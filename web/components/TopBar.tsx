@@ -7,6 +7,7 @@ import { apiGet } from "../lib/api";
 import { useTerminal } from "../store/terminal";
 import DisplaySettings from "./DisplaySettings";
 import { useInterface } from "../store/interface";
+import PwaSupport from "./PwaSupport";
 
 type Status = {
   ok: boolean;
@@ -68,6 +69,7 @@ export default function TopBar() {
       </button>
       <button className="term-btn" aria-label={ui("Research {symbol}", { symbol: activeSymbol })} onClick={() => useTerminal.getState().openResearch(activeSymbol)}>{ui("Research")}</button>
       <DisplaySettings />
+      <PwaSupport />
       <button className="term-btn" onClick={async()=>{await fetch("/api/session",{method:"DELETE"});window.location.assign("/login");}}>{ui("Sign out")}</button>
       <details className="connection-details"><summary>{ui("Connection status")}</summary><div className="connection-popover">
       <div className="flex gap-3 flex-wrap"><Clock tz="America/New_York" label="NY" /><Clock tz="Europe/London" label="LDN" /><Clock tz="Asia/Tokyo" label="TYO" /></div>

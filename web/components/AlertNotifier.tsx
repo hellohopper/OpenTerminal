@@ -127,7 +127,7 @@ export default function AlertNotifier() {
     <aside
       aria-label={ui("Price alert notifications")}
       aria-live="polite"
-      className="fixed top-16 right-3 z-[100] w-80 max-w-[90vw] space-y-2"
+      className="price-alert-toasts fixed top-16 right-3 z-[100] w-80 max-w-[90vw] space-y-2"
     >
       {toasts.map((event) => (
         <div

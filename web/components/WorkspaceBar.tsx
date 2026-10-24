@@ -5,11 +5,13 @@ import { useRef, useState } from "react";
 import { useTerminal } from "../store/terminal";
 import { exportWorkspace, importWorkspace, PRESETS, type Preset } from "../lib/workspaces";
 import { useDisplay } from "../store/display";
+import { useInterface } from "../store/interface";
 
 export default function WorkspaceBar() {
   const { t: ui } = useI18n();
 
   const st = useTerminal();
+  const simple = useInterface(s => s.mode === "simple");
   const hiddenPanels = useDisplay((state) => state.hiddenPanels);
   const visibleCount = st.widgets.filter((widget) => !(hiddenPanels[st.activeWorkspaceId] ?? []).includes(widget.id)).length;
   const [name, setName] = useState("");
@@ -25,7 +27,7 @@ export default function WorkspaceBar() {
     <select id="workspace-select" value={st.activeWorkspaceId} onChange={(e) => st.switchWorkspace(e.target.value)}>
       {st.workspaces.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
     </select>
-    <button className="term-btn" aria-pressed={st.layoutEditing} onClick={() => st.setLayoutEditing(!st.layoutEditing)}>{ui(st.layoutEditing ? "Finish editing" : "Edit layout")}</button>
+    {!simple && <button className="term-btn" aria-pressed={st.layoutEditing} onClick={() => st.setLayoutEditing(!st.layoutEditing)}>{ui(st.layoutEditing ? "Finish editing" : "Edit layout")}</button>}
     <button className="term-btn" onClick={() => { setName(`${current.name.slice(0, 57)} (copy)`); setIncludeAppearance(!!current.presentation?.appearance); setSaveAs(true); }}>{ui("Save layout as…")}</button>
     {saveAs && <div className="layout-save-form" role="group" aria-label={ui("Save layout as…")}>
       <label>{ui("Name")} <input aria-label={ui("New layout name")} maxLength={64} value={name} onChange={e => setName(e.target.value)} /></label>

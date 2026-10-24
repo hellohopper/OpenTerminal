@@ -1,5 +1,11 @@
 /** UI-owned text only. Symbols, user records and provider content retain their original text. */
 export const zh: Record<string, string> = {
+  "Mobile simple navigation": "手机简单版导航", "Install app": "安装应用", "Install OpenTerminal": "安装 OpenTerminal", "Install now": "立即安装",
+  "You are offline. Quotes may be outdated; reconnect to refresh data and save server changes.": "当前离线。报价可能已过期；请恢复网络后刷新数据和保存服务器记录。",
+  "On iPhone or iPad: open this site in Safari, tap Share, then Add to Home Screen. Launch it from the new icon.": "iPhone 或 iPad：用 Safari 打开本网站，点击“分享”→“添加到主屏幕”，然后从新图标启动。",
+  "On desktop or Android: use your browser’s Install app option when available.": "电脑或安卓设备：使用浏览器菜单中的“安装应用”选项（如果支持）。",
+  "A reachable HTTPS server is required. Background alerts also require server push keys, an active API and notification permission. Offline mode does not provide live prices.": "需要可访问的 HTTPS 服务器。后台提醒还需要配置推送密钥、持续运行 API，并授予通知权限。离线状态不提供实时价格。",
+  "Offline support could not be initialized. Reload to retry.": "离线支持初始化失败，请刷新重试。", "Installation was unavailable. Use your browser menu instead.": "无法发起安装，请使用浏览器菜单。",
   "Interface mode": "界面模式", "Mode": "模式", "Simple": "简单版", "Professional": "专业版", "Connection status": "连接状态",
   "Simple navigation": "简单版导航", "Today": "今日", "Customize home": "自定义首页", "Market briefing": "市场简报", "More research": "更多研究工具",
   "Holdings value": "持仓市值", "Unrealized P&L": "未实现盈亏", "Positions only; excludes cash.": "仅统计持仓，不含现金。", "No holdings yet.": "暂无持仓。",
