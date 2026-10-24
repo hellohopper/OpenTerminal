@@ -1,5 +1,8 @@
 /** UI-owned text only. Symbols, user records and provider content retain their original text. */
 export const zh: Record<string, string> = {
+  "Edit layout": "编辑布局", "Finish editing": "完成编辑", "Save layout as…": "布局另存为…",
+  "New layout name": "新布局名称", "Include font, language and density": "同时保存字号、语言和密度",
+  "Save new layout": "保存新布局",
   "The request could not be completed. Please retry.": "请求未能完成，请重试。",
   "API unavailable or timed out.": "服务暂不可用或请求超时。",
   "Sign in required.": "请先登录。",

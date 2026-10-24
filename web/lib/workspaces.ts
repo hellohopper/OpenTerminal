@@ -6,7 +6,16 @@ export type WidgetType = typeof WIDGET_TYPES[number];
 export type WidgetInstance = { id: string; type: WidgetType; symbol?: string; linked: boolean; settings?: PanelSettings };
 export type LayoutItem = { i: string; x: number; y: number; w: number; h: number };
 export type WorkspaceData = { activeSymbol: string; widgets: WidgetInstance[]; layout: LayoutItem[]; watchlist: string[] };
-export type SavedWorkspace = WorkspaceData & { id: string; name: string };
+export type WorkspacePresentation = {
+  sidebarVisible: boolean;
+  workspaceBarVisible: boolean;
+  hiddenSidebarFeatures: WidgetType[];
+  favoriteFeatures: WidgetType[];
+  collapsedGroups: string[];
+  hiddenPanelIds: string[];
+  appearance?: { language: "en" | "zh"; fontSize: number; density: "compact" | "standard" | "comfortable" };
+};
+export type SavedWorkspace = WorkspaceData & { id: string; name: string; presentation?: WorkspacePresentation };
 export const MAX_WORKSPACES = 20;
 export const PRESETS = { daily: "Daily market", research: "Company research", options: "Options analysis", blank: "Blank" };
 export type Preset = keyof typeof PRESETS;
@@ -87,7 +96,21 @@ export function readWorkspace(value: unknown): SavedWorkspace {
   if (placed.size !== ids.size) throw new Error("Every widget needs a layout position.");
   const watchlist = raw.watchlist.map((s) => typeof s === "string" ? normalizeSymbol(s) : null);
   if (watchlist.some((s) => !s)) throw new Error("Invalid watchlist symbol.");
-  return { id: newId(), name, activeSymbol: symbol, widgets, layout, watchlist: [...new Set(watchlist as string[])] };
+  const presentation = readWorkspacePresentation(raw.presentation, ids);
+  return { id: newId(), name, activeSymbol: symbol, widgets, layout, watchlist: [...new Set(watchlist as string[])], ...(presentation ? { presentation } : {}) };
+}
+export function readWorkspacePresentation(value: unknown, ids: Set<string>): WorkspacePresentation | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const v = value as Record<string, unknown>;
+  const features = (key: string) => WIDGET_TYPES.filter(type => Array.isArray(v[key]) && (v[key] as unknown[]).includes(type));
+  const a = v.appearance as Record<string, unknown> | undefined;
+  return {
+    sidebarVisible: v.sidebarVisible !== false, workspaceBarVisible: v.workspaceBarVisible !== false,
+    hiddenSidebarFeatures: features("hiddenSidebarFeatures"), favoriteFeatures: features("favoriteFeatures"),
+    collapsedGroups: Array.isArray(v.collapsedGroups) ? [...new Set(v.collapsedGroups.filter((g): g is string => typeof g === "string" && g.length <= 100))].slice(0, 20) : [],
+    hiddenPanelIds: Array.isArray(v.hiddenPanelIds) ? [...new Set(v.hiddenPanelIds.filter((id): id is string => typeof id === "string" && ids.has(id)))] : [],
+    ...(a && typeof a === "object" ? { appearance: { language: a.language === "zh" ? "zh" as const : "en" as const, fontSize: typeof a.fontSize === "number" && Number.isFinite(a.fontSize) ? Math.max(12, Math.min(20, Math.round(a.fontSize))) : 12, density: a.density === "comfortable" || a.density === "compact" ? a.density : "standard" as const } } : {}),
+  };
 }
 export function exportWorkspace(workspace: SavedWorkspace): string {
   return JSON.stringify({ format: "openterminal-workspace", version: 1, workspace }, null, 2);

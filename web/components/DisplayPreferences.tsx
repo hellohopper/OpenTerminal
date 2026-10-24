@@ -2,12 +2,22 @@
 
 import { useEffect, useLayoutEffect } from "react";
 import { useDisplay } from "../store/display";
+import { useTerminal } from "../store/terminal";
 
 export default function DisplayPreferences() {
   const fontSize = useDisplay((state) => state.fontSize);
   const language = useDisplay((state) => state.language);
   const density = useDisplay((state) => state.density);
-  useEffect(() => { void useDisplay.persist.rehydrate(); }, []);
+  useEffect(() => {
+    let cleanup: (() => void) | undefined, disposed = false;
+    void Promise.resolve(useDisplay.persist.rehydrate()).then(() => {
+      if (disposed) return;
+      useTerminal.getState().restorePresentation();
+      useTerminal.getState().savePresentation();
+      cleanup = useDisplay.subscribe(() => useTerminal.getState().savePresentation());
+    });
+    return () => { disposed = true; cleanup?.(); };
+  }, []);
   useLayoutEffect(() => {
     document.documentElement.style.setProperty("--terminal-font-size", `${fontSize}px`);
   }, [fontSize]);

@@ -10,6 +10,12 @@ const snapshot = z.object({
         z.object({
           id: z.string().min(1).max(100),
           name: z.string().min(1).max(64),
+          presentation: z.object({
+            sidebarVisible: z.boolean(), workspaceBarVisible: z.boolean(),
+            hiddenSidebarFeatures: z.array(z.string().max(40)).max(50), favoriteFeatures: z.array(z.string().max(40)).max(50),
+            collapsedGroups: z.array(z.string().max(100)).max(20), hiddenPanelIds: z.array(z.string().max(100)).max(50),
+            appearance: z.object({ language: z.enum(["en", "zh"]), fontSize: z.number().int().min(12).max(20), density: z.enum(["compact", "standard", "comfortable"]) }).optional(),
+          }).optional(),
           activeSymbol: z.string().max(20),
           watchlist: z.array(z.string().max(20)).max(200),
           widgets: z
