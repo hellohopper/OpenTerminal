@@ -1,5 +1,9 @@
 /** UI-owned text only. Symbols, user records and provider content retain their original text. */
 export const zh: Record<string, string> = {
+  "Devices": "设备", "Paired phones": "已授权手机", "Revoke device": "撤销设备", "Revoked": "已撤销", "Expires": "有效期至", "No phones paired yet.": "尚未授权手机。",
+  "Revoke a phone to stop API access and native notifications. Password or session-secret changes invalidate all phone credentials.": "撤销手机后将停止其 API 访问和原生通知。修改密码或会话密钥将使所有手机凭据失效。",
+  "Open this server in the iOS app": "在 iOS 应用中连接此服务器", "Shared watchlists": "共享自选列表", "Watchlist source": "自选列表来源", "Local workspace": "当前工作区本地列表",
+  "Shared lists update on the Mac and phone. Local workspace lists stay independent.": "共享列表会同步到 Mac 和手机。本地工作区列表独立保存。", "Shared list name": "共享列表名称", "Publish current list": "发布当前列表",
   "Mobile simple navigation": "手机简单版导航", "Install app": "安装应用", "Install OpenTerminal": "安装 OpenTerminal", "Install now": "立即安装",
   "You are offline. Quotes may be outdated; reconnect to refresh data and save server changes.": "当前离线。报价可能已过期；请恢复网络后刷新数据和保存服务器记录。",
   "On iPhone or iPad: open this site in Safari, tap Share, then Add to Home Screen. Launch it from the new icon.": "iPhone 或 iPad：用 Safari 打开本网站，点击“分享”→“添加到主屏幕”，然后从新图标启动。",

@@ -17,6 +17,7 @@ import AlertsWidget from "./widgets/AlertsWidget";
 import { EarningsTab, EconomicTab } from "./widgets/CalendarWidget";
 import { PollingScope } from "../lib/use-adaptive-refresh";
 import { useInterface } from "../store/interface";
+import { useSharedWatchlist } from "../lib/use-shared-watchlist";
 const TABS = ["Overview", "Chart", "Financials", "News", "Events", "Thesis", "Filings", "Notes", "Alerts", "Timeline", "Valuations", "Reader", "Earnings Reviews", "Plans"] as const;
 type Tab = typeof TABS[number];
 export default function ResearchView({ symbol }: { symbol: string }) {
@@ -25,7 +26,7 @@ export default function ResearchView({ symbol }: { symbol: string }) {
   const target=useTerminal(s=>s.researchTarget);
   const simple = useInterface(s => s.mode === "simple");
   const primary: readonly Tab[] = simple ? ["Overview", "Chart", "Financials", "News", "Notes"] : TABS;
-  const close = useTerminal(s => s.closeResearch), add = useTerminal(s => s.addToWatchlist);
+  const close = useTerminal(s => s.closeResearch), shared = useSharedWatchlist(), add = shared.add;
   const watched = useTerminal(s => s.watchlist.includes(symbol));
   const [tab, setTab] = useState<Tab>("Overview"), [note, setNote] = useState(0);
   const [notesVisited, setNotesVisited] = useState(false), [alertsVisited, setAlertsVisited] = useState(false);
@@ -52,6 +53,7 @@ export default function ResearchView({ symbol }: { symbol: string }) {
       {simple && <details className="research-more"><summary>{ui("More research")}{!primary.includes(tab) ? ` · ${ui(tab)}` : ""}</summary><div>{TABS.filter(t => !primary.includes(t)).map(t => <button className={`term-btn ${tab === t ? "active" : ""}`} key={t} onClick={e => { choose(t); e.currentTarget.closest("details")?.removeAttribute("open"); }}>{ui(t)}</button>)}</div></details>}
     </nav>
     <div className="research-body">
+      {shared.mutation.error && <p role="alert" className="down p-2">{shared.mutation.error.message}</p>}
       <WidgetErrorBoundary key={`${symbol}-${tab}-${note}`} name={`${symbol} ${tab}`}>
         {(tab==="Timeline"||recordKinds[tab])&&<ResearchRecords symbol={symbol} target={target} kinds={recordKinds[tab]}/>}
         {tab === "Overview" && <div className="research-overview"><section><h2 className="amber p-2">{ui("Quote / source")}</h2><QuoteWidget widget={widget} /></section><section><h2 className="amber p-2">{ui("Latest news")}</h2><NewsWidget widget={widget} /></section></div>}

@@ -11,6 +11,11 @@ out/
 # Database
 data/*.db*
 data/.api-key
+data/backups/
+config/*
+!config/server.example.json
+logs/
+backups/
 
 /test-results/
 /playwright-report/

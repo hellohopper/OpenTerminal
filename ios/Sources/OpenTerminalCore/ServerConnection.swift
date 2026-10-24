@@ -1,12 +1,16 @@
 import Foundation
 
 public enum ConnectionError: LocalizedError, Equatable, Sendable {
-    case invalidServer, invalidPath, unauthorized, response(Int, String)
+    case invalidServer, invalidPath, unauthorized, offline, unreachable, tls, timedOut, response(Int, String)
     public var errorDescription: String? {
         switch self {
         case .invalidServer: "Enter an HTTPS server origin, such as https://terminal.example.com."
         case .invalidPath: "Invalid API path."
         case .unauthorized: "Your session expired. Sign in again."
+        case .offline: "No network connection. Connect to Wi-Fi or cellular and enable Tailscale."
+        case .unreachable: "Cannot reach the Mac. Check Tailscale, the server address and whether the Mac is awake."
+        case .tls: "The server certificate could not be verified. Use the Mac’s configured HTTPS address."
+        case .timedOut: "The Mac did not respond in time. Check its connection and retry."
         case let .response(code, message): "\(message) (\(code))"
         }
     }
@@ -50,8 +54,10 @@ private final class NoRedirects: NSObject, URLSessionTaskDelegate, Sendable {
 public actor TerminalAPI {
     public let server: ServerConnection
     private let session: URLSession
-    public init(server: ServerConnection, configuration: URLSessionConfiguration = .ephemeral) {
+    private var credential: MobileCredential?
+    public init(server: ServerConnection, credential: MobileCredential? = nil, configuration: URLSessionConfiguration = .ephemeral) {
         self.server = server
+        self.credential = credential
         configuration.urlCache = nil
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         configuration.timeoutIntervalForRequest = 30
@@ -63,14 +69,31 @@ public actor TerminalAPI {
         catch ConnectionError.unauthorized { throw ConnectionError.response(401, "Invalid password.") }
     }
     public func signOut() async {
-        let _: Acknowledgement? = try? await send("/api/session", method: "DELETE")
+        let _: Acknowledgement? = try? await send(credential == nil ? "/api/session" : "/api/mobile/session", method: "DELETE")
+        credential = nil
         session.invalidateAndCancel()
     }
+    public func pair(password: String, name: String) async throws -> MobileCredential {
+        do {
+            let value: MobileCredential = try await send("/api/mobile/session", method: "POST", body: JSONEncoder().encode(["password":password,"name":name]))
+            credential = value; return value
+        } catch ConnectionError.unauthorized { throw ConnectionError.response(401,"Invalid password.") }
+    }
+    public func renewDevice() async throws -> MobileCredential {
+        guard let current = credential else { throw ConnectionError.unauthorized }
+        let value: MobileAuthorization = try await send("/api/mobile/session", method: "PUT")
+        let next = MobileCredential(id:value.id,name:value.name,token:current.token,expiresAt:value.expiresAt)
+        credential=next; return next
+    }
+    public func delete(_ path: String) async throws { let _: Acknowledgement = try await send(path, method:"DELETE") }
     public func get<T: Decodable & Sendable>(_ path: String, query: [String: String] = [:], as: T.Type = T.self) async throws -> T {
         try await send(path, query: query)
     }
     public func post<B: Encodable & Sendable, T: Decodable & Sendable>(_ path: String, body: B, as: T.Type = T.self) async throws -> T {
         try await send(path, method: "POST", body: JSONEncoder().encode(body))
+    }
+    public func put<B: Encodable & Sendable, T: Decodable & Sendable>(_ path: String, body: B, as: T.Type = T.self) async throws -> T {
+        try await send(path, method: "PUT", body: JSONEncoder().encode(body))
     }
     public func setAlertArmed(id: Int, armed: Bool) async throws {
         let _: Acknowledgement = try await send("/api/alerts/\(id)", method: "PUT", body: JSONEncoder().encode(["armed": armed]))
@@ -80,8 +103,19 @@ public actor TerminalAPI {
         request.httpMethod = method; request.httpBody = body
         request.setValue(server.origin.absoluteString, forHTTPHeaderField: "Origin")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let credential { request.setValue("Bearer \(credential.token)", forHTTPHeaderField:"Authorization") }
         if body != nil { request.setValue("application/json", forHTTPHeaderField: "Content-Type") }
-        let (data, response) = try await session.data(for: request)
+        let data: Data, response: URLResponse
+        do { (data,response) = try await session.data(for: request) }
+        catch let error as URLError {
+            switch error.code {
+            case .notConnectedToInternet, .networkConnectionLost: throw ConnectionError.offline
+            case .timedOut: throw ConnectionError.timedOut
+            case .secureConnectionFailed, .serverCertificateUntrusted, .serverCertificateHasBadDate, .serverCertificateHasUnknownRoot, .serverCertificateNotYetValid: throw ConnectionError.tls
+            case .cancelled: throw CancellationError()
+            default: throw ConnectionError.unreachable
+            }
+        }
         guard let http = response as? HTTPURLResponse else { throw ConnectionError.response(0, "Invalid server response.") }
         if http.statusCode == 401 { throw ConnectionError.unauthorized }
         guard (200..<300).contains(http.statusCode) else {

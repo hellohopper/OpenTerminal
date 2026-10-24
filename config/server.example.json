@@ -1,0 +1,11 @@
+{
+  "origin": "https://your-mac.your-tailnet.ts.net",
+  "webPort": 3000,
+  "apiPort": 4000,
+  "node": "/absolute/path/to/node",
+  "apiKey": "GENERATED_BY_SETUP",
+  "password": "GENERATED_BY_SETUP",
+  "sessionSecret": "GENERATED_BY_SETUP",
+  "keepAwake": true,
+  "tailscale": "/usr/local/bin/tailscale"
+}

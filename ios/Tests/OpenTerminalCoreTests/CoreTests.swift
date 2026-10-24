@@ -73,6 +73,27 @@ import Testing
         do { try await api.signIn(password: "incorrect"); fail("Expected invalid password") }
         catch { expectEqual(error as? ConnectionError, .response(401, "Invalid password.")) }
     }
+    @Test func testPairedCredentialsSurviveClientRecreationAndRenewWithoutTheOwnerPassword() async throws {
+        let configuration=URLSessionConfiguration.ephemeral;configuration.protocolClasses=[FixtureProtocol.self]
+        FixtureProtocol.handler={request in
+            if request.httpMethod=="POST" {return(201,Data(#"{"id":"phone","name":"My phone","token":"opaque-device-token","expiresAt":"2026-11-01T00:00:00Z"}"#.utf8))}
+            expectEqual(request.value(forHTTPHeaderField:"Authorization"),"Bearer opaque-device-token")
+            if request.httpMethod=="PUT" {return(200,Data(#"{"id":"phone","name":"My phone","expiresAt":"2026-12-01T00:00:00Z"}"#.utf8))}
+            return(200,Data("[]".utf8))
+        }
+        defer{FixtureProtocol.handler=nil}
+        let server=try ServerConnection("https://terminal.example.com"),api=TerminalAPI(server:server,configuration:configuration)
+        let value=try await api.pair(password:"owner password",name:"My phone"),saved=try JSONEncoder().encode(value)
+        let restored=TerminalAPI(server:server,credential:try JSONDecoder().decode(MobileCredential.self,from:saved),configuration:configuration)
+        let renewed=try await restored.renewDevice();expectEqual(renewed.token,value.token);expectEqual(renewed.expiresAt,"2026-12-01T00:00:00Z")
+        let _: [Portfolio]=try await restored.get("/api/portfolios")
+    }
+    @Test func testOfflineFailuresAreDistinguishedFromExpiredAuthorization()async throws{
+        let configuration=URLSessionConfiguration.ephemeral;configuration.protocolClasses=[FixtureProtocol.self]
+        FixtureProtocol.handler={_ in throw URLError(.notConnectedToInternet)};defer{FixtureProtocol.handler=nil}
+        let api=TerminalAPI(server:try ServerConnection("https://terminal.example.com"),configuration:configuration)
+        do{let _: [Portfolio]=try await api.get("/api/portfolios");fail("Expected offline status")}catch{expectEqual(error as? ConnectionError,.offline)}
+    }
 }
 // Small throwing-assertion adapters keep protocol callback assertions in the same test.
 private func expectEqual<T: Equatable>(_ actual: T, _ expected: T) { #expect(actual == expected) }

@@ -1,0 +1,28 @@
+import {test,expect}from"@playwright/test";
+import{signIn,blank}from"./helpers";
+test("pairs a phone, renews and revokes it, and shares atomic watchlist edits with the web UI",async({page})=>{
+ await signIn(page);const origin="http://127.0.0.1:3100",headers={origin};
+ const wrong=await page.request.post("/api/mobile/session",{headers,data:{password:"wrong",name:"Bad phone"}});expect(wrong.status()).toBe(401);
+ const pair=await page.request.post("/api/mobile/session",{headers,data:{password:"fixture owner password",name:"Connected phone"}});expect(pair.status()).toBe(201);const credential=await pair.json();
+ const phone={origin,authorization:`Bearer ${credential.token}`};
+ expect((await page.request.get("/api/portfolios",{headers:phone})).ok()).toBe(true);
+ expect((await page.request.put("/api/mobile/session",{headers:phone})).ok()).toBe(true);
+ expect((await page.request.post("/api/mobile-auth/register",{headers,data:{name:"Bypass"}})).status()).toBe(404);
+ expect((await page.request.post("/api/MOBILE-AUTH/register",{headers,data:{name:"Bypass"}})).status()).toBe(404);
+ const encoded=await page.request.post("/api/mobile-auth%2fregister",{headers,data:{name:"Bypass"}});expect([400,404]).toContain(encoded.status());
+ const created=await page.request.post("/api/watchlists",{headers:phone,data:{name:"Phone and Mac",symbols:["IBM"]}});expect(created.status()).toBe(201);const{id}=await created.json();
+ await blank(page,"Connected Mac");await page.getByRole("button",{name:"WATCHLIST",exact:true}).click();
+ const panel=page.getByRole("region",{name:"Watchlist",exact:true});await panel.getByText("Shared watchlists",{exact:true}).click();await panel.getByLabel("Watchlist source",{exact:true}).selectOption(String(id));
+ await expect(panel.getByRole("button",{name:"Select IBM",exact:true})).toBeVisible();
+ const [first,second]=await Promise.all([page.request.post(`/api/watchlists/${id}/symbols`,{headers:phone,data:{symbol:"MSFT",action:"add"}}),page.request.post(`/api/watchlists/${id}/symbols`,{headers:phone,data:{symbol:"NVDA",action:"add"}})]);expect(first.ok()&&second.ok()).toBe(true);
+ await panel.getByRole("textbox",{name:"Add ticker",exact:true}).fill("AAPL");await panel.getByRole("button",{name:"Add ticker",exact:true}).click();
+ await expect(panel.getByRole("button",{name:"Select AAPL",exact:true})).toBeVisible();
+ const lists=await(await page.request.get("/api/watchlists",{headers:phone})).json();expect(lists.find((r:any)=>r.id===id).payload.symbols).toEqual(expect.arrayContaining(["IBM","MSFT","NVDA","AAPL"]));
+ const serialized=JSON.stringify(await(await page.request.get("/api/mobile/devices")).json());expect(serialized).not.toContain(credential.token);expect(serialized).not.toContain("token_hash");
+ await page.getByRole("button",{name:"UI settings",exact:true}).click();const settings=page.getByRole("dialog",{name:"UI settings",exact:true});await settings.getByRole("tab",{name:"Devices",exact:true}).click();
+ await settings.locator(".ui-visibility-row").filter({hasText:"Connected phone"}).getByRole("button",{name:"Revoke device",exact:true}).click();
+ await expect(settings.getByText("Revoked",{exact:true})).toBeVisible();
+ expect((await page.request.get("/api/portfolios",{headers:phone})).status()).toBe(401);
+ expect((await page.request.put("/api/mobile/session",{headers:phone})).status()).toBe(401);
+ expect((await page.request.post("/api/mobile/session",{headers:{origin:"https://unrelated.invalid"},data:{password:"fixture owner password",name:"Cross-origin"}})).status()).toBe(403);
+});

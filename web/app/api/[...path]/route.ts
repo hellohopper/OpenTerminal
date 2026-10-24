@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import {authConfig,validSession,sameOrigin,SESSION_COOKIE} from "@/lib/session";
+import {sameOrigin} from "@/lib/session";
 import { getApiKey } from "@/lib/api-key";
+import { authorized, verifyMobile } from "@/lib/mobile-auth";
 
 // A route handler (rather than next.config.ts rewrites) because rewrites
 // can't attach a header to the proxied request — and the shared API key
@@ -8,15 +9,22 @@ import { getApiKey } from "@/lib/api-key";
 const API_URL = process.env.API_URL ?? "http://localhost:4000";
 
 async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
-  try{if(!validSession(req.cookies.get(SESSION_COOKIE)?.value,authConfig()))return NextResponse.json({error:"Sign in required."},{status:401});}catch{return NextResponse.json({error:"Web authentication is not configured."},{status:503});}
+  if (path.some(segment => segment === "." || segment === ".." || /[/\\]/.test(segment))) return NextResponse.json({error:"Invalid API path."},{status:400});
+  if (path[0]?.toLowerCase() === "mobile-auth") return NextResponse.json({error:"Not found."},{status:404});
+  try{if(!await authorized(req))return NextResponse.json({error:"Sign in required."},{status:401});}catch{return NextResponse.json({error:"Authentication service is unavailable."},{status:503});}
   if(!["GET","HEAD"].includes(req.method)&&!sameOrigin(req))return NextResponse.json({error:"Same-origin request required."},{status:403});
-  const url = `${API_URL}/api/${path.join("/")}${req.nextUrl.search}`;
+  const url = `${API_URL}/api/${path.map(encodeURIComponent).join("/")}${req.nextUrl.search}`;
   const apiKey = getApiKey();
 
   const headers = new Headers();
   const contentType = req.headers.get("content-type");
   if (contentType) headers.set("content-type", contentType);
   if (apiKey) headers.set("x-api-key", apiKey);
+  // Derive device identity from the verified credential, never an inbound header.
+  if (path[0] === "mobile" && path[1] === "push" && req.headers.has("authorization")) {
+    try { const device = await verifyMobile(req); if (!device) return NextResponse.json({error:"Sign in required."},{status:401}); headers.set("x-mobile-device-id", device.id); }
+    catch { return NextResponse.json({error:"Authentication service is unavailable."},{status:503}); }
+  }
   // Relayed, not fabricated: only meaningful (and only trusted by the API)
   // when TRUST_PROXY=1 is set there — see server/src/index.ts.
   const forwardedFor = req.headers.get("x-forwarded-for");

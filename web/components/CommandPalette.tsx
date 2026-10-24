@@ -8,6 +8,7 @@ import { useTerminal, type WidgetType } from "../store/terminal";
 import { WIDGET_CATALOG } from "../lib/widget-catalog";
 import { matchesWidget } from "../lib/i18n";
 import Modal from "./Modal";
+import { useSharedWatchlist } from "../lib/use-shared-watchlist";
 type SearchResult = { symbol: string; name: string; exchange: string; type: string };
 type Command = { id: string; label: string; detail: string; run: (watch?: boolean) => void };
 function Palette() {
@@ -15,6 +16,7 @@ function Palette() {
 
   const st = useTerminal(), [query, setQuery] = useState(""), [debounced, setDebounced] = useState(""), [selected, setSelected] = useState(0);
   const input = useRef<HTMLInputElement>(null);
+  const shared = useSharedWatchlist();
   useEffect(() => { input.current?.focus(); }, []);
   useEffect(() => { const t = setTimeout(() => setDebounced(query.trim()), 250); return () => clearTimeout(t); }, [query]);
   const mode = query.startsWith("#") ? "research" : query.startsWith(">") ? "actions" : query.startsWith("@") ? "workspaces" : "all";
@@ -31,7 +33,7 @@ function Palette() {
     }
   }
   if (mode !== "actions"&&mode!=="research") for (const w of st.workspaces) if (!needle || w.name.toLowerCase().includes(needle)) commands.push({ id: `workspace-${w.id}`, label: ui("Switch to {name}", { name: w.name }), detail: ui("Workspace"), run: () => { st.switchWorkspace(w.id); close(); } });
-  if (mode === "all" && debounced === query.trim()) for (const r of symbols.data ?? []) commands.unshift({ id: `symbol-${r.symbol}-${r.exchange}`, label: `${r.symbol} · ${r.name}`, detail: ui("{exchange} · research (Shift+Enter also watches)", { exchange: r.exchange }), run: (watch) => { if (watch) st.addToWatchlist(r.symbol); st.openResearch(r.symbol); } });
+  if (mode === "all" && debounced === query.trim()) for (const r of symbols.data ?? []) commands.unshift({ id: `symbol-${r.symbol}-${r.exchange}`, label: `${r.symbol} · ${r.name}`, detail: ui("{exchange} · research (Shift+Enter also watches)", { exchange: r.exchange }), run: (watch) => { if (watch) shared.add(r.symbol); st.openResearch(r.symbol); } });
   if(mode==='research')for(const r of privateSearch.data?.results??[])commands.push({id:`saved-${r.kind}-${r.id}-${r.paragraph??''}`,label:`${r.symbol} · ${r.title} ${r.paragraph??''}`,detail:r.snippet,run:()=>{st.openResearch(r.symbol,{kind:r.kind,id:r.id,paragraph:r.paragraph});close();}});
   const index = Math.min(selected, Math.max(0, commands.length - 1));
   useEffect(() => { document.getElementById(`command-${index}`)?.scrollIntoView({ block: "nearest" }); }, [index]);
