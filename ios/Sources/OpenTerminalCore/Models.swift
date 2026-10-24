@@ -74,7 +74,18 @@ public struct SyncSnapshot: Decodable, Sendable {
     }
     public let payload: Payload
 }
+public struct MobileCredential: Codable, Sendable {
+    public let id: String; public let name: String; public let token: String; public let expiresAt: String
+    public init(id: String, name: String, token: String, expiresAt: String) { self.id=id; self.name=name; self.token=token; self.expiresAt=expiresAt }
+}
+public struct MobileAuthorization: Decodable, Sendable { public let id: String; public let name: String; public let expiresAt: String }
+public struct SharedWatchlist: Decodable, Identifiable, Sendable {
+    public struct Payload: Decodable, Sendable { public let name: String; public let symbols: [String] }
+    public let id: Int; public let version: Int; public let payload: Payload
+}
+public struct MobileDeviceInfo: Decodable, Identifiable, Sendable { public let id: String; public let name: String; public let expires_at: String; public let revoked_at: String? }
+public struct NativePushStatus: Decodable, Sendable { public let configured: Bool; public let environment: String?; public let topic: String? }
 public func normalizedSymbol(_ value: String) -> String? {
     let symbol = value.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-    return symbol.range(of: "^[A-Z0-9.^=&-]{1,20}$", options: .regularExpression) != nil ? symbol : nil
+    return symbol.range(of: "^(?=.*[A-Z0-9])[A-Z0-9.^=&-]{1,20}$", options: .regularExpression) != nil ? symbol : nil
 }

@@ -13,6 +13,8 @@ import type { AlertRule } from "../lib/alerts";
 import type { Briefing } from "./widgets/BriefingWidget";
 import AlertsWidget from "./widgets/AlertsWidget";
 import WidgetErrorBoundary from "./WidgetErrorBoundary";
+import SharedWatchlistControls from "./SharedWatchlistControls";
+import { useSharedWatchlist } from "../lib/use-shared-watchlist";
 
 const PAGE_LABELS: Record<SimplePage, string> = { today: "Today", watchlist: "Watchlist", holdings: "Holdings", research: "Research", alerts: "Alerts" };
 const CARD_LABELS: Record<SimpleCard, string> = { briefing: "Market briefing", watchlist: "Watchlist", holdings: "Holdings", alerts: "Alerts" };
@@ -36,11 +38,14 @@ function MarketBriefing() {
 }
 function SimpleWatchlist({ preview = false }: { preview?: boolean }) {
   const { t } = useI18n(), watchlist = useTerminal(s => s.watchlist), [input, setInput] = useState(""), [invalid, setInvalid] = useState(false);
+  const shared = useSharedWatchlist();
   const polling = useAdaptiveRefresh(15000);
   const q = useQuery({ queryKey: ["watchlist", watchlist.join(",")], queryFn: () => apiGet<Quote[]>(`/api/quotes?symbols=${symbolsParam(watchlist)}`), enabled: !!watchlist.length && polling.active, refetchInterval: polling.interval });
   const symbols = preview ? watchlist.slice(0, 5) : watchlist;
   return <div ref={polling.ref}>
-    {!preview && <form className="simple-add" onSubmit={e => { e.preventDefault(); const symbol = normalizeSymbol(input); if (!symbol) { setInvalid(true); return; } useTerminal.getState().addToWatchlist(symbol); setInput(""); setInvalid(false); }}>
+    {!preview && <SharedWatchlistControls />}
+    {shared.mutation.error && <p role="alert">{shared.mutation.error.message}</p>}
+    {!preview && <form className="simple-add" onSubmit={e => { e.preventDefault(); const symbol = normalizeSymbol(input); if (!symbol) { setInvalid(true); return; } shared.add(symbol); setInput(""); setInvalid(false); }}>
       <label>{t("Add ticker")}<input aria-invalid={invalid} maxLength={20} value={input} placeholder="AAPL" onChange={e => setInput(e.target.value)} /></label><button className="term-btn">{t("Add")}</button>
       {invalid && <p role="alert">{t("Not a valid ticker symbol")}</p>}
     </form>}
@@ -48,7 +53,7 @@ function SimpleWatchlist({ preview = false }: { preview?: boolean }) {
     {!watchlist.length && <p className="dim">{t("Your watchlist is empty. Add a symbol above.")}</p>}
     {symbols.map(symbol => { const quote = q.data?.find(q => q.symbol === symbol); return <div className="simple-asset" key={symbol}>
       <button className="simple-asset-link" aria-label={t("Research {symbol}", { symbol })} onClick={() => useTerminal.getState().openResearch(symbol)}><span><strong>{symbol}</strong><span className="dim">{quote?.name ?? ""}</span></span><span className="simple-price"><strong>{fmt(quote?.price)}</strong><span className={pctClass(quote?.changePercent)}>{fmt(quote?.changePercent)}%</span>{quote?.stale && <span className="amber">{t("Stale")}</span>}</span></button>
-      {!preview && <button className="term-btn" aria-label={t("Remove {symbol} from watchlist", { symbol })} onClick={() => useTerminal.getState().removeFromWatchlist(symbol)}>×</button>}
+      {!preview && <button className="term-btn" aria-label={t("Remove {symbol} from watchlist", { symbol })} onClick={() => shared.remove(symbol)}>×</button>}
     </div>; })}
     {preview && <button className="term-btn" onClick={() => useInterface.getState().setPage("watchlist")}>{t("View watchlist")}</button>}
   </div>;

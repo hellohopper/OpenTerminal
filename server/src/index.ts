@@ -48,6 +48,8 @@ import { aiRouter } from "./routes/ai.js";
 import { allStats } from "./providers/registry.js";
 import { requireApiKey } from "./auth.js";
 import { rateLimit } from "./rateLimit.js";
+import { mobileAuthRouter, mobileRouter } from "./routes/mobile.js";
+import { watchlistsRouter } from "./routes/watchlists.js";
 
 const app = express();
 
@@ -83,6 +85,9 @@ const historyReads=rateLimit({windowMs:60000,max:240}),historyWrites=rateLimit({
 app.use("/api/history-library",requireApiKey,express.json({limit:"700kb"}),(req,res,next)=>(req.method==='GET'?historyReads:historyWrites)(req,res,next),historyLibraryRouter);
 app.use("/api/account-import",requireApiKey,express.json({limit:"700kb"}),rateLimit({windowMs:60000,max:60}),accountImportRouter);
 app.use(express.json());
+app.use("/api/mobile-auth", requireApiKey, rateLimit({windowMs:60000,max:120}), mobileAuthRouter);
+app.use("/api/mobile", requireApiKey, mobileRouter);
+app.use("/api/watchlists", requireApiKey, watchlistsRouter);
 app.use("/api/walkforward",requireApiKey,rateLimit({windowMs:60000,max:180}),walkforwardRouter);
 app.use("/api/option-positions",requireApiKey,rateLimit({windowMs:60000,max:30}),optionPositionsRouter);
 app.use("/api/portfolio-guards",requireApiKey,rateLimit({windowMs:60000,max:30}),portfolioGuardsRouter);

@@ -11,14 +11,17 @@ import SavedControls from "../SavedControls";
 import Flash from "../Flash";
 import DataStatus from "../DataStatus";
 import { useAdaptiveRefresh } from "../../lib/use-adaptive-refresh";
+import { useSharedWatchlist } from "../../lib/use-shared-watchlist";
+import SharedWatchlistControls from "../SharedWatchlistControls";
 
 export default function WatchlistWidget() {
   const { t: ui, locale } = useI18n();
 
   const polling = useAdaptiveRefresh();
   const watchlist = useTerminal((s) => s.watchlist);
-  const addToWatchlist = useTerminal((s) => s.addToWatchlist);
-  const removeFromWatchlist = useTerminal((s) => s.removeFromWatchlist);
+  const shared = useSharedWatchlist();
+  const addToWatchlist = shared.add;
+  const removeFromWatchlist = shared.remove;
   const setActiveSymbol = useTerminal((s) => s.setActiveSymbol);
   const activeSymbol = useTerminal(s => s.activeSymbol);
   const [input, setInput] = useState("");
@@ -33,7 +36,9 @@ export default function WatchlistWidget() {
 
   return (
     <div ref={polling.ref}>
-      <SavedControls kind="groups" value={watchlist} onLoad={value=>useTerminal.getState().setWatchlist(value as string[])} />
+      <SharedWatchlistControls />
+      {shared.mutation.error && <p role="alert">{shared.mutation.error.message}</p>}
+      {!shared.id && <SavedControls kind="groups" value={watchlist} onLoad={value=>useTerminal.getState().setWatchlist(value as string[])} />}
       <form
         className="flex gap-1 p-1"
         onSubmit={(e) => {

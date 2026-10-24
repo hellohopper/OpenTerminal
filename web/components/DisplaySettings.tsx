@@ -8,11 +8,13 @@ import { WIDGET_CATALOG, WIDGET_GROUPS } from "../lib/widget-catalog";
 import { WIDGET_TYPES } from "../lib/workspaces";
 import { matchesWidget } from "../lib/i18n";
 import Modal from "./Modal";
+import DeviceSettings from "./DeviceSettings";
 
 const TABS = [
   { id: "appearance", label: "Appearance" },
   { id: "sidebar", label: "Sidebar" },
   { id: "panels", label: "Panels" },
+  { id: "devices", label: "Devices" },
 ] as const;
 type SettingsTab = typeof TABS[number]["id"];
 
@@ -61,6 +63,7 @@ export default function DisplaySettings() {
         }}>{ui(item.label)}</button>)}
       </div>
       <div key={tab} className="ui-settings-body space-y-4" role="tabpanel" id={`${id}-content`} aria-labelledby={`${id}-${tab}`} tabIndex={0}>
+      {tab === "devices" && <DeviceSettings />}
       {tab === "appearance" && <>
         <label className="block">Language / 语言<select aria-label="Language / 语言" className="block w-full mt-2" value={display.language} onChange={(event) => display.setLanguage(event.target.value === "zh" ? "zh" : "en")}><option value="en" lang="en">English</option><option value="zh" lang="zh-CN">中文</option></select></label>
         <h3 className="amber font-bold">{ui("Font & spacing")}</h3>

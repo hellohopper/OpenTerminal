@@ -11,6 +11,7 @@
 <key>CFBundleShortVersionString</key><string>$(MARKETING_VERSION)</string>
 <key>CFBundleVersion</key><string>$(CURRENT_PROJECT_VERSION)</string>
 <key>LSRequiresIPhoneOS</key><true/>
+<key>CFBundleURLTypes</key><array><dict><key>CFBundleURLName</key><string>OpenTerminal connection</string><key>CFBundleURLSchemes</key><array><string>openterminal</string></array></dict></array>
 <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
 <key>NSLocalNetworkUsageDescription</key><string>Connect to the OpenTerminal server you choose on your local network.</string>
 <key>UILaunchScreen</key><dict/>

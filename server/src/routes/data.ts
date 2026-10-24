@@ -3,7 +3,7 @@ import { dataDir } from "../db.js";
 import { createBackupScheduler } from "../storage/backup-scheduler.js";
 import {Router} from 'express';import {db} from '../db.js';import {asyncRoute} from '../async-route.js';import {createBackup,restoreBackup} from '../storage/backup.js';import {SCHEMA_VERSION} from '../storage/migrations.js';
 export const dataRouter=Router();
-export const backupScheduler=createBackupScheduler(db,join(dataDir,"backups"));
+export const backupScheduler=createBackupScheduler(db,process.env.BACKUP_DIR || join(dataDir,"backups"));
 dataRouter.get("/schedule",asyncRoute(async(_req,res)=>res.json({policy:await backupScheduler.policy(),status:await backupScheduler.status(),files:await backupScheduler.files()})));
 dataRouter.post("/schedule",asyncRoute(async(req,res)=>{try{res.json(await backupScheduler.configure(req.body));}catch(e){res.status(400).json({error:(e as Error).message});}}));
 dataRouter.post("/schedule/run",asyncRoute(async(_req,res)=>{try{res.json(await backupScheduler.check(true));}catch(e){res.status(400).json({error:(e as Error).message});}}));

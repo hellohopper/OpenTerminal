@@ -13,6 +13,8 @@ services:
       - API_KEY=${API_KEY:-}
       - API_HOST=0.0.0.0 # safe: still only published to 127.0.0.1 above
       - WEB_ORIGIN=${WEB_ORIGIN:-http://localhost:3000}
+      - WEB_PASSWORD=${WEB_PASSWORD:-}
+      - WEB_SESSION_SECRET=${WEB_SESSION_SECRET:-}
       - DATA_DIR=/app/data
       - DATABASE_URL=${DATABASE_URL:-}
       - WEB_PUSH_PUBLIC_KEY=${WEB_PUSH_PUBLIC_KEY:-}

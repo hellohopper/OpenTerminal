@@ -29,5 +29,8 @@ export const MIGRATIONS = [
   },
   { id: 6, sqlite: "CREATE TABLE research_records (id INTEGER PRIMARY KEY AUTOINCREMENT,kind TEXT NOT NULL,record_key TEXT,payload TEXT NOT NULL,version INTEGER NOT NULL DEFAULT 1,updated_at TEXT NOT NULL,UNIQUE(kind,record_key));", postgres: "CREATE TABLE research_records (id BIGSERIAL PRIMARY KEY,kind TEXT NOT NULL,record_key TEXT,payload TEXT NOT NULL,version INTEGER NOT NULL DEFAULT 1,updated_at TEXT NOT NULL,UNIQUE(kind,record_key));" },
   { id: 7, sqlite: "SELECT 1;", postgres: "ALTER TABLE research_records ALTER COLUMN version TYPE BIGINT;" },
+  { id: 8,
+    sqlite: "CREATE TABLE mobile_devices (id TEXT PRIMARY KEY,name TEXT NOT NULL,token_hash TEXT NOT NULL UNIQUE,binding TEXT NOT NULL,expires_at TEXT NOT NULL,created_at TEXT NOT NULL,revoked_at TEXT);",
+    postgres: "CREATE TABLE mobile_devices (id TEXT PRIMARY KEY,name TEXT NOT NULL,token_hash TEXT NOT NULL UNIQUE,binding TEXT NOT NULL,expires_at TEXT NOT NULL,created_at TEXT NOT NULL,revoked_at TEXT);" },
 ];
 export const SCHEMA_VERSION = MIGRATIONS.at(-1)!.id;

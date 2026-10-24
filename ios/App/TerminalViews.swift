@@ -14,7 +14,7 @@ struct TerminalTabs: View {
             guard phase == .active else { return }
             while !Task.isCancelled {
                 await model.refresh()
-                do { try await Task.sleep(for: .seconds(30)) } catch { break }
+                do { try await Task.sleep(for: .seconds(model.reconnecting ? model.retryDelay : 30)) } catch { break }
             }
         }
     }
@@ -30,11 +30,12 @@ private struct TerminalPage<Content: View>: View {
             content.navigationTitle(title)
                 .safeAreaInset(edge: .top) {
                     if let error = model.error {
-                        HStack { Text(error).font(.callout); Spacer(); Button("Retry") { Task { await model.refresh() } } }
+                        HStack { VStack(alignment:.leading){Text(error).font(.callout);if model.reconnecting{Text("Reconnecting automatically…").font(.caption)}}; Spacer(); Button("Retry") { Task { await model.refresh() } } }
                             .padding().background(.orange.opacity(0.15)).accessibilityElement(children: .contain)
                     }
                 }
                 .toolbar { ToolbarItem(placement: .primaryAction) { Button { settings = true } label: { Label("Settings", systemImage: "gearshape") } } }
+                .safeAreaInset(edge:.bottom){if let updated=model.lastUpdated{Text("Last updated \(updated.formatted(date:.omitted,time:.shortened))").font(.caption).foregroundStyle(.secondary).padding(.vertical,4)}}
                 .sheet(isPresented: $settings) { SettingsView() }
         }
     }
@@ -79,9 +80,10 @@ private struct WatchlistView: View {
     var body: some View {
         List {
             Section {
+                Picker("Shared watchlist",selection:Binding(get:{model.sharedListID ?? 0},set:{model.chooseList($0)})){ForEach(model.sharedLists){Text($0.payload.name).tag($0.id)}}
                 HStack {
                     TextField("Ticker", text: $symbol).terminalInput().onSubmit(add)
-                    Button("Add", action: add).disabled(model.watchlist.count >= 150)
+                    Button("Add", action: add).disabled(model.watchlist.count >= 150 || model.sharedListID == nil)
                 }
                 if invalid { Text("Enter a valid ticker.").foregroundStyle(.red) }
             }
@@ -90,14 +92,14 @@ private struct WatchlistView: View {
                     if let quote = model.quotes.first(where: { $0.symbol == symbol }) { QuoteRow(quote: quote) }
                     else { HStack { Text(symbol); Spacer(); Text("—").foregroundStyle(.secondary) } }
                 }
-            }.onDelete { offsets in model.setWatchlist(model.watchlist.enumerated().filter { !offsets.contains($0.offset) }.map(\.element)); Task { await model.refresh() } }
+            }.onDelete { offsets in let symbols=offsets.map{model.watchlist[$0]};Task{for symbol in symbols{await model.changeSymbol(symbol,action:"remove")}} }
             if model.watchlist.isEmpty { Text("Your watchlist is empty.").foregroundStyle(.secondary) }
         }.refreshable { await model.refresh() }
     }
     private func add() {
         guard let value = normalizedSymbol(symbol) else { invalid = true; return }
-        model.setWatchlist(model.watchlist + [value]); symbol = ""; invalid = false
-        Task { await model.refresh() }
+        symbol = ""; invalid = false
+        Task { await model.changeSymbol(value,action:"add") }
     }
 }
 private struct HoldingsView: View {
@@ -106,7 +108,7 @@ private struct HoldingsView: View {
         List {
             if !model.portfolios.isEmpty {
                 Picker("Portfolio account", selection: $model.portfolioID) { ForEach(model.portfolios) { Text($0.name).tag(Optional($0.id)) } }
-                    .onChange(of: model.portfolioID) { _, _ in Task { await model.refreshHoldings() } }
+                    .onChange(of: model.portfolioID) { _, _ in model.positions=[];model.holdingsReady=false;Task { await model.refreshHoldings() } }
             }
             Section("Positions · USD") {
                 LabeledContent("Market value", value: number(model.valuation?.marketValue))
@@ -131,7 +133,7 @@ private struct AlertsView: View {
         List {
             Section {
                 Button("Create price alert") { create = true }
-                Text("Rules are checked by your running server. Native background push is not configured by this app; use the installed web app for Web Push.").font(.caption).foregroundStyle(.secondary)
+                Text("Rules are checked by your running Mac. Enable native notifications in Settings after configuring APNs on the server.").font(.caption).foregroundStyle(.secondary)
             }
             ForEach(model.alerts) { rule in
                 VStack(alignment: .leading, spacing: 8) {
@@ -187,12 +189,14 @@ private struct SettingsView: View {
                 Section("Saved web layouts") {
                     Button("Load published layouts") { Task { await model.loadWorkspaces() } }
                     ForEach(model.workspaces) { workspace in Button(workspace.name) { selected = workspace } }
-                    Text("Upload a reviewed snapshot from the web Sync panel first. Importing a watchlist replaces only this device's list; web layouts and records stay on the server.").font(.caption).foregroundStyle(.secondary)
+                    Text("Upload a reviewed snapshot from the web Sync panel first. Importing replaces the selected shared watchlist on the server; other web layouts are preserved.").font(.caption).foregroundStyle(.secondary)
                 }
-                Section("Privacy") { Text("Passwords, session cookies and account responses are not stored on disk. Only the server address and a server-specific watchlist are saved locally. Background app previews are covered. The server's 12-hour session expiry still applies.").font(.callout) }
+                Section("Native notifications"){Button("Enable native notifications"){Task{await model.enableNotifications()}};if let message=model.pushMessage{Text(message).font(.callout)}}
+                Section("Paired devices"){Button("Refresh devices"){Task{await model.loadDevices()}};ForEach(model.devices){device in HStack{Text(device.name);Spacer();Button(device.revoked_at == nil ? "Revoke" : "Revoked",role:.destructive){Task{await model.revoke(device.id)}}.disabled(device.revoked_at != nil)}}}
+                Section("Privacy") { Text("The owner password and account responses are never persisted. Remember this device stores only its revocable authorization token in this phone’s Keychain. Tokens expire after 30 days of inactivity and renew while the app is used.").font(.callout) }
             }.navigationTitle("Settings").toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
-                .confirmationDialog("Replace this device's watchlist?", isPresented: Binding(get: { selected != nil }, set: { if !$0 { selected = nil } }), titleVisibility: .visible) {
-                    Button("Import watchlist") { if let selected { model.setWatchlist(selected.watchlist); Task { await model.refresh() } }; selected = nil }
+                .confirmationDialog("Replace the selected shared watchlist on all devices?", isPresented: Binding(get: { selected != nil }, set: { if !$0 { selected = nil } }), titleVisibility: .visible) {
+                    Button("Import watchlist") { if let selected { Task { await model.replaceWatchlist(selected.watchlist) } }; selected = nil }
                     Button("Cancel", role: .cancel) { selected = nil }
                 }
         }
