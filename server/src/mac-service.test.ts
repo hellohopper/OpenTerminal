@@ -19,7 +19,7 @@ it("runs a production child with repo-local storage and captures its output",()=
  const fixture=join(root,"runtime"),config=setup(fixture,"https://studio.example.ts.net");
  config.keepAwake=false;writeFileSync(join(fixture,"config/server.json"),JSON.stringify(config));
  mkdirSync(join(fixture,"scripts"));mkdirSync(join(fixture,"server/dist"),{recursive:true});
- for(const name of["mac-service.mjs","mac-service-lib.mjs"])copyFileSync(new URL(`../../scripts/${name}`,import.meta.url),join(fixture,"scripts",name));
+ for(const name of["mac-service.mjs","mac-service-lib.mjs","mac-health.mjs"])copyFileSync(new URL(`../../scripts/${name}`,import.meta.url),join(fixture,"scripts",name));
  writeFileSync(join(fixture,"server/dist/index.js"),"console.log(JSON.stringify({data:process.env.DATA_DIR,backup:process.env.BACKUP_DIR,database:process.env.DATABASE_URL,host:process.env.API_HOST,disabled:process.env.WEB_AUTH_DISABLED,apns:process.env.APNS_KEY_FILE}));console.error('diagnostic');");
  const result=spawnSync(process.execPath,[join(fixture,"scripts/mac-service.mjs"),"run","api"],{env:{...process.env,DATA_DIR:"/outside",DATABASE_URL:"postgresql://outside",WEB_AUTH_DISABLED:"1",APNS_KEY_FILE:"/outside/key.p8"},encoding:"utf8"});
  expect(result.status,result.stderr).toBe(0);expect(JSON.parse(readFileSync(join(fixture,"logs/api.log"),"utf8"))).toEqual({data:join(fixture,"data"),backup:join(fixture,"backups"),database:"",host:"127.0.0.1",disabled:"",apns:""});

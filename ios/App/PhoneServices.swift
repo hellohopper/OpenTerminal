@@ -1,5 +1,15 @@
 import Foundation
 import Security
+@MainActor protocol CredentialStorage {
+    func load(_ server: String) throws -> Data?
+    func save(_ data: Data, server: String) throws
+    func remove(_ server: String)
+}
+struct KeychainCredentialStorage: CredentialStorage {
+    func load(_ server: String) throws -> Data? { try CredentialStore.load(server) }
+    func save(_ data: Data, server: String) throws { try CredentialStore.save(data, server: server) }
+    func remove(_ server: String) { CredentialStore.remove(server) }
+}
 enum CredentialStore {
     private static func query(_ server: String) -> [String:Any] { [kSecClass as String:kSecClassGenericPassword,kSecAttrService as String:"com.openterminal.device",kSecAttrAccount as String:server,kSecAttrSynchronizable as String:false] }
     static func load(_ server: String) throws -> Data? {

@@ -11,7 +11,7 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Core API and valuation tests
+      - name: Core API, valuation and app state tests
         run: swift test --disable-xctest --package-path ios
       - name: Build native iPhone and iPad app
         run: xcodebuild -project ios/OpenTerminal.xcodeproj -scheme OpenTerminal -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/OpenTerminalDerived CODE_SIGNING_ALLOWED=NO build

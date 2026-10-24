@@ -12,6 +12,7 @@ struct TerminalTabs: View {
             TerminalPage(title: "Alerts") { AlertsView() }.tabItem { Label("Alerts", systemImage: "bell") }
         }.task(id: phase) {
             guard phase == .active else { return }
+            await model.registerExistingPush()
             while !Task.isCancelled {
                 await model.refresh()
                 do { try await Task.sleep(for: .seconds(model.reconnecting ? model.retryDelay : 30)) } catch { break }
@@ -29,7 +30,7 @@ private struct TerminalPage<Content: View>: View {
         NavigationStack {
             content.navigationTitle(title)
                 .safeAreaInset(edge: .top) {
-                    if let error = model.error {
+                    if let error = model.error ?? (model.sectionErrors.isEmpty ? nil : "\(model.sectionErrors.keys.map(\.rawValue).sorted().joined(separator: ", ")): data unavailable.") {
                         HStack { VStack(alignment:.leading){Text(error).font(.callout);if model.reconnecting{Text("Reconnecting automatically…").font(.caption)}}; Spacer(); Button("Retry") { Task { await model.refresh() } } }
                             .padding().background(.orange.opacity(0.15)).accessibilityElement(children: .contain)
                     }
@@ -44,12 +45,13 @@ private struct TodayView: View {
     @EnvironmentObject private var model: TerminalModel
     var body: some View {
         List {
+            Section { DataSectionStatus(section: .briefing); DataSectionStatus(section: .holdings) }
             if let briefing = model.briefing {
                 Section(briefing.date) { Text(briefing.summary) }
                 Section("Market") { ForEach(briefing.indexes) { QuoteRow(quote: $0) } }
                 Section("Headlines") { ForEach(briefing.headlines.prefix(5)) { item in if let url = item.url { Link(item.title, destination: url) } } }
                 if !briefing.warnings.isEmpty { Section("Data coverage") { ForEach(briefing.warnings, id: \.self) { Text($0).font(.callout).foregroundStyle(.secondary) } } }
-            } else { Section { Text("Add symbols to your watchlist and pull to refresh your briefing.") } }
+            } else if !model.loadingSections.contains(.briefing) && model.sectionErrors[.briefing] == nil { Section { Text("Add symbols to your watchlist and pull to refresh your briefing.") } }
             Section("Your holdings") {
                 LabeledContent("Position value", value: number(model.valuation?.marketValue))
                 LabeledContent("Unrealized P&L", value: number(model.valuation?.unrealized))
@@ -57,6 +59,17 @@ private struct TodayView: View {
             }
             Section("Alerts") { Text("\(model.alerts.filter { $0.armed != 0 }.count) active alerts") }
         }.refreshable { await model.refresh() }
+    }
+}
+private struct DataSectionStatus: View {
+    @EnvironmentObject private var model: TerminalModel
+    let section: DataSection
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if model.loadingSections.contains(section) { ProgressView("Loading \(section.rawValue.lowercased())…") }
+            if let error = model.sectionErrors[section] { Text("\(section.rawValue): \(error)").foregroundStyle(.orange).font(.callout) }
+            if let updated = model.sectionUpdated[section] { Text("\(section.rawValue) updated \(updated.formatted(date: .omitted, time: .shortened))").font(.caption).foregroundStyle(.secondary) }
+        }
     }
 }
 struct QuoteRow: View {
@@ -80,6 +93,7 @@ private struct WatchlistView: View {
     var body: some View {
         List {
             Section {
+                DataSectionStatus(section: .watchlist)
                 Picker("Shared watchlist",selection:Binding(get:{model.sharedListID ?? 0},set:{model.chooseList($0)})){ForEach(model.sharedLists){Text($0.payload.name).tag($0.id)}}
                 HStack {
                     TextField("Ticker", text: $symbol).terminalInput().onSubmit(add)
@@ -93,7 +107,7 @@ private struct WatchlistView: View {
                     else { HStack { Text(symbol); Spacer(); Text("—").foregroundStyle(.secondary) } }
                 }
             }.onDelete { offsets in let symbols=offsets.map{model.watchlist[$0]};Task{for symbol in symbols{await model.changeSymbol(symbol,action:"remove")}} }
-            if model.watchlist.isEmpty { Text("Your watchlist is empty.").foregroundStyle(.secondary) }
+            if model.watchlist.isEmpty && !model.loadingSections.contains(.watchlist) && model.sectionErrors[.watchlist] == nil { Text("Your watchlist is empty.").foregroundStyle(.secondary) }
         }.refreshable { await model.refresh() }
     }
     private func add() {
@@ -111,6 +125,7 @@ private struct HoldingsView: View {
                     .onChange(of: model.portfolioID) { _, _ in model.positions=[];model.holdingsReady=false;Task { await model.refreshHoldings() } }
             }
             Section("Positions · USD") {
+                DataSectionStatus(section: .holdings)
                 LabeledContent("Market value", value: number(model.valuation?.marketValue))
                 LabeledContent("Unrealized P&L", value: number(model.valuation?.unrealized))
                 Text("Excludes cash. Incomplete valuations are withheld.").font(.caption).foregroundStyle(.secondary)
@@ -132,6 +147,7 @@ private struct AlertsView: View {
     var body: some View {
         List {
             Section {
+                DataSectionStatus(section: .alerts)
                 Button("Create price alert") { create = true }
                 Text("Rules are checked by your running Mac. Enable native notifications in Settings after configuring APNs on the server.").font(.caption).foregroundStyle(.secondary)
             }
@@ -142,7 +158,7 @@ private struct AlertsView: View {
                     Button(rule.armed == 0 ? "Rearm" : "Pause") { Task { await model.setArmed(rule) } }
                 }.padding(.vertical, 4)
             }
-            if model.alerts.isEmpty { Text("No alerts yet.") }
+            if model.alerts.isEmpty && !model.loadingSections.contains(.alerts) && model.sectionErrors[.alerts] == nil { Text("No alerts yet.") }
         }.refreshable { await model.refresh() }.sheet(isPresented: $create) { AlertEditor() }
     }
 }
@@ -185,6 +201,13 @@ private struct SettingsView: View {
                     Text(model.server?.origin.absoluteString ?? "").textSelection(.enabled)
                     if let server = model.server { Link("Open full web terminal", destination: server.origin) }
                     Button("Sign out", role: .destructive) { dismiss(); Task { await model.signOut() } }
+                }
+                Section("Server health") {
+                    Button("Check server health") { Task { await model.checkHealth() } }.disabled(model.checkingHealth)
+                    if model.checkingHealth { ProgressView("Checking…") }
+                    ForEach(["Connection", "Backups", "Native push"], id: \.self) { name in
+                        if let message = model.health[name] { VStack(alignment: .leading) { Text(name).font(.headline); Text(message).font(.callout) } }
+                    }
                 }
                 Section("Saved web layouts") {
                     Button("Load published layouts") { Task { await model.loadWorkspaces() } }
