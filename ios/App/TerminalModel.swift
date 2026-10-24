@@ -25,6 +25,8 @@ import UserNotifications
     @Published var devices: [MobileDeviceInfo] = []
     @Published var sharedLists: [SharedWatchlist] = []
     @Published var sharedListID: Int?
+    @Published var managingLists = false
+    @Published var listManagementError: String?
     @Published var researchSymbol: String?
     @Published var quotes: [Quote] = []
     @Published var portfolios: [Portfolio] = []
@@ -93,6 +95,7 @@ import UserNotifications
         generation = UUID(); credential = nil; api = nil; server = nil; signedIn = false
         quotes = []; portfolios = []; positions = []; holdingQuotes = []; alerts = []; briefing = nil; workspaces = []; portfolioID = nil; holdingsReady = false
         sharedLists = []; sharedListID = nil; devices = []; watchlist = []; lastUpdated = nil; reconnecting = false; error = nil
+        managingLists = false; listManagementError = nil
         enableDeliveryAfterRegistration=false
         refreshID = nil; sectionErrors = [:]; sectionUpdated = [:]; loadingSections = []; health = [:]; checkingHealth = false
         await old?.signOut()
@@ -186,6 +189,7 @@ import UserNotifications
     func refreshLists() async throws {
         guard let api else { return }; let token = generation, revision = listRevision
         var lists: [SharedWatchlist] = try await api.get("/api/watchlists")
+        guard token == generation, revision == listRevision else { return }
         if lists.isEmpty {
             let legacy = server.flatMap { defaults.stringArray(forKey: "watchlist:\($0.origin.absoluteString)") } ?? ["AAPL", "MSFT", "NVDA", "SPY"]
             let _: Acknowledgement = try await api.post("/api/watchlists/default", body: NewList(name: "My watchlist", symbols: legacy.compactMap(normalizedSymbol)))
@@ -195,12 +199,71 @@ import UserNotifications
         let saved = server.map { defaults.integer(forKey: "shared-list:\($0.origin.absoluteString)") }
         let selected = lists.first { $0.id == (sharedListID ?? saved) } ?? lists.first
         if let selected { sharedListID = selected.id; setWatchlist(selected.payload.symbols) }
+        else { sharedListID = nil; setWatchlist([]) }
     }
     func chooseList(_ id: Int) {
+        guard sharedLists.contains(where: { $0.id == id }) else { return }
         listRevision += 1
         sharedListID = id
         if let server { defaults.set(id, forKey: "shared-list:\(server.origin.absoluteString)") }
         if let row = sharedLists.first(where: { $0.id == id }) { setWatchlist(row.payload.symbols) }; Task { await refresh() }
+    }
+    @discardableResult func createList(name: String, copyCurrent: Bool = false) async -> Bool {
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, name.count <= 64 else { listManagementError = "Use a name of 1–64 characters."; return false }
+        let symbols = copyCurrent ? watchlist : []
+        return await manageLists { api in
+            let result: CreatedList = try await api.post("/api/watchlists", body: NewList(name: name, symbols: symbols)); return result.id
+        }
+    }
+    @discardableResult func renameList(_ row: SharedWatchlist, name: String) async -> Bool {
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, name.count <= 64 else { listManagementError = "Use a name of 1–64 characters."; return false }
+        return await manageLists { api in
+            let _: Acknowledgement = try await api.post("/api/watchlists/\(row.id)/rename", body: RenamedList(name: name, version: row.version)); return nil
+        }
+    }
+    @discardableResult func deleteList(_ row: SharedWatchlist) async -> Bool {
+        await manageLists { api in try await api.delete("/api/watchlists/\(row.id)", query: ["version": String(row.version)]); return nil }
+    }
+    func moveList(_ row: SharedWatchlist, direction: String) async {
+        await manageLists { api in
+            let _: [SharedWatchlist] = try await api.post("/api/watchlists/\(row.id)/move", body: ["direction": direction]); return nil
+        }
+    }
+    func moveSymbol(_ symbol: String, direction: Int) async {
+        guard let row = sharedLists.first(where: { $0.id == sharedListID }), let index = row.payload.symbols.firstIndex(of: symbol) else { return }
+        var symbols = row.payload.symbols; let next = index + direction
+        guard symbols.indices.contains(next) else { return }; symbols.swapAt(index, next)
+        await manageLists { api in
+            let _: Acknowledgement = try await api.post("/api/watchlists/\(row.id)/reorder-symbols", body: OrderedSymbols(symbols: symbols, version: row.version)); return nil
+        }
+    }
+    @discardableResult private func manageLists(_ operation: (TerminalAPI) async throws -> Int?) async -> Bool {
+        guard let api, !managingLists else { return false }; let token = generation
+        managingLists = true; listManagementError = nil; listRevision += 1
+        defer { if token == generation { managingLists = false } }
+        do {
+            let selected = try await operation(api); guard token == generation else { return false }
+            listRevision += 1
+            if let selected {
+                sharedListID = selected
+                if let server { defaults.set(selected, forKey: "shared-list:\(server.origin.absoluteString)") }
+            }
+            try await refreshLists(); guard token == generation else { return false }
+            // Updating quotes must not keep the management controls waiting on a market provider.
+            Task { await refresh() }; return true
+        } catch {
+            guard token == generation else { return false }
+            if error as? ConnectionError == .unauthorized { await report(error) }
+            else {
+                listManagementError = error.localizedDescription
+                listRevision += 1
+                do { try await refreshLists() }
+                catch { if token == generation && error as? ConnectionError == .unauthorized { await report(error) } }
+            }
+            return false
+        }
     }
     func changeSymbol(_ symbol: String, action: String) async {
         guard let value = normalizedSymbol(symbol), let api, let id = sharedListID else { return }; let token = generation
@@ -312,6 +375,9 @@ private struct BackupStatus: Decodable, Sendable {
     }
 }
 private struct NewList: Encodable, Sendable { let name: String; let symbols: [String] }
+private struct CreatedList: Decodable, Sendable { let id: Int }
+private struct RenamedList: Encodable, Sendable { let name: String; let version: Int }
+private struct OrderedSymbols: Encodable, Sendable { let symbols: [String]; let version: Int }
 private struct ReplacementList: Encodable, Sendable { let name: String; let symbols: [String]; let version: Int }
 private struct NotificationState:Decodable,Sendable{struct Settings:Decodable,Sendable{struct Policy:Decodable,Sendable{let quietStart:String;let quietEnd:String;let timezone:String};let version:Int;let payload:Policy};let settings:Settings}
 private struct EnableDelivery:Encodable,Sendable{let enabled:Bool;let quietStart:String;let quietEnd:String;let timezone:String;let version:Int}

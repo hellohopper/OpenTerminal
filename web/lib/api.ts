@@ -22,7 +22,10 @@ export async function apiPost<T>(path: string, body: unknown): Promise<T> {
 
 export async function apiDelete(path: string): Promise<void> {
   const res = await fetch(path, { method: "DELETE" });
-  if (!res.ok && res.status !== 204) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error ?? `HTTP ${res.status}`);
+  }
 }
 
 export type Quote = {
