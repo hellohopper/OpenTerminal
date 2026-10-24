@@ -16,6 +16,10 @@ import WidgetErrorBoundary from "./WidgetErrorBoundary";
 
 const PAGE_LABELS: Record<SimplePage, string> = { today: "Today", watchlist: "Watchlist", holdings: "Holdings", research: "Research", alerts: "Alerts" };
 const CARD_LABELS: Record<SimpleCard, string> = { briefing: "Market briefing", watchlist: "Watchlist", holdings: "Holdings", alerts: "Alerts" };
+export function SimpleNavigation({ mobile = false }: { mobile?: boolean }) {
+  const { t } = useI18n(), page = useInterface(s => s.page), setPage = useInterface(s => s.setPage);
+  return <nav className={mobile ? "mobile-nav simple-mobile-nav" : "simple-nav"} aria-label={t(mobile ? "Mobile simple navigation" : "Simple navigation")}>{(["today", "watchlist", "holdings", "research"] as const).map(p => <button className={mobile ? "" : `term-btn ${p === page ? "active" : ""}`} aria-current={p === page ? "page" : undefined} key={p} onClick={() => setPage(p)}>{t(PAGE_LABELS[p])}</button>)}</nav>;
+}
 function QueryFeedback({ loading, error, retry }: { loading: boolean; error: Error | null; retry: () => void }) {
   const { t } = useI18n();
   return loading ? <p role="status" className="dim">{t("Loading…")}</p> : error ? <p role="alert">{error.message} <button className="term-btn" onClick={retry}>{t("Retry")}</button></p> : null;
@@ -77,7 +81,7 @@ export default function SimpleHome() {
   const { t } = useI18n(), page = useInterface(s => s.page), setPage = useInterface(s => s.setPage), cards = useTerminal(s => s.simpleCards ?? SIMPLE_CARDS);
   const symbol = useTerminal(s => s.activeSymbol);
   return <div className="simple-home">
-    <nav className="simple-nav" aria-label={t("Simple navigation")}>{(["today", "watchlist", "holdings", "research"] as const).map(p => <button className={`term-btn ${p === page ? "active" : ""}`} aria-current={p === page ? "page" : undefined} key={p} onClick={() => setPage(p)}>{t(PAGE_LABELS[p])}</button>)}</nav>
+    <SimpleNavigation />
     <div className="simple-heading"><h1>{t(PAGE_LABELS[page])}</h1>{page === "today" && <details><summary>{t("Customize home")}</summary><div className="simple-customize">{SIMPLE_CARDS.map(card => <label key={card}><input type="checkbox" checked={cards.includes(card)} onChange={e => useTerminal.getState().setSimpleCards(e.target.checked ? [...cards, card] : cards.filter(c => c !== card))} /> {t(CARD_LABELS[card])}</label>)}</div></details>}</div>
     {page === "today" ? <div className="simple-grid">{cards.map(card => <section className={`simple-card simple-card-${card}`} key={card} aria-label={t(CARD_LABELS[card])}><h2>{t(CARD_LABELS[card])}</h2><WidgetErrorBoundary name={t(CARD_LABELS[card])}>{card === "briefing" ? <MarketBriefing /> : card === "watchlist" ? <SimpleWatchlist preview /> : card === "holdings" ? <SimpleHoldings preview /> : <AlertsSummary />}</WidgetErrorBoundary></section>)}{!cards.length && <p>{t("Choose cards in Customize home.")}</p>}</div>
       : <section className="simple-card" aria-label={t(PAGE_LABELS[page])}><WidgetErrorBoundary key={page} name={t(PAGE_LABELS[page])}>{page === "watchlist" ? <SimpleWatchlist /> : page === "holdings" ? <SimpleHoldings /> : page === "alerts" ? <AlertsWidget /> : <><p>{t("Search for a company or open your selected symbol.")}</p><div className="simple-add"><button className="term-btn" onClick={() => useTerminal.getState().setCommandOpen(true)}>{t("Search symbols")}</button><button className="term-btn" onClick={() => useTerminal.getState().openResearch(symbol)}>{t("Research {symbol}", { symbol })}</button></div></>}</WidgetErrorBoundary></section>}

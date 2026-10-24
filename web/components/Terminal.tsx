@@ -20,7 +20,7 @@ import { useTerminal } from "../store/terminal";
 import { useDisplay } from "../store/display";
 import { PollingScope } from "../lib/use-adaptive-refresh";
 import { useInterface } from "../store/interface";
-import SimpleHome from "./SimpleHome";
+import SimpleHome, { SimpleNavigation } from "./SimpleHome";
 
 export default function Terminal() {
   const { t: ui, widgetTitle } = useI18n();
@@ -38,6 +38,7 @@ export default function Terminal() {
   const view = useTerminal(s => s.mobileView), setView = useTerminal(s => s.setMobileView);
   useEffect(() => {
     const media = window.matchMedia("(max-width: 767px)");
+    try { if (media.matches && !localStorage.getItem("openterminal-interface")) useInterface.getState().setMode("simple"); } catch { /* Keep the current mode if storage is unavailable. */ }
     const update = () => { setCompact(media.matches); if (!media.matches) setTools(false); };
     update(); media.addEventListener("change", update);
     return () => media.removeEventListener("change", update);
@@ -92,6 +93,7 @@ export default function Terminal() {
           </PollingScope>
         </main>
       </div>
+      {compact && mode === "simple" && <SimpleNavigation mobile />}
       {compact && mode === "professional" && <nav aria-label={ui("Mobile navigation")} className="mobile-nav">
         {(["holdings", "alerts", "events", "workspace"] as const).map(v => <button key={v} aria-current={view === v ? "page" : undefined} onClick={() => setView(v)}>{v === "holdings" ? ui("Holdings") : v === "alerts" ? ui("Alerts") : v === "events" ? ui("Events") : ui("Workspace")}</button>)}
         <button onClick={() => setTools(true)}>{ui("Tools")}</button>

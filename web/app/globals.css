@@ -161,6 +161,8 @@ button.term-btn.active {
 .layout-save-form { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; flex-basis: 100%; padding: .75rem 0; }
 .layout-save-form label { display: flex; align-items: center; gap: .5rem; }
 .mode-control { display: flex; align-items: center; gap: .5rem; }
+.offline-banner { flex-basis: 100%; color: var(--amber); padding: .5rem; border: 1px solid var(--amber-dim); }
+.install-dialog { width: min(42rem, 94vw); }
 .connection-details { position: relative; margin-left: auto; }
 .connection-popover { position: absolute; right: 0; top: 100%; z-index: 60; width: min(30rem, 85vw); padding: 1rem; background: var(--panel-2); border: 1px solid var(--border); }
 .simple-home { max-width: 100rem; margin: auto; padding: 1.5rem; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif; font-size: max(14px, 1rem); }
@@ -188,6 +190,19 @@ button.term-btn.active {
 .research-more { position: relative; padding: .25rem; }
 .research-more > div { position: absolute; right: 0; z-index: 20; min-width: 18rem; padding: .75rem; display: grid; gap: .5rem; background: var(--panel-2); border: 1px solid var(--border); }
 @media (max-width: 767px) { .simple-home { padding: 1rem; } .simple-grid { grid-template-columns: minmax(0, 1fr); } .simple-card { padding: 1rem; } .simple-nav .term-btn { flex: 1; padding: .75rem .5rem; } }
+@media (max-width: 767px) {
+  .simple-home .simple-nav { display: none; }
+  .price-alert-toasts { top: auto; bottom: calc(5rem + env(safe-area-inset-bottom)); max-height: 35dvh; overflow-y: auto; }
+  .simple-mobile-nav button { padding-inline: .25rem; }
+  .terminal-shell { padding-top: env(safe-area-inset-top); padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+  .simple-shell button, .simple-shell summary, .simple-shell select { min-height: 44px; }
+  .simple-shell .topbar > .mode-control { flex-shrink: 1; min-width: 0; }
+  .simple-shell .topbar select { max-width: 10rem; }
+  .simple-shell .simple-heading { flex-wrap: wrap; }
+  .simple-shell .simple-add input { max-width: 100%; width: 100%; }
+  .simple-shell .simple-add label { min-width: 0; flex: 1; }
+  .simple-card > div, .simple-card > form { max-width: 100%; overflow-x: auto; }
+}
 .widget-sidebar { width: 12rem; }
 .terminal-dialog {
   position: fixed; inset: 0; margin: auto; padding: 0;
