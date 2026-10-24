@@ -112,6 +112,10 @@ export async function evaluateAlerts(
           rule.revision,
           rule.generation ?? "legacy",
         );
+      if (changed.changes && rule.last_checked_at && now.getTime()-Date.parse(rule.last_checked_at)>Math.max(5*60000,(rule.repeat_seconds??0)*1000+60000)) {
+        await db.prepare("INSERT INTO research_records (kind,record_key,payload,updated_at) VALUES (?,?,?,?) ON CONFLICT(kind,record_key) DO NOTHING").run('alert-gap',`${rule.id}:${rule.last_checked_at}`,JSON.stringify({symbol:rule.symbol,alertId:rule.id,from:rule.last_checked_at,to:now.toISOString(),reason:'No successful threshold evaluation recorded in this interval. Pauses, provider failures or server downtime may be responsible. Intraday moves cannot be backfilled.'}),now.toISOString());
+        await db.prepare("DELETE FROM research_records WHERE kind='alert-gap' AND id NOT IN (SELECT id FROM research_records WHERE kind='alert-gap' ORDER BY id DESC LIMIT 100)").run();
+      }
       if (!changed.changes || !triggered) continue;
       const observed = quote.time === null ? null : new Date(quote.time * 1000);
       await db

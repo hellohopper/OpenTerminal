@@ -1,3 +1,4 @@
+import { records } from "../records.js";
 import { asyncRoute } from "../async-route.js";
 import { Router } from "express";
 import { z } from "zod";
@@ -66,6 +67,7 @@ alertsRouter.get(
         .prepare("SELECT * FROM price_alerts ORDER BY id DESC")
         .all(),
       monitor: alertMonitor.status(),
+      gaps: await records("alert-gap"),
     }),
   ),
 );

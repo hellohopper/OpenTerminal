@@ -136,3 +136,16 @@ it("upgrades a pre-history database once without changing the existing snapshot"
     }
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+it('preserves panel settings through server sync and optionally merges scoped display choices',async()=>{
+ const {defaultDisplayPreferences}=await import('../../web/lib/display.js');const {mergeDeviceSnapshots}=await import('../../web/lib/device-sync.js');
+ const db=await AppDatabase.open();try{
+  const w=makeWorkspace('Settings','blank');w.widgets=[{id:'chart',type:'chart',linked:true,settings:{chartRange:'5Y'}}];w.layout=[{i:'chart',x:0,y:0,w:12,h:8}];
+  const display={...defaultDisplayPreferences(),language:'zh' as const,fontSize:18,hiddenPanels:{[w.id]:['chart']}};
+  const source=readDeviceSnapshot({format:'openterminal-device',version:1,workspace:{workspaces:[w],activeWorkspaceId:w.id},preferences:{groups:[],screeners:[]},drawings:{},display});
+  await writeSync(db,source,null);const saved=(await readSync(db))!.payload;expect(saved.workspace.workspaces[0].widgets[0].settings.chartRange).toBe('5Y');expect(saved.display.fontSize).toBe(18);
+  const target={...source,display:{...defaultDisplayPreferences(),hiddenPanels:{other:['keep']}}};
+  expect(mergeDeviceSnapshots(source,target,{workspaceIds:null,includePreferences:true}).display?.fontSize).toBe(12);
+  const merged=mergeDeviceSnapshots(source,target,{workspaceIds:[w.id],includePreferences:false,includeDisplay:true});expect(merged.display?.fontSize).toBe(18);expect(merged.display?.hiddenPanels).toEqual({other:['keep'],[w.id]:['chart']});
+ }finally{await db.close();}
+});

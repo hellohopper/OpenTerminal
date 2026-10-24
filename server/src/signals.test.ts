@@ -20,3 +20,30 @@ it('persists one event across overlapping monitor checks, restart and rule delet
  await createSignalMonitor(load,clock).check();expect(await records('signal-event')).toHaveLength(1);await db.prepare('DELETE FROM research_records WHERE id=?').run(id);expect(await records('signal-event')).toHaveLength(1);
 });
 it('enforces the active-symbol cap when two paused groups are resumed concurrently',async()=>{await db.exec('DELETE FROM research_records;');const first=await addRecord('signal',{...rule,enabled:false,symbols:Array.from({length:20},(_,i)=>`A${i}`)}),second=await addRecord('signal',{...rule,enabled:false,symbols:Array.from({length:20},(_,i)=>`B${i}`)});const router=(await import('./routes/signals.js')).signalsRouter;const handler=(router as any).stack.find((l:any)=>l.route?.path==='/:id'&&l.route.methods.put).route.stack[0].handle;const results=await Promise.all([first,second].map(async id=>{let status=200;const res:any={status:(s:number)=>{status=s;return res;},json:()=>res};await handler({params:{id:String(id)},body:{enabled:true,version:1}},res,(e:any)=>{throw e;});return status;}));expect(results.sort()).toEqual([200,409]);expect((await records<any>('signal')).filter(r=>r.payload.enabled)).toHaveLength(1);});
+
+it('catches intermediate signals after restart with prefix-only calculations and durable checkpoints',async()=>{
+ await db.exec('DELETE FROM research_records;');
+ const {signalCatchup}=await import('./signals.js');
+ const daily={...rule,mode:'daily' as const,conditions:[{type:'VOLUME_ABOVE' as const,period:2,threshold:1.5}]};
+ const sample=Array.from({length:12},(_,i)=>({...rows[0],time:rows[0].time+i*86400,volume:i===9?1000:100}));
+ const previous={date:'2026-01-08',matched:false};
+ const catchup=signalCatchup(daily,sample,previous);
+ expect(catchup.results.filter(r=>r.fire).map(r=>r.date)).toEqual(['2026-01-10']);
+ expect(catchup.results.find(r=>r.fire)?.historical).toBe(true);
+ expect(catchup.results[0].evidence).toEqual(evaluateSignal(daily,sample.slice(0,9)).evidence);
+ await addRecord('signal',{...daily,state:{AAPL:previous}});
+ const clock=()=>new Date('2026-01-13T01:00:00Z');await createSignalMonitor(async()=>sample,clock).check();
+ expect((await records<any>('signal'))[0].payload.state.AAPL.date).toBe('2026-01-12');
+ expect(await records('signal-event')).toHaveLength(1);
+ await createSignalMonitor(async()=>sample,clock).check();expect(await records('signal-event')).toHaveLength(1);
+});
+it('bounds catch-up and keeps missing or future checkpoints instead of silently skipping days',async()=>{
+ const {signalCatchup,SIGNAL_CATCHUP_LIMIT}=await import('./signals.js');
+ const sample=Array.from({length:90},(_,i)=>({...rows[0],time:rows[0].time+i*86400}));
+ const daily={...rule,conditions:[{type:'VOLUME_ABOVE' as const,period:2,threshold:1}]};
+ const r=signalCatchup(daily,sample,{date:'2026-01-10',matched:true});
+ expect(r.results).toHaveLength(SIGNAL_CATCHUP_LIMIT);expect(r.remaining).toBe(50);
+ expect(()=>signalCatchup(daily,sample,{date:'2025-12-31',matched:false})).toThrow('missing');
+ expect(()=>signalCatchup(daily,sample,{date:'2027-01-01',matched:false})).toThrow('before');
+ expect(signalCatchup(daily,sample).results).toHaveLength(1);
+});

@@ -1,3 +1,4 @@
+import { readDisplayPreferences, type DisplayPreferences } from "./display";
 import {
   readWorkspace,
   MAX_WORKSPACES,
@@ -11,6 +12,7 @@ export type DeviceSnapshot = {
   workspace: { workspaces: SavedWorkspace[]; activeWorkspaceId: string };
   preferences: Preferences;
   drawings: Record<string, string>;
+  display?: DisplayPreferences;
 };
 export const SYNC_VERSION_KEY = "openterminal-sync-version";
 export function readDeviceSnapshot(raw: unknown): DeviceSnapshot {
@@ -60,6 +62,7 @@ export function readDeviceSnapshot(raw: unknown): DeviceSnapshot {
     version: 1,
     workspace: { workspaces, activeWorkspaceId: v.workspace.activeWorkspaceId },
     preferences: readPreferences(v.preferences),
+    ...(v.display ? { display: readDisplayPreferences(v.display) } : {}),
     drawings,
   };
 }
@@ -73,6 +76,7 @@ export function applyDeviceSnapshot(
     "openterminal-workspace",
     "openterminal-preferences",
     SYNC_VERSION_KEY,
+    ...(valid.display ? ["openterminal-display"] : []),
     ...Object.keys(storage).filter((k) =>
       k.startsWith("openterminal-drawings-v1:"),
     ),
@@ -90,6 +94,7 @@ export function applyDeviceSnapshot(
       "openterminal-preferences",
       JSON.stringify({ version: 1, state: { data: valid.preferences } }),
     );
+    if (valid.display) storage.setItem("openterminal-display", JSON.stringify({ state: valid.display, version: 0 }));
     for (const [key, value] of Object.entries(valid.drawings))
       storage.setItem(key, value);
     storage.setItem(SYNC_VERSION_KEY, version);
@@ -102,11 +107,11 @@ export function applyDeviceSnapshot(
   }
 }
 
-export type SyncScope = { workspaceIds: string[] | null; includePreferences: boolean };
+export type SyncScope = { workspaceIds: string[] | null; includePreferences: boolean; includeDisplay?: boolean };
 /** Selective sync upserts only chosen IDs; it never removes unselected workspaces. */
 export function mergeDeviceSnapshots(source: DeviceSnapshot, target: DeviceSnapshot, scope: SyncScope): DeviceSnapshot {
   const from = readDeviceSnapshot(source), to = readDeviceSnapshot(target);
-  if (scope.workspaceIds === null) return from;
+  if (scope.workspaceIds === null) return { ...from, display: scope.includeDisplay ? from.display ?? to.display : to.display };
   const ids = new Set(scope.workspaceIds);
   if (!ids.size || [...ids].some(id => !from.workspace.workspaces.some(w => w.id === id)))
     throw new Error("Select at least one existing source workspace.");
@@ -124,7 +129,7 @@ export function mergeDeviceSnapshots(source: DeviceSnapshot, target: DeviceSnaps
     ...Object.entries(to.drawings).filter(([key]) => !belongs(key)),
     ...Object.entries(from.drawings).filter(([key]) => belongs(key)),
   ]);
-  return readDeviceSnapshot({ ...to, workspace: { workspaces, activeWorkspaceId: to.workspace.activeWorkspaceId }, preferences: scope.includePreferences ? from.preferences : to.preferences, drawings });
+  return readDeviceSnapshot({ ...to, workspace: { workspaces, activeWorkspaceId: to.workspace.activeWorkspaceId }, preferences: scope.includePreferences ? from.preferences : to.preferences, display: scope.includeDisplay && from.display ? { ...from.display, hiddenPanels: { ...to.display?.hiddenPanels, ...Object.fromEntries(selected.map(w => [w.id, from.display!.hiddenPanels[w.id] ?? []])) } } : to.display, drawings });
 }
 function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
@@ -148,6 +153,7 @@ export function describeSyncChanges(before: DeviceSnapshot | null, after: Device
     const a = before?.preferences[kind] ?? [], b = after.preferences[kind];
     changes.push({ name: kind === "groups" ? "Watchlist groups" : "Screener presets", status: canonical(a) === canonical(b) ? "Unchanged" : "Changed", detail: `${a.length} → ${b.length}: ${b.map(v => v.name).join(", ") || "none"}` });
   }
+  if (canonical(before?.display) !== canonical(after.display)) changes.push({ name: "UI preferences", status: "Changed", detail: `Language ${before?.display?.language ?? "device default"} → ${after.display?.language ?? "device default"}; font ${before?.display?.fontSize ?? "device default"} → ${after.display?.fontSize ?? "device default"}; density ${after.display?.density ?? "device default"}; favorites ${after.display?.favoriteFeatures.join(", ") || "none"}; panel visibility included` });
   const keys = new Set([...Object.keys(before?.drawings ?? {}), ...Object.keys(after.drawings)]);
   const changed = [...keys].filter(key => before?.drawings[key] !== after.drawings[key]);
   changes.push({ name: "Chart drawings", status: changed.length ? "Changed" : "Unchanged", detail: `${changed.length} chart(s) changed · ${Object.keys(before?.drawings ?? {}).length} → ${Object.keys(after.drawings).length} saved charts` });

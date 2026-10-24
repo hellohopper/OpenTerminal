@@ -220,3 +220,10 @@ describe("background alert monitor", () => {
   });
 });
 it('repeats volume alerts only after cooldown, with one event across concurrent snapshots',async()=>{await create();await db.prepare('UPDATE price_alerts SET metric=?,threshold=?,repeat_seconds=?').run('volume',1000,60);let rules=await alerts.activeAlerts();const q={...quote(),volume:1000};const now=new Date('2026-01-01T00:00:00Z');expect((await Promise.all([alerts.evaluateAlerts(rules,[q],now),alerts.evaluateAlerts(rules,[q],now)])).reduce((a,b)=>a+b,0)).toBe(1);rules=await alerts.activeAlerts();expect(rules).toHaveLength(1);expect(await alerts.evaluateAlerts(rules,[q],new Date(now.getTime()+59000))).toBe(0);expect(await alerts.evaluateAlerts(rules,[q],new Date(now.getTime()+60000))).toBe(1);expect((await history()).every(r=>r.metric==='volume')).toBe(true);expect(alerts.alertValue({condition:'PRICE_ABOVE',metric:'volume'},{...q,volume:null})).toBeNull();});
+
+it('records successful-evaluation gaps once without fabricating missed intraday triggers',async()=>{
+ await db.exec("DELETE FROM research_records WHERE kind='alert-gap';");await create('PRICE_ABOVE',200);await db.prepare("UPDATE price_alerts SET last_checked_at='2026-10-20T10:00:00.000Z'").run();
+ const rules=await alerts.activeAlerts();await alerts.evaluateAlerts(rules,[quote(100)],new Date('2026-10-20T12:00:00.000Z'));
+ expect(await history()).toHaveLength(0);const gaps=await db.prepare("SELECT * FROM research_records WHERE kind='alert-gap'").all();expect(gaps).toHaveLength(1);expect(JSON.parse(gaps[0].payload)).toMatchObject({from:'2026-10-20T10:00:00.000Z',to:'2026-10-20T12:00:00.000Z'});
+ await alerts.evaluateAlerts(await alerts.activeAlerts(),[quote(100)],new Date('2026-10-20T12:00:15.000Z'));expect(await db.prepare("SELECT * FROM research_records WHERE kind='alert-gap'").all()).toHaveLength(1);
+});

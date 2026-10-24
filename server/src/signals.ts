@@ -26,6 +26,25 @@ export function evaluateSignal(rule:SignalRule,rows:Candle[]) {
   });
   return {matched:evidence.every(e=>e.matched),date:new Date(last.time*1000).toISOString().slice(0,10),price:last.close,evidence};
 }
+export const SIGNAL_CATCHUP_LIMIT=30;
+export function signalCatchup(rule:SignalRule,candles:Candle[],previous?:{date:string;matched:boolean}) {
+  const dates=candles.map(c=>new Date(c.time*1000).toISOString().slice(0,10)),latest=dates.at(-1);
+  if(!latest)throw new Error('No completed daily candles.');
+  if(previous&&previous.date>latest)throw new Error('History ends before the saved checkpoint; checkpoint kept.');
+  if(previous?.date===latest)return {results:[],remaining:0,warning:null};
+  const index=previous?dates.indexOf(previous.date):-1;
+  // A missing checkpoint means coverage cannot be established. Keep it until the source is repaired.
+  if(previous&&index<0)throw new Error(`Checkpoint ${previous.date} missing from supplied history; no days skipped. Restore historical coverage before retrying.`);
+  const start=previous?index+1:candles.length-1,end=Math.min(candles.length,start+SIGNAL_CATCHUP_LIMIT);
+  const results=[];let matched=previous?.matched??false;
+  for(let i=start;i<end;i++){
+    const result=evaluateSignal(rule,candles.slice(0,i+1));
+    const fire=result.matched&&(rule.mode==='daily'||!matched);
+    results.push({...result,fire,historical:!!previous&&(start<candles.length-1||i<candles.length-1)});matched=result.matched;
+  }
+  const gap=previous&&dates.slice(start,end).some((date,i)=>Date.parse(date)-Date.parse(dates[start+i-1])>7*86400000);
+  return {results,remaining:candles.length-end,warning:gap?'Supplied history has a gap over seven calendar days; missing sessions cannot be reconstructed.':null};
+}
 export function createSignalMonitor(load=dailyHistory,clock=()=>new Date()) {
   let timer:ReturnType<typeof setInterval>|undefined,inFlight:Promise<unknown>|undefined,lastCheck=0;
   const check=()=>{
@@ -37,16 +56,18 @@ export function createSignalMonitor(load=dailyHistory,clock=()=>new Date()) {
       const snapshots=await records<SignalRule & {state?:Record<string,{date:string;matched:boolean}>}>('signal');
       for(const row of snapshots.filter(r=>r.payload.enabled)){
         const next={...row.payload,state:{...row.payload.state}};
-        const events:unknown[]=[];
+        const events:unknown[]=[],ruleErrors:string[]=[],warnings:string[]=[];let processed=0,remaining=0;
         for(const symbol of row.payload.symbols)try{
           const candles=closedDaily(await load(symbol),clock()),last=candles.at(-1);
           if(!last||clock().getTime()-last.time*1000>7*86400000)throw new Error('Recent completed candles unavailable');
-          const result=evaluateSignal(row.payload,candles),previous=next.state[symbol];
-          if(previous?.date===result.date)continue;
-          if(result.matched&&(row.payload.mode==='daily'||!previous?.matched))events.push({symbol,ruleId:row.id,name:row.payload.name,...result});
-          next.state[symbol]={date:result.date,matched:result.matched};
-        }catch(e){errors.push(`${symbol}: ${(e as Error).message}`);}
-        try{await db.transaction(async()=>{await updateRecord('signal',row.id,row.version,next);for(const event of events){const e=event as {symbol:string;date:string};await addRecord('signal-event',event,`${row.id}:${e.symbol}:${e.date}`);}await db.prepare("DELETE FROM research_records WHERE kind='signal-event' AND id NOT IN (SELECT id FROM research_records WHERE kind='signal-event' ORDER BY id DESC LIMIT 500)").run();})();triggered+=events.length;}catch{errors.push(`${row.payload.name}: rule changed; retry on next check`);}
+          const batch=signalCatchup(row.payload,candles,next.state[symbol]);
+          if(batch.warning)warnings.push(`${symbol}: ${batch.warning}`);remaining+=batch.remaining;
+          for(const result of batch.results){
+            if(result.fire)events.push({symbol,ruleId:row.id,name:row.payload.name,...result,detectedAt:clock().toISOString()});
+            next.state[symbol]={date:result.date,matched:result.matched};processed++;
+          }
+        }catch(e){const message=`${symbol}: ${(e as Error).message}`;errors.push(message);ruleErrors.push(message);}
+        try{await db.transaction(async()=>{await updateRecord('signal',row.id,row.version,{...next,monitor:{checkedAt:clock().toISOString(),processed,remaining,errors:ruleErrors,warnings}});for(const event of events){const e=event as {symbol:string;date:string};await addRecord('signal-event',event,`${row.id}:${e.symbol}:${e.date}`);}await db.prepare("DELETE FROM research_records WHERE kind='signal-event' AND id NOT IN (SELECT id FROM research_records WHERE kind='signal-event' ORDER BY id DESC LIMIT 500)").run();})();triggered+=events.length;}catch{errors.push(`${row.payload.name}: rule changed; retry on next check`);}
       }
       return {triggered,errors,checkedAt:clock().toISOString()};
     })().finally(()=>{inFlight=undefined;});return inFlight;

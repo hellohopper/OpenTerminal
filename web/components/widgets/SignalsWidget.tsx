@@ -5,7 +5,7 @@ import {useState} from 'react';
 import {useQuery,useMutation,useQueryClient} from '@tanstack/react-query';
 import {apiGet,apiPost,apiPut,apiDelete} from '../../lib/api';
 import {useTerminal} from '../../store/terminal';
-type Row={id:number;version:number;payload:{name:string;symbols:string[];enabled:boolean;symbol?:string;date?:string;evidence?:unknown[]}};
+type Row={id:number;version:number;payload:{name:string;symbols:string[];enabled:boolean;symbol?:string;date?:string;historical?:boolean;monitor?:{checkedAt:string;remaining:number;errors:string[];warnings:string[]};evidence?:unknown[]}};
 export default function SignalsWidget(){
   const { t: ui } = useI18n();
 
@@ -21,6 +21,6 @@ export default function SignalsWidget(){
  <button className="term-btn" disabled={action.isPending} onClick={()=>action.mutate(async()=>{const result=await apiPost('/api/signals/check',{});setStatus(JSON.stringify(result));return result;})}>{ui("Check signals")}</button>
  {(status||q.error)&&<p role="status">{status||q.error?.message}</p>}
  {q.data?.rules.map(r=><div key={r.id} className="border-b border-[var(--border)] p-1">{r.payload.name} · {r.payload.symbols.join(', ')} · {r.payload.enabled?ui("Active"):ui("Paused")} <button className="term-btn" onClick={()=>action.mutate(()=>apiPut(`/api/signals/${r.id}`,{enabled:!r.payload.enabled,version:r.version}))}>{ui("Pause / resume")}</button><button className="term-btn" onClick={()=>action.mutate(()=>apiDelete(`/api/signals/${r.id}`))}>{ui("Delete")}</button></div>)}
- <h3 className="amber">{ui("Signal history / evidence")}</h3>{q.data?.events.map(r=><article key={r.id} className="border-b border-[var(--border)] p-1"><button className="amber" onClick={()=>useTerminal.getState().openResearch(r.payload.symbol!)}>{r.payload.symbol} · {r.payload.name} · {r.payload.date}</button><details><summary>{ui("Condition values")}</summary><pre className="whitespace-pre-wrap">{JSON.stringify(r.payload.evidence,null,2)}</pre></details></article>)}
+ {q.data?.rules.map(r=>r.payload.monitor&&<div key={`monitor-${r.id}`}><p className="dim">{r.payload.name} · {ui("Checked")} {r.payload.monitor.checkedAt} · {ui("Pending catch-up bars")} {r.payload.monitor.remaining}</p>{[...r.payload.monitor.errors,...r.payload.monitor.warnings].map((m,i)=><p role="status" className="amber" key={i}>{m}</p>)}</div>)}<p className="dim">{ui("Restart recovery checks up to 30 completed bars per symbol per pass. New rules start at the latest bar; missing checkpoint history blocks catch-up.")}</p><h3 className="amber">{ui("Signal history / evidence")}</h3>{q.data?.events.map(r=><article key={r.id} className="border-b border-[var(--border)] p-1"><button className="amber" onClick={()=>useTerminal.getState().openResearch(r.payload.symbol!)}>{r.payload.symbol} · {r.payload.name} · {r.payload.date}</button>{r.payload.historical&&<span className="amber"> · {ui("Historical catch-up")}</span>}<details><summary>{ui("Condition values")}</summary><pre className="whitespace-pre-wrap">{JSON.stringify(r.payload.evidence,null,2)}</pre></details></article>)}
  </div>;
 }
