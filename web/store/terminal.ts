@@ -6,6 +6,8 @@ import { persist, createJSONStorage, type StateStorage } from "zustand/middlewar
 import { readSymbols } from "../lib/preferences";
 import { normalizeSymbol } from "../lib/symbol";
 import { useDisplay } from "./display";
+import { useInterface } from "./interface";
+import { SIMPLE_CARDS, type SimpleCard } from "../lib/workspaces";
 import { makeWorkspace, readWorkspace, restoreWorkspaces, workspaceName, newId, SIZE_BY_TYPE, MAX_WORKSPACES, type Preset, type SavedWorkspace, type WorkspaceData, type WorkspacePresentation, type WidgetType, type LayoutItem } from "../lib/workspaces";
 export type { WidgetType, WidgetInstance, LayoutItem } from "../lib/workspaces";
 
@@ -20,6 +22,7 @@ type TerminalState = WorkspaceData & {
   activeWorkspaceId: string;
   layoutEditing: boolean;
   setLayoutEditing: (editing: boolean) => void;
+  setSimpleCards: (cards: SimpleCard[]) => void;
   savePresentation: (includeAppearance?: boolean) => void;
   restorePresentation: () => void;
   saveWorkspaceAs: (name: string, includeAppearance: boolean) => void;
@@ -67,7 +70,7 @@ export function createTerminalStore(storage?: StateStorage, display = useDisplay
     const addWorkspace = (workspace: SavedWorkspace) => {
       if (get().workspaces.length >= MAX_WORKSPACES) throw new Error(`You can save up to ${MAX_WORKSPACES} workspaces.`);
       get().savePresentation();
-      set((st) => ({ ...workspace, workspaces: [...st.workspaces, workspace], activeWorkspaceId: workspace.id, mobileView: "workspace", layoutEditing: false }));
+      set((st) => ({ ...workspace, simpleCards: workspace.simpleCards, workspaces: [...st.workspaces, workspace], activeWorkspaceId: workspace.id, mobileView: "workspace", layoutEditing: false }));
       applyPresentation(workspace);
     };
     return {
@@ -75,6 +78,7 @@ export function createTerminalStore(storage?: StateStorage, display = useDisplay
       researchSymbol: null, researchTarget: null, mobileView: "holdings", lastAddedWidgetId: null, lastRemovedPanel: null,
       layoutEditing: false,
       setLayoutEditing: layoutEditing => set({ layoutEditing }),
+      setSimpleCards: cards => set(st => activePatch(st, { simpleCards: SIMPLE_CARDS.filter(card => cards.includes(card)) })),
       savePresentation: includeAppearance => set(st => ({ workspaces: st.workspaces.map(w => w.id === st.activeWorkspaceId ? { ...w, presentation: presentation(includeAppearance) } : w) })),
       restorePresentation: () => { const w = get().workspaces.find(w => w.id === get().activeWorkspaceId); if (w) applyPresentation(w); },
       saveWorkspaceAs: (name, includeAppearance) => {
@@ -89,6 +93,7 @@ export function createTerminalStore(storage?: StateStorage, display = useDisplay
       setCommandOpen: (open) => set({ commandOpen: open }),
       addWidget: (type, symbol) => set((st) => {
         if (st.widgets.length >= 50) return st;
+        useInterface.getState().setMode("professional");
         const id = newId();
         const sym = symbol ? normalizeSymbol(symbol) : undefined;
         const maxY = st.layout.reduce((m, l) => Math.max(m, l.y + l.h), 0);
@@ -116,14 +121,14 @@ export function createTerminalStore(storage?: StateStorage, display = useDisplay
       removeFromWatchlist: (s) => set((st) => activePatch(st, { watchlist: st.watchlist.filter((x) => x !== s) })),
       resetWorkspace: () => { const { widgets, layout } = makeWorkspace("Default"); set((st) => activePatch(st, { widgets, layout })); },
       createWorkspace: (name, preset = "daily") => addWorkspace({ ...makeWorkspace(name, preset), presentation: { ...presentation(false), hiddenPanelIds: [] } }),
-      switchWorkspace: (id) => { if (id === get().activeWorkspaceId) return; const workspace = get().workspaces.find((w) => w.id === id); if (workspace) { get().savePresentation(); set({ ...workspace, activeWorkspaceId: id, commandOpen: false, mobileView: "workspace", layoutEditing: false }); applyPresentation(workspace); } },
+      switchWorkspace: (id) => { if (id === get().activeWorkspaceId) return; const workspace = get().workspaces.find((w) => w.id === id); if (workspace) { get().savePresentation(); set({ ...workspace, simpleCards: workspace.simpleCards, activeWorkspaceId: id, commandOpen: false, mobileView: "workspace", layoutEditing: false }); applyPresentation(workspace); } },
       renameWorkspace: (name) => { const valid = workspaceName(name); set((st) => ({ workspaces: st.workspaces.map((w) => w.id === st.activeWorkspaceId ? { ...w, name: valid } : w) })); },
       duplicateWorkspace: () => { const current = get().workspaces.find((w) => w.id === get().activeWorkspaceId)!; get().saveWorkspaceAs(`${current.name.slice(0, 57)} (copy)`, !!current.presentation?.appearance); },
       deleteWorkspace: () => {
         const st = get();
         if (st.workspaces.length === 1) throw new Error("Keep at least one workspace.");
         const remaining = st.workspaces.filter((w) => w.id !== st.activeWorkspaceId);
-        set({ ...remaining[0], workspaces: remaining, activeWorkspaceId: remaining[0].id, layoutEditing: false });
+        set({ ...remaining[0], simpleCards: remaining[0].simpleCards, workspaces: remaining, activeWorkspaceId: remaining[0].id, layoutEditing: false });
         applyPresentation(remaining[0]);
       },
       importWorkspace: (workspace) => addWorkspace(readWorkspace(workspace)),
@@ -136,7 +141,7 @@ export function createTerminalStore(storage?: StateStorage, display = useDisplay
     merge: (persisted, current) => {
       const restored = restoreWorkspaces(persisted);
       const active = restored.workspaces.find((w) => w.id === restored.activeWorkspaceId)!;
-      return { ...current, ...active, ...restored, commandOpen: false };
+      return { ...current, ...active, simpleCards: active.simpleCards, ...restored, commandOpen: false };
     },
   }));
 }

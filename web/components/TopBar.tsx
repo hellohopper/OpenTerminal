@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { apiGet } from "../lib/api";
 import { useTerminal } from "../store/terminal";
 import DisplaySettings from "./DisplaySettings";
+import { useInterface } from "../store/interface";
 
 type Status = {
   ok: boolean;
@@ -44,6 +45,7 @@ export default function TopBar() {
 
   const setCommandOpen = useTerminal((s) => s.setCommandOpen);
   const activeSymbol = useTerminal((s) => s.activeSymbol);
+  const mode = useInterface(s => s.mode), setMode = useInterface(s => s.setMode);
   const { data: status } = useQuery({
     queryKey: ["status"],
     queryFn: () => apiGet<Status>("/api/status"),
@@ -57,11 +59,7 @@ export default function TopBar() {
     <header className="flex items-center gap-2 px-3 min-h-8 topbar bg-[var(--panel-2)] border-b border-[var(--border)] text-[11px] shrink-0">
       <span className="amber font-bold tracking-widest">OPENTERMINAL</span>
       <span className={`market-status ${market.open ? "up" : "down"}`}>● {ui(market.label)}</span>
-      {/* desktop market clocks */}
-      <span className="desktop-clocks"><Clock tz="America/New_York" label="NY" /></span>
-      <span className="desktop-clocks"><Clock tz="Europe/Rome" label="MIL" /></span>
-      <span className="desktop-clocks"><Clock tz="Europe/London" label="LDN" /></span>
-      <span className="desktop-clocks"><Clock tz="Asia/Tokyo" label="TYO" /></span>
+      <label className="mode-control">{ui("Mode")} <select aria-label={ui("Interface mode")} value={mode} onChange={e => setMode(e.target.value as typeof mode)}><option value="simple">{ui("Simple")}</option><option value="professional">{ui("Professional")}</option></select></label>
       <button
         className="term-btn flex-1 max-w-md min-w-0 text-left dim topbar-search"
         onClick={() => setCommandOpen(true)}
@@ -71,12 +69,15 @@ export default function TopBar() {
       <button className="term-btn" aria-label={ui("Research {symbol}", { symbol: activeSymbol })} onClick={() => useTerminal.getState().openResearch(activeSymbol)}>{ui("Research")}</button>
       <DisplaySettings />
       <button className="term-btn" onClick={async()=>{await fetch("/api/session",{method:"DELETE"});window.location.assign("/login");}}>{ui("Sign out")}</button>
-      <span className="dim ml-auto feed-status">{ui("feeds:")}{" "}
+      <details className="connection-details"><summary>{ui("Connection status")}</summary><div className="connection-popover">
+      <div className="flex gap-3 flex-wrap"><Clock tz="America/New_York" label="NY" /><Clock tz="Europe/London" label="LDN" /><Clock tz="Asia/Tokyo" label="TYO" /></div>
+      <span className="dim">{ui("feeds:")}{" "}
         {healthy.length > 0
           ? healthy.map((p) => `${p.name} ${p.lastLatencyMs ?? "—"}ms`).join(" · ")
           : ui("connecting…")}
       </span>
       <span className={`ai-status ${status?.ai ? "up" : "dim"}`}>AI {status?.ai ? "●" : "○"}</span>
+      </div></details>
     </header>
   );
 }

@@ -10,6 +10,7 @@ const snapshot = z.object({
         z.object({
           id: z.string().min(1).max(100),
           name: z.string().min(1).max(64),
+          simpleCards: z.array(z.enum(["briefing", "watchlist", "holdings", "alerts"])).max(4).optional(),
           presentation: z.object({
             sidebarVisible: z.boolean(), workspaceBarVisible: z.boolean(),
             hiddenSidebarFeatures: z.array(z.string().max(40)).max(50), favoriteFeatures: z.array(z.string().max(40)).max(50),

@@ -5,7 +5,9 @@ export const WIDGET_TYPES = ["quote", "chart", "watchlist", "news", "heatmap", "
 export type WidgetType = typeof WIDGET_TYPES[number];
 export type WidgetInstance = { id: string; type: WidgetType; symbol?: string; linked: boolean; settings?: PanelSettings };
 export type LayoutItem = { i: string; x: number; y: number; w: number; h: number };
-export type WorkspaceData = { activeSymbol: string; widgets: WidgetInstance[]; layout: LayoutItem[]; watchlist: string[] };
+export const SIMPLE_CARDS = ["briefing", "watchlist", "holdings", "alerts"] as const;
+export type SimpleCard = typeof SIMPLE_CARDS[number];
+export type WorkspaceData = { activeSymbol: string; widgets: WidgetInstance[]; layout: LayoutItem[]; watchlist: string[]; simpleCards?: SimpleCard[] };
 export type WorkspacePresentation = {
   sidebarVisible: boolean;
   workspaceBarVisible: boolean;
@@ -97,7 +99,7 @@ export function readWorkspace(value: unknown): SavedWorkspace {
   const watchlist = raw.watchlist.map((s) => typeof s === "string" ? normalizeSymbol(s) : null);
   if (watchlist.some((s) => !s)) throw new Error("Invalid watchlist symbol.");
   const presentation = readWorkspacePresentation(raw.presentation, ids);
-  return { id: newId(), name, activeSymbol: symbol, widgets, layout, watchlist: [...new Set(watchlist as string[])], ...(presentation ? { presentation } : {}) };
+  return { id: newId(), name, activeSymbol: symbol, widgets, layout, watchlist: [...new Set(watchlist as string[])], ...(Array.isArray(raw.simpleCards) ? { simpleCards: SIMPLE_CARDS.filter(card => (raw.simpleCards as unknown[]).includes(card)) } : {}), ...(presentation ? { presentation } : {}) };
 }
 export function readWorkspacePresentation(value: unknown, ids: Set<string>): WorkspacePresentation | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;

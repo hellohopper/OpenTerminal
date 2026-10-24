@@ -16,12 +16,15 @@ import JournalWidget from "./widgets/JournalWidget";
 import AlertsWidget from "./widgets/AlertsWidget";
 import { EarningsTab, EconomicTab } from "./widgets/CalendarWidget";
 import { PollingScope } from "../lib/use-adaptive-refresh";
-const TABS = ["Overview", "Chart", "Financials", "Events", "Thesis", "Filings", "Notes", "Alerts", "Timeline", "Valuations", "Reader", "Earnings Reviews", "Plans"] as const;
+import { useInterface } from "../store/interface";
+const TABS = ["Overview", "Chart", "Financials", "News", "Events", "Thesis", "Filings", "Notes", "Alerts", "Timeline", "Valuations", "Reader", "Earnings Reviews", "Plans"] as const;
 type Tab = typeof TABS[number];
 export default function ResearchView({ symbol }: { symbol: string }) {
   const { t: ui } = useI18n();
 
   const target=useTerminal(s=>s.researchTarget);
+  const simple = useInterface(s => s.mode === "simple");
+  const primary: readonly Tab[] = simple ? ["Overview", "Chart", "Financials", "News", "Notes"] : TABS;
   const close = useTerminal(s => s.closeResearch), add = useTerminal(s => s.addToWatchlist);
   const watched = useTerminal(s => s.watchlist.includes(symbol));
   const [tab, setTab] = useState<Tab>("Overview"), [note, setNote] = useState(0);
@@ -45,12 +48,15 @@ export default function ResearchView({ symbol }: { symbol: string }) {
       <button className="term-btn" onClick={() => { setNote(n => n + 1); choose("Notes"); }}>{ui("Write note")}</button>
       <button className="term-btn" aria-label={ui("Close research")} onClick={close}>{ui("Close")}</button>
     </header>
-    <nav aria-label={ui("Research sections")} className="flex flex-wrap gap-1 p-2 border-b border-[var(--border)]">{TABS.map(t => <button className={`term-btn ${tab === t ? "active" : ""}`} aria-pressed={tab === t} key={t} onClick={() => choose(t)}>{ui(t)}</button>)}</nav>
+    <nav aria-label={ui("Research sections")} className="flex flex-wrap gap-1 p-2 border-b border-[var(--border)]">{primary.map(t => <button className={`term-btn ${tab === t ? "active" : ""}`} aria-pressed={tab === t} key={t} onClick={() => choose(t)}>{ui(t)}</button>)}
+      {simple && <details className="research-more"><summary>{ui("More research")}{!primary.includes(tab) ? ` · ${ui(tab)}` : ""}</summary><div>{TABS.filter(t => !primary.includes(t)).map(t => <button className={`term-btn ${tab === t ? "active" : ""}`} key={t} onClick={e => { choose(t); e.currentTarget.closest("details")?.removeAttribute("open"); }}>{ui(t)}</button>)}</div></details>}
+    </nav>
     <div className="research-body">
       <WidgetErrorBoundary key={`${symbol}-${tab}-${note}`} name={`${symbol} ${tab}`}>
         {(tab==="Timeline"||recordKinds[tab])&&<ResearchRecords symbol={symbol} target={target} kinds={recordKinds[tab]}/>}
         {tab === "Overview" && <div className="research-overview"><section><h2 className="amber p-2">{ui("Quote / source")}</h2><QuoteWidget widget={widget} /></section><section><h2 className="amber p-2">{ui("Latest news")}</h2><NewsWidget widget={widget} /></section></div>}
         {tab === "Filings" && <FilingsWidget initialSymbol={symbol} />}
+        {tab === "News" && <NewsWidget widget={widget} />}
         {tab === "Thesis" && <ThesisWidget initialSymbol={symbol} />}
         {tab === "Financials" && <FundamentalsWidget widget={{ ...widget, type: "fundamentals" }} />}
         {tab === "Events" && <div className="space-y-4 p-2"><section><h2 className="amber">{symbol} {ui("earnings")}</h2><p className="dim">{ui("Expected provider dates; release sessions are unverified. Select a row for past results.")}</p><EarningsTab symbols={[symbol]} /></section><section><h2 className="amber">{ui("Market-wide economic calendar")}</h2><p className="dim">{ui("Current-week events provide context; they are not company-specific.")}</p><EconomicTab /></section></div>}
