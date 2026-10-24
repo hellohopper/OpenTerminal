@@ -1,5 +1,10 @@
 /** UI-owned text only. Symbols, user records and provider content retain their original text. */
 export const zh: Record<string, string> = {
+  "Interface mode": "界面模式", "Mode": "模式", "Simple": "简单版", "Professional": "专业版", "Connection status": "连接状态",
+  "Simple navigation": "简单版导航", "Today": "今日", "Customize home": "自定义首页", "Market briefing": "市场简报", "More research": "更多研究工具",
+  "Holdings value": "持仓市值", "Unrealized P&L": "未实现盈亏", "Positions only; excludes cash.": "仅统计持仓，不含现金。", "No holdings yet.": "暂无持仓。",
+  "View holdings": "查看持仓", "View watchlist": "查看自选", "Open portfolio tools": "打开组合管理工具", "Manage alerts": "管理提醒", "{count} active alerts": "{count} 条启用中的提醒",
+  "Choose cards in Customize home.": "在“自定义首页”中选择显示的卡片。", "Search for a company or open your selected symbol.": "搜索公司，或打开当前选中的股票。", "Search symbols": "搜索股票",
   "Edit layout": "编辑布局", "Finish editing": "完成编辑", "Save layout as…": "布局另存为…",
   "New layout name": "新布局名称", "Include font, language and density": "同时保存字号、语言和密度",
   "Save new layout": "保存新布局",

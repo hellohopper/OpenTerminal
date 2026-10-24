@@ -142,7 +142,7 @@ export function describeSyncChanges(before: DeviceSnapshot | null, after: Device
   const old = before?.workspace.workspaces ?? [], next = after.workspace.workspaces;
   for (const id of new Set([...old, ...next].map(w => w.id))) {
     const a = old.find(w => w.id === id), b = next.find(w => w.id === id);
-    const fields = a && b ? (["name", "activeSymbol", "watchlist", "widgets", "layout", "presentation"] as const).filter(k => canonical(a[k]) !== canonical(b[k])) : [];
+    const fields = a && b ? (["name", "activeSymbol", "watchlist", "widgets", "layout", "presentation", "simpleCards"] as const).filter(k => canonical(a[k]) !== canonical(b[k])) : [];
     changes.push({ name: b?.name ?? a!.name, status: !a ? "Added" : !b ? "Removed" : fields.length ? "Changed" : "Unchanged", detail: fields.length ? fields.map(k => k === "watchlist" ? `watchlist: ${a!.watchlist.join(", ") || "empty"} → ${b!.watchlist.join(", ") || "empty"}` : k === "name" ? `name: ${a!.name} → ${b!.name}` : k === "widgets" ? `panels: ${a!.widgets.map(p => p.type).join(", ")} → ${b!.widgets.map(p => p.type).join(", ")}` : k === "activeSymbol" ? `symbol: ${a!.activeSymbol} → ${b!.activeSymbol}` : "panel layout").join(" · ") : `${(b ?? a)!.widgets.length} panels · watchlist: ${(b ?? a)!.watchlist.join(", ") || "empty"}` });
   }
   if (before && canonical(old.map(w => w.id)) !== canonical(next.map(w => w.id)))

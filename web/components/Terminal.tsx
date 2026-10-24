@@ -19,6 +19,8 @@ import CommandPalette from "./CommandPalette";
 import { useTerminal } from "../store/terminal";
 import { useDisplay } from "../store/display";
 import { PollingScope } from "../lib/use-adaptive-refresh";
+import { useInterface } from "../store/interface";
+import SimpleHome from "./SimpleHome";
 
 export default function Terminal() {
   const { t: ui, widgetTitle } = useI18n();
@@ -42,6 +44,7 @@ export default function Terminal() {
   }, []);
   useEffect(()=>{const read=()=>{const {symbol,target}=readResearchLink(window.location.search);if(symbol)useTerminal.getState().openResearch(symbol,target??undefined);else useTerminal.getState().closeResearch();};read();window.addEventListener("popstate",read);return()=>window.removeEventListener("popstate",read);},[]);
   const workspaceId = useTerminal((s) => s.activeWorkspaceId);
+  const mode = useInterface(s => s.mode);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -75,21 +78,21 @@ export default function Terminal() {
 
   if (compact === null) return <div className="terminal-shell p-3 dim">{ui("Loading terminal…")}</div>;
   return (
-    <div className="terminal-shell flex flex-col">
+    <div className={`terminal-shell flex flex-col ${mode === "simple" ? "simple-shell" : ""}`}>
       <TopBar />
-      {workspaceBarVisible && (!compact || view === "workspace") && <WorkspaceBar />}
+      {workspaceBarVisible && (mode === "simple" || !compact || view === "workspace") && <WorkspaceBar />}
       <div className="flex flex-1 overflow-hidden min-h-0">
-        {!compact && sidebarVisible && <Sidebar />}
+        {mode === "professional" && !compact && sidebarVisible && <Sidebar />}
         <main className="flex-1 overflow-auto min-w-0">
           <PollingScope active={!research}>
-          {!compact || view === "workspace" ? <Workspace key={workspaceId} compact={compact} /> : <section className={`mobile-home mobile-${view} p-2`} aria-label={ui("Mobile {value}", { value: ui(view === "holdings" ? "Holdings" : view === "alerts" ? "Alerts" : "Events") })}>
+          {mode === "simple" ? <SimpleHome key={workspaceId} /> : !compact || view === "workspace" ? <Workspace key={workspaceId} compact={compact} /> : <section className={`mobile-home mobile-${view} p-2`} aria-label={ui("Mobile {value}", { value: ui(view === "holdings" ? "Holdings" : view === "alerts" ? "Alerts" : "Events") })}>
             <h1 className="amber text-lg mb-2">{view === "holdings" ? ui("Holdings") : view === "alerts" ? ui("Alerts") : ui("Holdings events")}</h1>
             <WidgetErrorBoundary key={view} name={view}>{view === "holdings" ? <PortfolioWidget /> : view === "alerts" ? <AlertsWidget /> : <EventsWidget />}</WidgetErrorBoundary>
           </section>}
           </PollingScope>
         </main>
       </div>
-      {compact && <nav aria-label={ui("Mobile navigation")} className="mobile-nav">
+      {compact && mode === "professional" && <nav aria-label={ui("Mobile navigation")} className="mobile-nav">
         {(["holdings", "alerts", "events", "workspace"] as const).map(v => <button key={v} aria-current={view === v ? "page" : undefined} onClick={() => setView(v)}>{v === "holdings" ? ui("Holdings") : v === "alerts" ? ui("Alerts") : v === "events" ? ui("Events") : ui("Workspace")}</button>)}
         <button onClick={() => setTools(true)}>{ui("Tools")}</button>
       </nav>}
