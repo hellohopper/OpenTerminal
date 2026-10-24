@@ -33,7 +33,7 @@ describe("UI display preferences", () => {
     display.getState().setPanelsVisible(first, [firstWidget.id], false);
     terminal.getState().duplicateWorkspace();
     const second = terminal.getState().activeWorkspaceId;
-    // A duplicated workspace can reuse widget IDs; visibility still belongs to its workspace.
+    // This isolated display store is not the terminal store's display dependency.
     expect(display.getState().hiddenPanels[second]).toBeUndefined();
     display.getState().setPanelsVisible(second, [firstWidget.id], false);
     display.getState().setPanelsVisible(second, [firstWidget.id], true);

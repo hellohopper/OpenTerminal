@@ -15,6 +15,8 @@ export default function WorkspaceBar() {
   const [name, setName] = useState("");
   const [preset, setPreset] = useState<Preset>("daily");
   const [error, setError] = useState("");
+  const [includeAppearance, setIncludeAppearance] = useState(false);
+  const [saveAs, setSaveAs] = useState(false);
   const file = useRef<HTMLInputElement>(null);
   const current = st.workspaces.find((w) => w.id === st.activeWorkspaceId)!;
   const run = (action: () => void) => { try { action(); setError(""); } catch (err) { setError((err as Error).message); } };
@@ -23,6 +25,14 @@ export default function WorkspaceBar() {
     <select id="workspace-select" value={st.activeWorkspaceId} onChange={(e) => st.switchWorkspace(e.target.value)}>
       {st.workspaces.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
     </select>
+    <button className="term-btn" aria-pressed={st.layoutEditing} onClick={() => st.setLayoutEditing(!st.layoutEditing)}>{ui(st.layoutEditing ? "Finish editing" : "Edit layout")}</button>
+    <button className="term-btn" onClick={() => { setName(`${current.name.slice(0, 57)} (copy)`); setIncludeAppearance(!!current.presentation?.appearance); setSaveAs(true); }}>{ui("Save layout as…")}</button>
+    {saveAs && <div className="layout-save-form" role="group" aria-label={ui("Save layout as…")}>
+      <label>{ui("Name")} <input aria-label={ui("New layout name")} maxLength={64} value={name} onChange={e => setName(e.target.value)} /></label>
+      <label><input type="checkbox" checked={includeAppearance} onChange={e => setIncludeAppearance(e.target.checked)} /> {ui("Include font, language and density")}</label>
+      <button className="term-btn" onClick={() => run(() => { st.saveWorkspaceAs(name, includeAppearance); setSaveAs(false); setName(""); })}>{ui("Save new layout")}</button>
+      <button className="term-btn" onClick={() => setSaveAs(false)}>{ui("Cancel")}</button>
+    </div>}
     <details className="relative">
       <summary className="cursor-pointer amber">{ui("Manage")}</summary>
       <div className="absolute top-full left-0 z-50 w-72 max-w-[80vw] p-3 space-y-3 border border-[var(--border)] bg-[var(--panel-2)] shadow-xl">
@@ -36,7 +46,9 @@ export default function WorkspaceBar() {
         </div>
         <div className="flex gap-2">
           <button className="term-btn" onClick={() => run(() => {
-            const url = URL.createObjectURL(new Blob([exportWorkspace(current)], { type: "application/json" }));
+            st.savePresentation();
+            const saved = useTerminal.getState().workspaces.find(w => w.id === st.activeWorkspaceId)!;
+            const url = URL.createObjectURL(new Blob([exportWorkspace(saved)], { type: "application/json" }));
             const a = document.createElement("a"); a.href = url; a.download = "openterminal-workspace.json"; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
           })}>{ui("Export JSON")}</button>
           <button className="term-btn" onClick={() => file.current?.click()}>{ui("Import JSON")}</button>

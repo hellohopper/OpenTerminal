@@ -192,6 +192,7 @@ export default function Workspace({ compact = false }: { compact?: boolean }) {
   const toggleLinked = useTerminal((s) => s.toggleLinked);
   const activeSymbol = useTerminal((s) => s.activeSymbol);
   const workspaceId = useTerminal((s) => s.activeWorkspaceId);
+  const layoutEditing = useTerminal(s => s.layoutEditing);
   const lastAddedWidgetId = useTerminal(s => s.lastAddedWidgetId);
   useEffect(() => {
     if (!lastAddedWidgetId) return;
@@ -253,6 +254,8 @@ export default function Workspace({ compact = false }: { compact?: boolean }) {
       rowHeight={rowHeight}
       margin={[4 * scale, 4 * scale]}
       draggableHandle=".panel-title"
+      isDraggable={layoutEditing}
+      isResizable={layoutEditing}
       // Only persist deliberate edits, not compaction caused by hiding panels.
       onDragStop={(next) => setLayout(mergeVisibleLayout(layout, next))}
       onResizeStop={(next) => setLayout(mergeVisibleLayout(layout, next))}

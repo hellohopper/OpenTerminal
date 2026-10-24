@@ -1,0 +1,21 @@
+import { test, expect } from "@playwright/test";
+import { signIn } from "./helpers";
+test("named layouts preserve hidden panels and the original survives save-as and reload", async ({ page }) => {
+  await signIn(page);
+  const original = await page.locator("#workspace-select").inputValue();
+  await expect(page.getByRole("button", { name: "Edit layout", exact: true })).toHaveAttribute("aria-pressed", "false");
+  const chart = page.getByRole("region", { name: "Chart", exact: true });
+  await chart.getByLabel("Actions for Chart", { exact: true }).click();
+  await chart.getByRole("button", { name: "Hide panel", exact: true }).click();
+  await page.getByRole("button", { name: "Save layout as…", exact: true }).click();
+  await page.getByLabel("New layout name", { exact: true }).fill("Quiet reading");
+  await page.getByRole("button", { name: "Save new layout", exact: true }).click();
+  await expect(chart).toHaveCount(0);
+  await page.reload();
+  await expect(page.locator("#workspace-select option:checked")).toHaveText("Quiet reading");
+  await expect(chart).toHaveCount(0);
+  await page.locator("#workspace-select").selectOption(original);
+  await expect(chart).toHaveCount(0);
+  await page.getByRole("button", { name: "Edit layout", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Finish editing", exact: true })).toHaveAttribute("aria-pressed", "true");
+});

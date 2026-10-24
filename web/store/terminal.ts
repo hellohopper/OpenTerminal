@@ -6,7 +6,7 @@ import { persist, createJSONStorage, type StateStorage } from "zustand/middlewar
 import { readSymbols } from "../lib/preferences";
 import { normalizeSymbol } from "../lib/symbol";
 import { useDisplay } from "./display";
-import { makeWorkspace, readWorkspace, restoreWorkspaces, workspaceName, newId, SIZE_BY_TYPE, MAX_WORKSPACES, type Preset, type SavedWorkspace, type WorkspaceData, type WidgetType, type LayoutItem } from "../lib/workspaces";
+import { makeWorkspace, readWorkspace, restoreWorkspaces, workspaceName, newId, SIZE_BY_TYPE, MAX_WORKSPACES, type Preset, type SavedWorkspace, type WorkspaceData, type WorkspacePresentation, type WidgetType, type LayoutItem } from "../lib/workspaces";
 export type { WidgetType, WidgetInstance, LayoutItem } from "../lib/workspaces";
 
 import { readPanelSettings, type PanelSettings } from "../lib/panel-settings";
@@ -18,6 +18,11 @@ type TerminalState = WorkspaceData & {
   dismissPanelNotice: () => void;
   workspaces: SavedWorkspace[];
   activeWorkspaceId: string;
+  layoutEditing: boolean;
+  setLayoutEditing: (editing: boolean) => void;
+  savePresentation: (includeAppearance?: boolean) => void;
+  restorePresentation: () => void;
+  saveWorkspaceAs: (name: string, includeAppearance: boolean) => void;
   commandOpen: boolean;
   researchSymbol: string | null;
   researchTarget: ResearchTarget | null;
@@ -47,16 +52,35 @@ type TerminalState = WorkspaceData & {
 function activePatch(st: TerminalState, patch: Partial<WorkspaceData>): Partial<TerminalState> {
   return { ...patch, workspaces: st.workspaces.map((w) => w.id === st.activeWorkspaceId ? { ...w, ...patch } : w) };
 }
-export function createTerminalStore(storage?: StateStorage) {
+export function createTerminalStore(storage?: StateStorage, display = useDisplay) {
   const initial = makeWorkspace("My workspace");
   return create<TerminalState>()(persist((set, get) => {
+    const presentation = (includeAppearance = !!get().workspaces.find(w => w.id === get().activeWorkspaceId)?.presentation?.appearance): WorkspacePresentation => {
+      const d = display.getState();
+      return { sidebarVisible: d.sidebarVisible, workspaceBarVisible: d.workspaceBarVisible, hiddenSidebarFeatures: d.hiddenSidebarFeatures, favoriteFeatures: d.favoriteFeatures, collapsedGroups: d.collapsedGroups, hiddenPanelIds: (d.hiddenPanels[get().activeWorkspaceId] ?? []).filter(id => get().widgets.some(w => w.id === id)), ...(includeAppearance ? { appearance: { language: d.language, fontSize: d.fontSize, density: d.density } } : {}) };
+    };
+    const applyPresentation = (workspace: SavedWorkspace) => {
+      if (!workspace.presentation) return;
+      const { hiddenPanelIds, appearance, ...choices } = workspace.presentation;
+      display.setState(d => ({ ...choices, ...appearance, hiddenPanels: { ...d.hiddenPanels, [workspace.id]: hiddenPanelIds }, visibilityUndo: null }));
+    };
     const addWorkspace = (workspace: SavedWorkspace) => {
       if (get().workspaces.length >= MAX_WORKSPACES) throw new Error(`You can save up to ${MAX_WORKSPACES} workspaces.`);
-      set((st) => ({ ...workspace, workspaces: [...st.workspaces, workspace], activeWorkspaceId: workspace.id, mobileView: "workspace" }));
+      get().savePresentation();
+      set((st) => ({ ...workspace, workspaces: [...st.workspaces, workspace], activeWorkspaceId: workspace.id, mobileView: "workspace", layoutEditing: false }));
+      applyPresentation(workspace);
     };
     return {
       ...initial, workspaces: [initial], activeWorkspaceId: initial.id, commandOpen: false,
       researchSymbol: null, researchTarget: null, mobileView: "holdings", lastAddedWidgetId: null, lastRemovedPanel: null,
+      layoutEditing: false,
+      setLayoutEditing: layoutEditing => set({ layoutEditing }),
+      savePresentation: includeAppearance => set(st => ({ workspaces: st.workspaces.map(w => w.id === st.activeWorkspaceId ? { ...w, presentation: presentation(includeAppearance) } : w) })),
+      restorePresentation: () => { const w = get().workspaces.find(w => w.id === get().activeWorkspaceId); if (w) applyPresentation(w); },
+      saveWorkspaceAs: (name, includeAppearance) => {
+        const current = get().workspaces.find(w => w.id === get().activeWorkspaceId)!;
+        addWorkspace(readWorkspace({ ...current, name: workspaceName(name), presentation: presentation(includeAppearance) }));
+      },
       dismissPanelNotice: () => set({ lastAddedWidgetId: null, lastRemovedPanel: null }),
       openResearch: (symbol,target) => { const sym = normalizeSymbol(symbol); if (sym) { get().setActiveSymbol(sym); set({ researchSymbol: sym, researchTarget: target??null, commandOpen: false }); if(typeof window!=="undefined")window.history.replaceState(null,"",researchLink(sym,target)); } },
       closeResearch: () => {set({ researchSymbol: null,researchTarget:null });if(typeof window!=="undefined")window.history.replaceState(null,"",window.location.pathname);},
@@ -91,15 +115,16 @@ export function createTerminalStore(storage?: StateStorage) {
       setWatchlist: (symbols) => { const watchlist=readSymbols(symbols); set(st=>activePatch(st,{watchlist})); },
       removeFromWatchlist: (s) => set((st) => activePatch(st, { watchlist: st.watchlist.filter((x) => x !== s) })),
       resetWorkspace: () => { const { widgets, layout } = makeWorkspace("Default"); set((st) => activePatch(st, { widgets, layout })); },
-      createWorkspace: (name, preset = "daily") => addWorkspace(makeWorkspace(name, preset)),
-      switchWorkspace: (id) => { const workspace = get().workspaces.find((w) => w.id === id); if (workspace) set({ ...workspace, activeWorkspaceId: id, commandOpen: false, mobileView: "workspace" }); },
+      createWorkspace: (name, preset = "daily") => addWorkspace({ ...makeWorkspace(name, preset), presentation: { ...presentation(false), hiddenPanelIds: [] } }),
+      switchWorkspace: (id) => { if (id === get().activeWorkspaceId) return; const workspace = get().workspaces.find((w) => w.id === id); if (workspace) { get().savePresentation(); set({ ...workspace, activeWorkspaceId: id, commandOpen: false, mobileView: "workspace", layoutEditing: false }); applyPresentation(workspace); } },
       renameWorkspace: (name) => { const valid = workspaceName(name); set((st) => ({ workspaces: st.workspaces.map((w) => w.id === st.activeWorkspaceId ? { ...w, name: valid } : w) })); },
-      duplicateWorkspace: () => { const current = get().workspaces.find((w) => w.id === get().activeWorkspaceId)!; addWorkspace(readWorkspace({ ...current, name: `${current.name.slice(0, 57)} (copy)` })); },
+      duplicateWorkspace: () => { const current = get().workspaces.find((w) => w.id === get().activeWorkspaceId)!; get().saveWorkspaceAs(`${current.name.slice(0, 57)} (copy)`, !!current.presentation?.appearance); },
       deleteWorkspace: () => {
         const st = get();
         if (st.workspaces.length === 1) throw new Error("Keep at least one workspace.");
         const remaining = st.workspaces.filter((w) => w.id !== st.activeWorkspaceId);
-        set({ ...remaining[0], workspaces: remaining, activeWorkspaceId: remaining[0].id });
+        set({ ...remaining[0], workspaces: remaining, activeWorkspaceId: remaining[0].id, layoutEditing: false });
+        applyPresentation(remaining[0]);
       },
       importWorkspace: (workspace) => addWorkspace(readWorkspace(workspace)),
     };
