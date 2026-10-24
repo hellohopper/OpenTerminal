@@ -50,6 +50,10 @@ node scripts/mac-service.mjs logs web
 node scripts/mac-service.mjs doctor
 ```
 
+`doctor` checks local web/API responses, the configured HTTPS login page, Tailscale connectivity/hostname, backup freshness, and any configured APNs key. A failed service, malformed response, HTTPS failure, stale/failed backup, or invalid configured push key returns exit code 1. An optional unconfigured push channel, disabled backups, or a new installation awaiting its first backup produces a warning. Scheduled backups older than 36 hours are treated as stale. `node scripts/mac-service.mjs doctor --json` returns a structured report with `ok`, check names, severity and descriptions, without credentials or key contents. The checks are read-only; push-key validation does not verify Apple delivery.
+
+On the phone, Settings → Server health checks the authenticated backend connection, last backup result and native push configuration independently. It can show a working connection alongside a failed backup or unavailable push-status endpoint. Tailscale's local process/hostname check is available through the Mac command, not the phone screen.
+
 For an upgrade or config/password change, stop the service, update dependencies/build, then start it again:
 
 ```sh

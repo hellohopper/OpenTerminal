@@ -21,7 +21,7 @@ The app pairs through `/api/mobile/session` and sends a device Bearer token plus
 - Native notifications: register this phone in Settings after configuring APNs and signing. Background delivery uses the existing alert/signal queue and quiet-hour policy; tapping a symbol notification opens native research. Revoking the phone removes its native registration.
 - Full research and professional tools remain available through links to the web terminal. That browser has its own login session.
 
-The app refreshes while active, supports pull-to-refresh and stops periodic work when backgrounded. It distinguishes offline, timeout, unreachable-server and certificate errors, backs off retries, and shows the last successful refresh. Prices are indicative provider data; market and account responses are not cached to disk. The installed PWA from [the mobile guide](../docs/ui-modes-mobile.md) retains its separate Web Push path. Native screens currently use English strings and system text sizing.
+The app enters its main interface after authorization succeeds, then loads watchlists, holdings, alerts and briefings independently. A slow or failing data section does not block the other sections; each shows loading, errors and its own last-success time. The app refreshes while active, supports pull-to-refresh and stops periodic work when backgrounded. It distinguishes offline, timeout, unreachable-server and certificate errors and backs off retries. Settings → Server health checks connection, backup status and push configuration without changing server settings. Prices are indicative provider data; market and account responses are not cached to disk. The installed PWA from [the mobile guide](../docs/ui-modes-mobile.md) retains its separate Web Push path. Native screens currently use English strings and system text sizing.
 
 ## Push signing
 
@@ -41,7 +41,7 @@ xcodebuild -project ios/OpenTerminal.xcodeproj -scheme OpenTerminal \
   -derivedDataPath /tmp/OpenTerminalDerived CODE_SIGNING_ALLOWED=NO build
 ```
 
-The `iOS` GitHub Actions workflow runs those checks on macOS when Actions is enabled for the repository. The portable core tests cover server origin validation, query encoding, device pairing/renewal/Bearer headers, session expiry, network failures, alert writes, provider errors and incomplete holdings valuations.
+The `iOS` GitHub Actions workflow runs those checks on macOS when Actions is enabled for the repository. The portable core tests cover server origin validation, query encoding, device pairing/renewal/Bearer headers, session expiry, network failures, alert writes, provider errors and incomplete holdings valuations. A separate app-model test target compiles the production model/credential adapter and covers startup, stalled requests, independent section failures, retry recovery, logout during refresh and partial health results with an in-memory credential store and simulated network responses.
 
 Local validation in the authoring environment: core tests and SwiftUI source type checking against the installed macOS SDK. That environment has only Command Line Tools, so an iOS SDK build, simulator launch, device networking, touch/VoiceOver checks and signing still need full Xcode. Source type checking is not an iOS simulator build.
 

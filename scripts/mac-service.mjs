@@ -4,13 +4,22 @@ import { dirname, join } from 'node:path';
 import { existsSync, mkdirSync, writeFileSync, readFileSync, cpSync, chmodSync, appendFileSync } from 'node:fs';
 import { spawn, spawnSync } from 'node:child_process';
 import { setup, configuration, runtimeEnvironment, launchPlist, labelFor, rotateLog } from './mac-service-lib.mjs';
+import { inspectMac } from './mac-health.mjs';
 const root=dirname(dirname(fileURLToPath(import.meta.url))),[command='help',argument,...extra]=process.argv.slice(2);
 const run=(program,args,options={})=>{const result=spawnSync(program,args,{stdio:'inherit',...options});if(result.error)throw result.error;if(result.status!==0)throw new Error(`${program} exited with status ${result.status}`);};
 const serviceFile=service=>join(root,'config','launchd',`${labelFor(root,service)}.plist`);
 const services=['api','web'];
 async function main(){
- if(command==='help'){console.log('Commands: setup --origin HTTPS_URL | credentials | build | install | uninstall | start | stop | status | logs [api|web] | doctor | serve | run api|web');return;}
+ if(command==='help'){console.log('Commands: setup --origin HTTPS_URL | credentials | build | install | uninstall | start | stop | status | logs [api|web] | doctor [--json] | serve | run api|web');return;}
  if(command==='setup'){if(argument!=='--origin'||!extra[0])throw new Error('Use setup --origin HTTPS_URL');setup(root,extra[0]);console.log('Created config/server.json. Read the owner password with the credentials command.');return;}
+ if(command==='doctor'){
+  let report;
+  try { report=await inspectMac(root,configuration(root)); }
+  catch { report={ok:false,checks:[{name:'configuration',status:'error',detail:'Cannot read valid config/server.json. Run setup or correct its fields and permissions.'}]}; }
+  if(argument==='--json')console.log(JSON.stringify(report,null,2));
+  else { for(const item of report.checks)console.log(`${item.name}: ${item.status.toUpperCase()} — ${item.detail}`);console.log('All application data/config/logs/backups stay in this repository. FileVault may require local unlock/login after reboot.'); }
+  process.exitCode=report.ok?0:1;return;
+ }
  const config=configuration(root),env={...process.env,...runtimeEnvironment(root,config)};
  if(command==='credentials'){console.log(`Server: ${config.origin}\nOwner password: ${config.password}`);return;}
  if(command==='build'){
@@ -60,13 +69,6 @@ async function main(){
   const status=spawnSync(binary,['serve','status','--json'],{encoding:'utf8'});if(status.status!==0)throw new Error('Cannot read Tailscale Serve configuration.');
   if(Object.keys(JSON.parse(status.stdout||'{}')).length)throw new Error('Serve already has configuration. Inspect it before changing its routes.');
   run(binary,['serve','--bg',`http://127.0.0.1:${config.webPort}`]);console.log(`Set iOS server to ${config.origin}. Confirm Serve reports this exact hostname.`);return;
- }
- if(command==='doctor'){
-  console.log(`Repository: ${root}\nHTTPS origin: ${config.origin}\nData/config/logs/backups: inside repository`);
-  for(const [name,port]of [['web',config.webPort],['api',config.apiPort]]){try{const r=await fetch(`http://127.0.0.1:${port}/${name==='api'?'api/status':'login'}`,{signal:AbortSignal.timeout(3000)});console.log(`${name}: HTTP ${r.status}`);}catch{console.log(`${name}: unreachable`);}}
-  console.log(`iOS entry: ${config.origin}\nOwner password: not displayed (use credentials)\nAPNs: ${config.apnsKeyFile?'configured; verify Apple signing on device':'not configured'}`);
-  const network=spawnSync(config.tailscale??'/usr/local/bin/tailscale',['status','--json'],{encoding:'utf8'});try{const status=JSON.parse(network.stdout);console.log(`Tailscale: ${status.BackendState}; hostname ${status.Self?.DNSName??'unknown'}`);}catch{console.log('Tailscale: unavailable; check the Mac app and CLI installation.');}
-  console.log('Install registers a login item pointing into this repo. Runtime files stay here. FileVault may require a local unlock after reboot.');return;
  }
  throw new Error('Unknown command. Run help.');
 }
