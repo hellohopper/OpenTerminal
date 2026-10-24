@@ -67,7 +67,7 @@ const Grid = WidthProvider(GridLayout);
 
 function WidgetBody({ widget }: { widget: WidgetInstance }) {
   switch (widget.type) {
-    case "thesis": return <ThesisWidget />;
+    case "thesis": return <ThesisWidget draftId={widget.id} />;
     case "reviews": return <TradeReviewsWidget />;
     case "rebalance": return <RebalanceWidget />;
     case "filings": return <FilingsWidget />;
@@ -76,18 +76,18 @@ function WidgetBody({ widget }: { widget: WidgetInstance }) {
     case "backtest": return <BacktestWidget />;
     case "today": return <TodayWidget />;
     case "historyLibrary": return <HistoryLibraryWidget />;
-    case "valuationLab": return <ValuationLabWidget />;
+    case "valuationLab": return <ValuationLabWidget draftId={widget.id} />;
     case "portfolioRisk": return <PortfolioRiskWidget />;
     case "paper": return <PaperTradingWidget />;
     case "consolidated": return <ConsolidatedLedgerWidget />;
     case "filingReader": return <FilingReaderWidget />;
-    case "earningsReview": return <EarningsReviewWidget />;
+    case "earningsReview": return <EarningsReviewWidget draftId={widget.id} />;
     case "researchSearch": return <ResearchSearchWidget />;
     case "peers": return <PeersWidget />;
     case "thesisMonitor": return <ThesisMonitorWidget />;
-    case "accountImport": return <AccountImportWidget />;
+    case "accountImport": return <AccountImportWidget initialReportId={widget.settings?.sourceRecord?.kind === "reconciliation" ? widget.settings.sourceRecord.id : undefined} />;
     case "portfolioGuards": return <PortfolioGuardsWidget />;
-    case "optionPositions": return <OptionPositionsWidget />;
+    case "optionPositions": return <OptionPositionsWidget initialLotId={widget.settings?.sourceRecord?.kind === "expiry" ? widget.settings.sourceRecord.id : undefined} />;
     case "walkforward": return <WalkforwardWidget />;
     case "signals": return <SignalsWidget />;
     case "quality": return <QualityWidget />;
@@ -236,7 +236,7 @@ export default function Workspace({ compact = false }: { compact?: boolean }) {
               </span>
             </div>
             <div className="flex-1 overflow-auto min-h-0">
-              <PollingScope active={!maximized || maximized === w.id}><WidgetErrorBoundary name={widgetTitle(w.type)}><WidgetBody widget={w} /></WidgetErrorBoundary></PollingScope>
+              <PollingScope active={!maximized || maximized === w.id}><WidgetErrorBoundary name={widgetTitle(w.type)}><WidgetBody key={`${workspaceId}:${w.id}`} widget={w} /></WidgetErrorBoundary></PollingScope>
             </div>
           </PanelFrame>
         </div>

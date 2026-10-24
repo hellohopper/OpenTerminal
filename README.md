@@ -35,6 +35,8 @@ No signup. No credit card. No rate‑limited demo tier. Clone it, `npm install`,
 
 ## ✨ Features
 
+- **Workflow recovery and coverage** — persistent research drafts, optional UI preference sync, scheduled backups and complete migration, broader TODAY coverage, combined account exposure and technical-signal catch-up. [Usage and limits](docs/workflow-reliability.md).
+
 - **Connected research and validation** — per-stock timelines and record links, private research search, peer fundamentals, thesis evidence monitors, account reconciliation, portfolio risk policies, option holdings and rolling sample-out strategy validation. [Usage and limits](docs/round-5.md).
 
 - **Daily research and review** — TODAY workbench, versioned historical datasets, DCF and reverse DCF valuation, portfolio correlation/stress, independent paper trading, multicurrency consolidation, SEC paragraph reading/comparison and earnings thesis archives. [Panel guide and limits](docs/round-4.md).

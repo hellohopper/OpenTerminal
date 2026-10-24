@@ -68,7 +68,7 @@ export default function AlertsWidget({ initialSymbol }: { initialSymbol?: string
   const { data, error } = useQuery({
     queryKey: ["price-alerts"],
     queryFn: () =>
-      apiGet<{ alerts: AlertRule[]; monitor: AlertStatus }>("/api/alerts"),
+      apiGet<{ alerts: AlertRule[]; monitor: AlertStatus; gaps?: {id:number;payload:{symbol:string;from:string;to:string}}[] }>("/api/alerts"),
     refetchInterval: 10000,
   });
   const { data: history, error: historyError } = useQuery({
@@ -186,6 +186,8 @@ export default function AlertsWidget({ initialSymbol }: { initialSymbol?: string
   const percent = form.condition.startsWith("CHANGE_");
   return (
     <div className="p-2 space-y-3">
+      {!!data?.gaps?.length && <details><summary className="amber">{ui("Price monitoring gaps")} · {data.gaps.length}</summary><p>{ui("No successful checks were recorded during these intervals. Intraday price moves cannot be reconstructed.")}</p>{data.gaps.map(g=><p key={g.id}>{g.payload.symbol} · {g.payload.from} → {g.payload.to}</p>)}</details>}
+
       <div className="flex flex-wrap items-center gap-2">
         <button
           className="term-btn"

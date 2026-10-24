@@ -4,7 +4,7 @@ Add panels from the widget sidebar or find them with Cmd/Ctrl+K: TODAY, HISTORY 
 
 ## TODAY
 
-TODAY combines unread notification/filing records, due active/watching thesis cards, upcoming seven-day earnings and quote-quality problems. Earnings and quality checks cover the first twelve workspace watchlist symbols. Expected earnings sessions remain unverified. Complete, reopen or snooze items for an hour; filters show pending, completed and snoozed tasks. State persists on the server and participates in backup/import, with optimistic conflict checks and retention of the latest 500 states. Completing a queue task does not mark its source read. A new thesis revision creates a new review task. Source and research buttons open existing panels.
+TODAY combines unread notification/filing records, due active/watching thesis cards, upcoming seven-day earnings and quote-quality problems. Earnings and quality checks cover selected watchlists and actual account holdings, up to 200 unique symbols in bounded batches. Open option expirations and latest unmatched reconciliation reports also enter TODAY; see [coverage controls](workflow-reliability.md#today-coverage). Expected earnings sessions remain unverified. Complete, reopen or snooze items for an hour; filters show pending, completed and snoozed tasks. State persists on the server and participates in backup/import, with optimistic conflict checks and retention of the latest 500 states. Completing a queue task does not mark its source read. A new thesis revision creates a new review task. Source and research buttons open existing panels.
 
 ## Historical data center
 

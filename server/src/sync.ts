@@ -19,6 +19,7 @@ const snapshot = z.object({
                 type: z.string().max(40),
                 linked: z.boolean(),
                 symbol: z.string().max(20).optional(),
+                settings: z.record(z.unknown()).refine(v => JSON.stringify(v).length <= 16000).optional(),
               }),
             )
             .max(50),
@@ -43,6 +44,13 @@ const snapshot = z.object({
     groups: z.array(z.unknown()).max(20),
     screeners: z.array(z.unknown()).max(20),
   }),
+  display: z.object({
+    language: z.enum(["en", "zh"]), fontSize: z.number().min(12).max(20), density: z.enum(["compact", "standard", "comfortable"]),
+    refreshInterval: z.number().refine(n => [0,1000,5000,15000,30000].includes(n)), hideEmptyQuoteFields: z.boolean(),
+    favoriteFeatures: z.array(z.string().max(40)).max(100), recentFeatures: z.array(z.string().max(40)).max(5),
+    collapsedGroups: z.array(z.string().max(100)).max(20), sidebarVisible: z.boolean(), workspaceBarVisible: z.boolean(),
+    hiddenSidebarFeatures: z.array(z.string().max(40)).max(100), hiddenPanels: z.record(z.string().max(100), z.array(z.string().max(100)).max(50)).refine(v => Object.keys(v).length <= 100),
+  }).optional(),
   drawings: z
     .record(z.string().max(240), z.string().max(65536))
     .refine(

@@ -1,5 +1,13 @@
+import { join } from "node:path";
+import { dataDir } from "../db.js";
+import { createBackupScheduler } from "../storage/backup-scheduler.js";
 import {Router} from 'express';import {db} from '../db.js';import {asyncRoute} from '../async-route.js';import {createBackup,restoreBackup} from '../storage/backup.js';import {SCHEMA_VERSION} from '../storage/migrations.js';
 export const dataRouter=Router();
-dataRouter.get('/status',asyncRoute(async(_req,res)=>res.json({database:db.kind,schemaVersion:SCHEMA_VERSION,backups:'manual',maxBackupBytes:32*1024*1024})));
+export const backupScheduler=createBackupScheduler(db,join(dataDir,"backups"));
+dataRouter.get("/schedule",asyncRoute(async(_req,res)=>res.json({policy:await backupScheduler.policy(),status:await backupScheduler.status(),files:await backupScheduler.files()})));
+dataRouter.post("/schedule",asyncRoute(async(req,res)=>{try{res.json(await backupScheduler.configure(req.body));}catch(e){res.status(400).json({error:(e as Error).message});}}));
+dataRouter.post("/schedule/run",asyncRoute(async(_req,res)=>{try{res.json(await backupScheduler.check(true));}catch(e){res.status(400).json({error:(e as Error).message});}}));
+dataRouter.get("/schedule/files/:name",asyncRoute(async(req,res)=>{try{res.type("json").send(await backupScheduler.download(req.params.name));}catch{res.status(404).json({error:"Backup unavailable."});}}));
+dataRouter.get('/status',asyncRoute(async(_req,res)=>res.json({database:db.kind,schemaVersion:SCHEMA_VERSION,backups:'manual-and-scheduled',maxBackupBytes:32*1024*1024})));
 dataRouter.get('/backup',asyncRoute(async(_req,res)=>{try{res.json(await createBackup(db));}catch(error){res.status(400).json({error:(error as Error).message});}}));
 dataRouter.post('/restore',asyncRoute(async(req,res)=>{if(req.body?.confirmation!=='RESTORE')return res.status(400).json({error:'Type RESTORE to replace server data.'});try{res.json({restored:await restoreBackup(db,req.body.backup)});}catch(error){res.status(400).json({error:(error as Error).message});}}));

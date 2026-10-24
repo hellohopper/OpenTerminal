@@ -5,20 +5,15 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost } from "../../lib/api";
 import { useTerminal } from "../../store/terminal";
-import { usePreferences } from "../../store/preferences";
+import { captureDevice } from "../../lib/capture-device";
 import { readDeviceSnapshot, applyDeviceSnapshot, mergeDeviceSnapshots, describeSyncChanges, sameSnapshot, SYNC_VERSION_KEY, type DeviceSnapshot } from "../../lib/device-sync";
 type Snapshot = { payload: DeviceSnapshot; version: string; updatedAt: string };
 type Preview = { entire: boolean; direction: "upload" | "download" | "restore"; local: DeviceSnapshot; before: DeviceSnapshot | null; after: DeviceSnapshot; baseVersion: string | null; restoreVersion?: string };
-function capture(): DeviceSnapshot {
-  const s = useTerminal.getState(), drawings: Record<string, string> = {};
-  for (const key of Object.keys(localStorage)) if (key.startsWith("openterminal-drawings-v1:")) drawings[key] = localStorage.getItem(key)!;
-  return readDeviceSnapshot({ format: "openterminal-device", version: 1, workspace: { workspaces: s.workspaces, activeWorkspaceId: s.activeWorkspaceId }, preferences: usePreferences.getState().data, drawings });
-}
 export default function SyncWidget() {
   const { t: ui } = useI18n();
 
   const [message, setMessage] = useState(""), [busy, setBusy] = useState(false), [confirmed, setConfirmed] = useState(false);
-  const [scope, setScope] = useState<"all" | "selected">("all"), [selected, setSelected] = useState<string[]>([]), [preferences, setPreferences] = useState(false);
+  const [scope, setScope] = useState<"all" | "selected">("all"), [selected, setSelected] = useState<string[]>([]), [preferences, setPreferences] = useState(false), [display, setDisplay] = useState(false);
   const [preview, setPreview] = useState<Preview | null>(null), [savedVersion, setSavedVersion] = useState("");
   const workspaces = useTerminal(s => s.workspaces);
   const qc = useQueryClient();
@@ -30,7 +25,7 @@ export default function SyncWidget() {
     finally { setBusy(false); }
   };
   const review = (direction: Preview["direction"]) => run(async () => {
-    const latest = await apiGet<Snapshot | null>("/api/sync"), local = capture();
+    const latest = await apiGet<Snapshot | null>("/api/sync"), local = captureDevice();
     qc.setQueryData(["device-sync"], latest);
     let before: DeviceSnapshot | null, after: DeviceSnapshot;
     if (direction === "restore") {
@@ -42,7 +37,7 @@ export default function SyncWidget() {
       if (!source) throw new Error("No snapshot on server.");
       before = direction === "upload" ? latest ? readDeviceSnapshot(latest.payload) : null : local;
       if (!before && scope === "selected") throw new Error("Upload an entire snapshot before using selective sync.");
-      after = scope === "all" ? source : mergeDeviceSnapshots(source, before!, { workspaceIds: selected, includePreferences: preferences });
+      after = before ? mergeDeviceSnapshots(source, before, { workspaceIds: scope === "all" ? null : selected, includePreferences: preferences, includeDisplay: display }) : { ...source, display: display ? source.display : undefined };
     }
     if (new TextEncoder().encode(JSON.stringify(after)).length > 2 * 1024 * 1024) throw new Error("Device snapshot exceeds 2 MB.");
     setPreview({ entire: scope === "all", direction, local, before, after, baseVersion: latest?.version ?? null, restoreVersion: direction === "restore" ? savedVersion : undefined });
@@ -50,7 +45,7 @@ export default function SyncWidget() {
   });
   const apply = () => run(async () => {
     if (!preview || !confirmed) return;
-    if (!sameSnapshot(capture(), preview.local)) throw new Error("Local data changed since preview. Review the changes again.");
+    if (!sameSnapshot(captureDevice(), preview.local)) throw new Error("Local data changed since preview. Review the changes again.");
     if (preview.direction === "download") {
       const latest = await apiGet<Snapshot | null>("/api/sync");
       if (latest?.version !== preview.baseVersion) throw new Error("Sync conflict: server changed since preview. Review again.");
@@ -73,6 +68,7 @@ export default function SyncWidget() {
     {(remote.error || history.error) && <p role="alert" className="down">{(remote.error || history.error)?.message}</p>}
     <p>{ui("Server snapshot:")} {remote.isLoading ? ui("Loading…") : remote.data?.updatedAt ?? ui("None")}</p>
     <label>{ui("Sync scope")} <select aria-label={ui("Sync scope")} disabled={busy} value={scope} onChange={e => { setScope(e.target.value as typeof scope); resetReview(); }}><option value="all">{ui("Entire snapshot")}</option><option value="selected">{ui("Selected workspaces")}</option></select></label>
+    <label className="block"><input type="checkbox" disabled={busy} checked={display} onChange={e => { setDisplay(e.target.checked); resetReview(); }} /> {ui("Also sync UI preferences")}</label><p className="dim">{ui("Leave unchecked to keep this device’s font, language and visibility choices.")}</p>
     {scope === "selected" && <fieldset className="space-y-1 border border-[var(--border)] p-2"><legend>{ui("Choose source workspaces")}</legend>
       {[...choices.values()].map(w => <label className="block" key={w.id}><input type="checkbox" disabled={busy} checked={selected.includes(w.id)} onChange={e => { setSelected(e.target.checked ? [...selected, w.id] : selected.filter(id => id !== w.id)); resetReview(); }} /> {w.name} <span className="dim">{w.id.slice(0,8)}</span></label>)}
       <label className="block"><input type="checkbox" disabled={busy} checked={preferences} onChange={e => { setPreferences(e.target.checked); resetReview(); }} /> {ui("Also replace shared watchlist groups and screener presets")}</label>

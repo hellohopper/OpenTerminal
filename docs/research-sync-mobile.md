@@ -10,6 +10,8 @@ All data uses the existing sources and limits: quotes are indicative and show re
 
 ## Reviewed device sync
 
+DEVICE SYNC can also transfer UI preferences through an optional checkbox; leaving it off keeps destination font, language and visibility choices. Panel settings always travel with their workspace. See [preference sync](workflow-reliability.md#optional-ui-preference-sync).
+
 DEVICE SYNC has two scopes:
 
 - **Entire snapshot** replaces all workspaces, watchlist groups, screener presets and drawings at the destination. Workspaces missing from the source are removed.

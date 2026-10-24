@@ -33,7 +33,7 @@ import {signalMonitor} from "./signals.js";
 import {holdingEventsRouter} from "./routes/holding-events.js";
 import {deliveryRouter,briefingScheduler} from "./routes/delivery.js";
 import {syncRouter} from "./routes/sync.js";
-import {dataRouter} from "./routes/data.js";
+import {dataRouter,backupScheduler} from "./routes/data.js";
 import {tradeCsvRouter} from "./routes/trade-csv.js";
 import express, { type ErrorRequestHandler } from "express";
 import { db } from "./db.js";
@@ -155,6 +155,7 @@ const PORT = Number(process.env.API_PORT ?? 4000);
 const HOST = process.env.API_HOST ?? "127.0.0.1";
 await recoverWalkforward();
 const server = app.listen(PORT, HOST, () => {
+  backupScheduler.start();
   guardMonitor.start();
   thesisMonitor.start();
   paperMonitor.start();
@@ -173,7 +174,7 @@ async function shutdown() {
   stopping = true;
   const deadline = setTimeout(() => process.exit(1), 15000);
   deadline.unref();
-  await Promise.all([stopWalkforward(),guardMonitor.stop(),thesisMonitor.stop(),alertMonitor.stop(),briefingScheduler.stop(),signalMonitor.stop(),filingMonitor.stop(),notificationWorker.stop(),screenerTracker.stop(),paperMonitor.stop()]);
+  await Promise.all([backupScheduler.stop(),stopWalkforward(),guardMonitor.stop(),thesisMonitor.stop(),alertMonitor.stop(),briefingScheduler.stop(),signalMonitor.stop(),filingMonitor.stop(),notificationWorker.stop(),screenerTracker.stop(),paperMonitor.stop()]);
   await new Promise<void>((resolve) => server.close(() => resolve()));
   await db.close();
   clearTimeout(deadline);
