@@ -1,0 +1,11 @@
+{
+  "accessMode": "local",
+  "origin": "http://127.0.0.1:3000",
+  "webPort": 3000,
+  "apiPort": 4000,
+  "node": "/absolute/path/to/node",
+  "apiKey": "GENERATED_BY_SETUP",
+  "password": "GENERATED_BY_SETUP",
+  "sessionSecret": "GENERATED_BY_SETUP",
+  "keepAwake": true
+}
