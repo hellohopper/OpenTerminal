@@ -1,9 +1,19 @@
 import Foundation
 import SwiftUI
+import Combine
 import OpenTerminalCore
 
 enum ResearchSection: String, CaseIterable { case quote = "Quote", chart = "Price chart", news = "News", notes = "Research notes" }
 struct ResearchDraft: Equatable { var title = ""; var body = ""; var isEmpty: Bool { title.isEmpty && body.isEmpty } }
+@MainActor final class ResearchNoteState: ObservableObject {
+    @Published var title: String
+    @Published var body: String
+    @Published var saving = false
+    @Published var message: String?
+    @Published var error: String?
+    @Published var savedRevision = 0
+    init(_ draft: ResearchDraft) { title = draft.title; body = draft.body }
+}
 
 @MainActor final class ResearchModel: ObservableObject {
     @Published var quote: Quote?
@@ -14,15 +24,18 @@ struct ResearchDraft: Equatable { var title = ""; var body = ""; var isEmpty: Bo
     @Published var loading: Set<ResearchSection> = []
     @Published var errors: [ResearchSection: String] = [:]
     @Published var updated: [ResearchSection: Date] = [:]
-    @Published var title: String { didSet { keepDraft() } }
-    @Published var bodyText: String { didSet { keepDraft() } }
-    @Published var saving = false
-    @Published var message: String?
-    @Published var saveError: String?
+    var title: String { get { noteState.title } set { noteState.title = newValue; keepDraft() } }
+    var bodyText: String { get { noteState.body } set { noteState.body = newValue; keepDraft() } }
+    var saving: Bool { get { noteState.saving } set { noteState.saving = newValue } }
+    var message: String? { get { noteState.message } set { noteState.message = newValue } }
+    var saveError: String? { get { noteState.error } set { noteState.error = newValue } }
+    var noteRevision: Int { noteState.savedRevision }
     let symbol: String
     private let terminal: TerminalModel
     private let session: UUID
     private let draftKey: String
+    private let noteState: ResearchNoteState
+    private var noteUpdates: AnyCancellable?
     private var requests: [ResearchSection: UUID] = [:]
     var hasDraft: Bool { !draft.isEmpty }
     private var draft: ResearchDraft { ResearchDraft(title: title, body: bodyText) }
@@ -30,8 +43,9 @@ struct ResearchDraft: Equatable { var title = ""; var body = ""; var isEmpty: Bo
     init(terminal: TerminalModel, symbol: String) {
         self.terminal = terminal; self.symbol = symbol; session = terminal.sessionID
         draftKey = "\(terminal.server?.origin.absoluteString ?? "")|\(symbol)"
-        let saved = terminal.researchDrafts[draftKey] ?? ResearchDraft()
-        title = saved.title; bodyText = saved.body
+        let state = terminal.researchNoteStates[draftKey] ?? ResearchNoteState(terminal.researchDrafts[draftKey] ?? ResearchDraft())
+        terminal.researchNoteStates[draftKey] = state; noteState = state
+        noteUpdates = state.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
     }
     private var current: Bool { terminal.sessionID == session && terminal.signedIn }
     private func keepDraft() { if current { terminal.researchDrafts[draftKey] = draft.isEmpty ? nil : draft } }
@@ -90,6 +104,7 @@ struct ResearchDraft: Equatable { var title = ""; var body = ""; var isEmpty: Bo
             if draft == submitted && terminal.researchDrafts[draftKey] == submitted {
                 title = ""; bodyText = ""; message = nativeText("Note saved.")
             } else { message = nativeText("Note saved. Newer edits are kept as a draft.") }
+            noteState.savedRevision += 1
             await load(.notes)
         } catch {
             guard current, !(error is CancellationError) else { return }

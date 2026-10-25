@@ -43,7 +43,7 @@ describe("journal persistence", () => {
     ).toHaveBeenCalledWith(expect.objectContaining(note));
     await call("put", "/:id", {
       params: { id },
-      body: { ...note, title: "Updated", kind: "trade" },
+      body: { ...note, version: created.json.mock.calls[0][0].version, title: "Updated", kind: "trade" },
     });
     expect(
       (await call("get", "/", { query: { symbol: "AAPL", kind: "research" } }))
@@ -74,5 +74,19 @@ describe("journal persistence", () => {
     const entry = (await call("get", "/")).json.mock.calls[0][0].entries[0];
     expect(entry.hasImage).toBe(1);
     expect(entry.image).toBeUndefined();
+  });
+  it("rejects stale and unversioned edits without overwriting a newer note", async () => {
+    const created = (await call("post", "/", { body: note })).json.mock.calls[0][0];
+    const first = await call("put", "/:id", { params: { id: created.id }, body: { ...note, version: created.version, body: "Device A edits" } });
+    const fresh = first.json.mock.calls[0][0];
+    expect(fresh.version).not.toBe(created.version);
+    const stale = await call("put", "/:id", { params: { id: created.id }, body: { ...note, version: created.version, title: "Device B title" } });
+    expect(stale.status).toHaveBeenCalledWith(409);
+    expect((await call("put", "/:id", { params: { id: created.id }, body: note })).status).toHaveBeenCalledWith(409);
+    const saved = (await call("get", "/:id", { params: { id: created.id } })).json.mock.calls[0][0];
+    expect(saved).toMatchObject({ body: "Device A edits", version: fresh.version, title: note.title });
+    const reviewed = await call("put", "/:id", { params: { id: created.id }, body: { ...saved, body: "Reviewed merge" } });
+    expect(reviewed.json.mock.calls[0][0].version).not.toBe(fresh.version);
+    expect((await call("put", "/:id", { params: { id: 999999 }, body: { ...note, version: fresh.version } })).status).toHaveBeenCalledWith(404);
   });
 });

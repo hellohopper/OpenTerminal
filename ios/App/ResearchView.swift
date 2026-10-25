@@ -62,6 +62,7 @@ private struct ResearchContent: View {
             .refreshable { await research.refresh() }
             .task { await research.refreshOverview() }
             .task(id: research.range) { await research.load(.chart) }
+            .onChange(of: research.noteRevision) { _, _ in Task { await research.load(.notes) } }
             .interactiveDismissDisabled(research.hasDraft || research.saving)
             .terminalBackButtonHidden(research.hasDraft || research.saving)
             .toolbar {

@@ -2,6 +2,7 @@ import { asyncRoute } from "../async-route.js";
 import { Router } from "express";
 import { z } from "zod";
 import { db } from "../db.js";
+import { randomUUID } from "node:crypto";
 export const journalRouter = Router();
 export const journalSchema = z.object({
   symbol: z
@@ -49,7 +50,7 @@ journalRouter.get(
       return res.status(400).json({ error: "invalid cursor" });
     const rows = (await db
       .prepare(
-        "SELECT id, symbol, title, body, kind, created_at, updated_at, CASE WHEN image IS NOT NULL THEN 1 ELSE 0 END AS \"hasImage\" FROM journal_entries WHERE (? = '' OR symbol = ?) AND (? = '' OR kind = ?) AND id < ? ORDER BY id DESC LIMIT 51",
+        "SELECT id, symbol, title, body, kind, version, created_at, updated_at, CASE WHEN image IS NOT NULL THEN 1 ELSE 0 END AS \"hasImage\" FROM journal_entries WHERE (? = '' OR symbol = ?) AND (? = '' OR kind = ?) AND id < ? ORDER BY id DESC LIMIT 51",
       )
       .all(symbol, symbol, kind, kind, before)) as Array<{
       id: number;
@@ -87,24 +88,29 @@ journalRouter.post(
     if (!parsed.success)
       return res.status(400).json({ error: parsed.error.issues[0].message });
     const n = parsed.data;
+    const version = randomUUID();
     const info = await db
       .prepare(
-        "INSERT INTO journal_entries (symbol, title, body, kind, image) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO journal_entries (symbol, title, body, kind, image, version) VALUES (?, ?, ?, ?, ?, ?)",
       )
-      .run(n.symbol, n.title, n.body, n.kind, n.image ?? null);
-    res.status(201).json({ id: Number(info.lastInsertRowid) });
+      .run(n.symbol, n.title, n.body, n.kind, n.image ?? null, version);
+    res.status(201).json({ id: Number(info.lastInsertRowid), version });
   }),
 );
 journalRouter.put(
   "/:id",
   asyncRoute(async (req, res) => {
-    const parsed = journalSchema.safeParse(req.body);
-    if (!parsed.success)
+    const parsed = journalSchema.extend({ version: z.string().min(1).max(100) }).safeParse(req.body);
+    if (!parsed.success) {
+      if (parsed.error.issues.some(issue => issue.path[0] === "version"))
+        return res.status(409).json({ error: "Review the saved entry before saving this older draft." });
       return res.status(400).json({ error: parsed.error.issues[0].message });
+    }
     const n = parsed.data;
+    const version = randomUUID();
     const result = await db
       .prepare(
-        "UPDATE journal_entries SET symbol=?, title=?, body=?, kind=?, image=?, updated_at=? WHERE id=?",
+        "UPDATE journal_entries SET symbol=?, title=?, body=?, kind=?, image=?, updated_at=?, version=? WHERE id=? AND version=?",
       )
       .run(
         n.symbol,
@@ -113,11 +119,15 @@ journalRouter.put(
         n.kind,
         n.image ?? null,
         new Date().toISOString().replace("T", " ").slice(0, 19),
+        version,
         req.params.id,
+        n.version,
       );
     return result.changes
-      ? res.json({ id: Number(req.params.id) })
-      : res.status(404).json({ error: "entry not found" });
+      ? res.json({ id: Number(req.params.id), version })
+      : (await db.prepare("SELECT id FROM journal_entries WHERE id=?").get(req.params.id))
+        ? res.status(409).json({ error: "This entry changed on another device. Your draft is kept. Review the saved entry before saving again." })
+        : res.status(404).json({ error: "entry not found" });
   }),
 );
 journalRouter.delete(

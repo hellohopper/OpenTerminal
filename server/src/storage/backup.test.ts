@@ -5,6 +5,16 @@ const opened:AppDatabase[]=[];afterEach(async()=>{await Promise.all(opened.splic
 async function open(){const db=await AppDatabase.open();opened.push(db);return db;}
 const rehash=(b:any)=>{b.checksum=createHash('sha256').update(JSON.stringify(b.data)).digest('hex');return b;};
 describe('versioned backups',()=>{
+ it('rotates journal revisions on restore, including backups from before revisions existed',async()=>{
+  const db=await open();await db.prepare('INSERT INTO journal_entries (symbol,title,body,kind,version) VALUES (?,?,?,?,?)').run('AAPL','Saved','Body','research','old-revision');
+  const backup=await createBackup(db);expect(backup.data.journal_entries[0].version).toBe('old-revision');
+  await restoreBackup(db,backup);const restored=(await db.prepare('SELECT * FROM journal_entries').get())!;
+  expect(restored.version).not.toBe('old-revision');
+  expect((await db.prepare('UPDATE journal_entries SET body=? WHERE id=? AND version=?').run('Stale overwrite',restored.id,'old-revision')).changes).toBe(0);
+  delete backup.data.journal_entries[0].version;await restoreBackup(db,rehash({...backup,schemaVersion:8}));
+  const legacy=(await db.prepare('SELECT * FROM journal_entries').get())!;
+  expect(legacy.body).toBe('Body');expect(legacy.version).not.toBe(restored.version);
+ });
  it('records migrations once and roundtrips attached journal data',async()=>{const db=await open();expect((await db.prepare('SELECT COUNT(*) AS n FROM app_schema_migrations').get())!.n).toBe(SCHEMA_VERSION);await db.prepare('INSERT INTO journal_entries (symbol,title,body,kind,image) VALUES (?,?,?,?,?)').run('AAPL','Saved','Note','research','data:image/png;base64,iVBORw0KGgo=');const b=await createBackup(db);await db.prepare('DELETE FROM journal_entries').run();await restoreBackup(db,b);expect((await db.prepare('SELECT * FROM journal_entries').get())!.image).toBe(b.data.journal_entries[0].image);});
  it('rejects damaged or future backups before changing data and rolls back invalid rows',async()=>{const db=await open(),b=await createBackup(db);const damaged=structuredClone(b);damaged.data.portfolios[0].name='Tampered';await expect(restoreBackup(db,damaged)).rejects.toThrow('checksum');const invalid=structuredClone(b);invalid.data.transactions=[{id:1,portfolio_id:999,symbol:'AAPL',side:'BUY',quantity:1,price:1,executed_at:'2026'}];await expect(restoreBackup(db,rehash(invalid))).rejects.toThrow();expect((await db.prepare('SELECT name FROM portfolios').get())!.name).toBe('Main');await expect(restoreBackup(db,{...b,schemaVersion:999})).rejects.toThrow('incompatible');});
  it('changes alert generations so an old in-flight snapshot cannot fire restored rules',async()=>{const db=await open();await db.prepare('INSERT INTO price_alerts (symbol,condition,threshold,created_at) VALUES (?,?,?,?)').run('AAPL','PRICE_ABOVE',1,'2026');const snapshot=(await db.prepare('SELECT * FROM price_alerts').get())!;const b=await createBackup(db);await restoreBackup(db,b);expect((await db.prepare('SELECT generation FROM price_alerts').get())!.generation).not.toBe(snapshot.generation);expect((await db.prepare('UPDATE price_alerts SET armed=0 WHERE id=? AND revision=? AND generation=?').run(snapshot.id,snapshot.revision,snapshot.generation)).changes).toBe(0);});

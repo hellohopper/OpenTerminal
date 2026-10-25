@@ -43,7 +43,10 @@ import UserNotifications
     private var generation = UUID()
     var sessionID: UUID { generation }
     var researchDrafts: [String: ResearchDraft] = [:]
+    var researchNoteStates: [String: ResearchNoteState] = [:]
     private var refreshID: UUID?
+    private var selectionRefresh: Task<Void, Never>?
+    private var sectionRequests: [DataSection: UUID] = [:]
     private let defaults: UserDefaults
     private let credentials: any CredentialStorage
     private let makeClient: (ServerConnection, MobileCredential?) -> TerminalAPI
@@ -95,7 +98,8 @@ import UserNotifications
         let old = api
         if let server { credentials.remove(server.origin.absoluteString) }
         generation = UUID(); credential = nil; api = nil; server = nil; signedIn = false
-        researchDrafts = [:]
+        researchDrafts = [:]; researchNoteStates = [:]
+        selectionRefresh?.cancel(); selectionRefresh = nil; sectionRequests = [:]
         quotes = []; portfolios = []; positions = []; holdingQuotes = []; alerts = []; briefing = nil; workspaces = []; portfolioID = nil; holdingsReady = false
         sharedLists = []; sharedListID = nil; devices = []; watchlist = []; lastUpdated = nil; reconnecting = false; error = nil
         managingLists = false; listManagementError = nil
@@ -130,63 +134,71 @@ import UserNotifications
             if token == generation && !Task.isCancelled && self.error == nil && sectionErrors.isEmpty { lastUpdated = .now; reconnecting = false; retryDelay = 2 }
         } catch { if token == generation && !Task.isCancelled { await report(error) } }
     }
-    private func begin(_ section: DataSection) { loadingSections.insert(section); sectionErrors[section] = nil }
-    private func finish(_ section: DataSection, token: UUID) { if token == generation { loadingSections.remove(section) } }
+    private func begin(_ section: DataSection) -> UUID {
+        let request = UUID(); sectionRequests[section] = request
+        loadingSections.insert(section); sectionErrors[section] = nil; return request
+    }
+    private func current(_ section: DataSection, request: UUID, token: UUID) -> Bool {
+        token == generation && sectionRequests[section] == request && !Task.isCancelled
+    }
+    private func finish(_ section: DataSection, request: UUID, token: UUID) {
+        if token == generation && sectionRequests[section] == request { loadingSections.remove(section) }
+    }
     private func refreshWatchlistData() async {
-        let token = generation; begin(.watchlist); begin(.briefing)
-        defer { finish(.watchlist, token: token); finish(.briefing, token: token) }
+        let token = generation, revision = listRevision, pricesRequest = begin(.watchlist), briefingRequest = begin(.briefing)
+        defer { finish(.watchlist, request: pricesRequest, token: token); finish(.briefing, request: briefingRequest, token: token) }
         do {
-            try await refreshLists(); guard token == generation else { return }
+            try await refreshLists(); guard token == generation, revision == listRevision, !Task.isCancelled else { return }
             async let prices: Void = refreshQuotes()
             async let summary: Void = refreshBriefing()
             _ = await (prices, summary)
-        } catch { if token == generation {
+        } catch { if current(.watchlist, request: pricesRequest, token: token) {
             await report(error, section: .watchlist)
-            if token == generation && !(error is CancellationError) { sectionErrors[.briefing] = nativeText("Briefing could not refresh because the shared watchlist is unavailable.") }
+            if current(.briefing, request: briefingRequest, token: token) && !(error is CancellationError) { sectionErrors[.briefing] = nativeText("Briefing could not refresh because the shared watchlist is unavailable.") }
         } }
     }
     private func refreshAccounts() async {
-        guard let api else { return }; let token = generation; begin(.holdings); defer { finish(.holdings, token: token) }
+        guard let api else { return }; let token = generation, request = begin(.holdings); defer { finish(.holdings, request: request, token: token) }
         do {
             let accounts: [Portfolio] = try await api.get("/api/portfolios")
-            guard token == generation else { return }; portfolios = accounts
+            guard current(.holdings, request: request, token: token) else { return }; portfolios = accounts
             if !accounts.contains(where: { $0.id == portfolioID }) { portfolioID = accounts.first?.id }
             await refreshHoldings()
-        } catch { if token == generation { await report(error, section: .holdings) } }
+        } catch { if current(.holdings, request: request, token: token) { await report(error, section: .holdings) } }
     }
     private func refreshAlerts() async {
-        guard let api else { return }; let token = generation; begin(.alerts); defer { finish(.alerts, token: token) }
+        guard let api else { return }; let token = generation, request = begin(.alerts); defer { finish(.alerts, request: request, token: token) }
         do {
             let rules: AlertList = try await api.get("/api/alerts")
-            if token == generation { alerts = rules.alerts; sectionUpdated[.alerts] = .now }
-        } catch { if token == generation { await report(error, section: .alerts) } }
+            if current(.alerts, request: request, token: token) { alerts = rules.alerts; sectionUpdated[.alerts] = .now }
+        } catch { if current(.alerts, request: request, token: token) { await report(error, section: .alerts) } }
     }
     func refreshQuotes() async {
         guard let api else { return }; let token = generation, symbols = watchlist
-        begin(.watchlist); defer { finish(.watchlist, token: token) }
+        let request = begin(.watchlist); defer { finish(.watchlist, request: request, token: token) }
         if symbols.isEmpty { quotes = []; sectionUpdated[.watchlist] = .now; return }
-        do { let rows: [Quote] = try await api.get("/api/quotes", query: ["symbols": symbols.joined(separator: ",")]); if token == generation && symbols == watchlist { quotes = rows; sectionUpdated[.watchlist] = .now } }
-        catch { if token == generation && symbols == watchlist && !Task.isCancelled { await report(error, section: .watchlist) } }
+        do { let rows: [Quote] = try await api.get("/api/quotes", query: ["symbols": symbols.joined(separator: ",")]); if current(.watchlist, request: request, token: token) && symbols == watchlist { quotes = rows; sectionUpdated[.watchlist] = .now } }
+        catch { if current(.watchlist, request: request, token: token) && symbols == watchlist { await report(error, section: .watchlist) } }
     }
     func refreshHoldings() async {
-        guard let api else { return }; let token = generation; begin(.holdings); defer { finish(.holdings, token: token) }
+        guard let api else { return }; let token = generation, request = begin(.holdings); defer { finish(.holdings, request: request, token: token) }
         guard let id = portfolioID else { holdingsReady = false; positions = []; holdingQuotes = []; sectionUpdated[.holdings] = .now; return }; holdingsReady = false
         do {
             let rows: [Position] = try await api.get("/api/portfolios/\(id)/positions"), symbols = rows.map(\.symbol)
             let prices: [Quote] = symbols.isEmpty ? [] : try await api.get("/api/quotes", query: ["symbols": symbols.joined(separator: ",")])
-            guard token == generation && id == portfolioID else { return }; positions = rows; holdingQuotes = prices; holdingsReady = true; sectionUpdated[.holdings] = .now
-        } catch { if token == generation && id == portfolioID && !Task.isCancelled { await report(error, section: .holdings) } }
+            guard current(.holdings, request: request, token: token) && id == portfolioID else { return }; positions = rows; holdingQuotes = prices; holdingsReady = true; sectionUpdated[.holdings] = .now
+        } catch { if current(.holdings, request: request, token: token) && id == portfolioID { await report(error, section: .holdings) } }
     }
     func refreshBriefing() async {
-        guard let api else { return }; let token = generation, symbols = Array(watchlist.prefix(12)); begin(.briefing); defer { finish(.briefing, token: token) }
+        guard let api else { return }; let token = generation, symbols = Array(watchlist.prefix(12)), request = begin(.briefing); defer { finish(.briefing, request: request, token: token) }
         if symbols.isEmpty { briefing = nil; sectionUpdated[.briefing] = .now; return }
-        do { let result: Briefing = try await api.get("/api/briefings/current", query: ["symbols": symbols.joined(separator: ","), "mode": "pre-market"]); if token == generation && symbols == Array(watchlist.prefix(12)) { briefing = result; sectionUpdated[.briefing] = .now } }
-        catch { if token == generation && symbols == Array(watchlist.prefix(12)) && !Task.isCancelled { await report(error, section: .briefing) } }
+        do { let result: Briefing = try await api.get("/api/briefings/current", query: ["symbols": symbols.joined(separator: ","), "mode": "pre-market"]); if current(.briefing, request: request, token: token) && symbols == Array(watchlist.prefix(12)) { briefing = result; sectionUpdated[.briefing] = .now } }
+        catch { if current(.briefing, request: request, token: token) && symbols == Array(watchlist.prefix(12)) { await report(error, section: .briefing) } }
     }
     private func setWatchlist(_ symbols: [String]) {
         if watchlist != symbols {
             watchlist = symbols; quotes = []; briefing = nil
-            for section in [DataSection.watchlist, .briefing] { sectionUpdated[section] = nil; sectionErrors[section] = nil }
+            for section in [DataSection.watchlist, .briefing] { sectionRequests[section] = UUID(); loadingSections.remove(section); sectionUpdated[section] = nil; sectionErrors[section] = nil }
         }
     }
     func refreshLists() async throws {
@@ -209,7 +221,17 @@ import UserNotifications
         listRevision += 1
         sharedListID = id
         if let server { defaults.set(id, forKey: "shared-list:\(server.origin.absoluteString)") }
-        if let row = sharedLists.first(where: { $0.id == id }) { setWatchlist(row.payload.symbols) }; Task { await refresh() }
+        if let row = sharedLists.first(where: { $0.id == id }) { setWatchlist(row.payload.symbols) }; refreshSelection()
+    }
+    private func refreshSelection() {
+        selectionRefresh?.cancel()
+        let token = generation
+        selectionRefresh = Task {
+            guard token == generation, !Task.isCancelled else { return }
+            async let prices: Void = refreshQuotes()
+            async let summary: Void = refreshBriefing()
+            _ = await (prices, summary)
+        }
     }
     @discardableResult func createList(name: String, copyCurrent: Bool = false) async -> Bool {
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -255,7 +277,7 @@ import UserNotifications
             }
             try await refreshLists(); guard token == generation else { return false }
             // Updating quotes must not keep the management controls waiting on a market provider.
-            Task { await refresh() }; return true
+            refreshSelection(); return true
         } catch {
             guard token == generation else { return false }
             if error as? ConnectionError == .unauthorized { await report(error) }

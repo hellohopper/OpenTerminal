@@ -52,6 +52,7 @@ export const TABLE_COLUMNS = {
     "image",
     "created_at",
     "updated_at",
+    "version",
   ],
   briefings: ["id", "generated_at", "content"],
   price_alerts: [
