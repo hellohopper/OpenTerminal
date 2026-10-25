@@ -89,4 +89,38 @@ describe("journal persistence", () => {
     expect(reviewed.json.mock.calls[0][0].version).not.toBe(fresh.version);
     expect((await call("put", "/:id", { params: { id: 999999 }, body: { ...note, version: fresh.version } })).status).toHaveBeenCalledWith(404);
   });
+  it("pages matching notes beyond fifty without duplicates when new notes arrive", async () => {
+    for (let index = 0; index < 60; index++)
+      await call("post", "/", { body: { ...note, symbol: "JPAGE", title: `Paged match ${index}` } });
+    const first = (await call("get", "/", { query: { symbol: "JPAGE", kind: "research", q: "paged MATCH" } })).json.mock.calls[0][0];
+    expect(first.entries).toHaveLength(50); expect(first.nextCursor).toBe(first.entries[49].id);
+    const inserted = (await call("post", "/", { body: { ...note, symbol: "JPAGE", title: "Paged match newest" } })).json.mock.calls[0][0];
+    const second = (await call("get", "/", { query: { symbol: "JPAGE", kind: "research", q: "paged MATCH", before: String(first.nextCursor) } })).json.mock.calls[0][0];
+    expect(second.entries).toHaveLength(10); expect(second.nextCursor).toBeNull();
+    const ids = [...first.entries, ...second.entries].map(row => row.id);
+    expect(new Set(ids).size).toBe(60); expect(ids).not.toContain(inserted.id);
+    expect(ids).toEqual([...ids].sort((a, b) => b - a));
+  });
+  it("searches titles and full bodies beyond the first page with literal wildcards and symbol/kind filters", async () => {
+    const old = { ...note, symbol: "JSEARCH", title: "现金流 CashFlow", body: "Yield 100% growth_! +20%" };
+    const match = (await call("post", "/", { body: old })).json.mock.calls[0][0];
+    for (let index = 0; index < 55; index++) await call("post", "/", { body: { ...note, symbol: "JSEARCH", title: `Unrelated ${index}` } });
+    await call("post", "/", { body: { ...old, body: "Yield 100X growthZ!" } });
+    await call("post", "/", { body: { ...old, kind: "trade" } });
+    await call("post", "/", { body: { ...old, symbol: "OTHER" } });
+    const recent = (await call("get", "/", { query: { symbol: "JSEARCH", kind: "research" } })).json.mock.calls[0][0];
+    expect(recent.entries.map(row => row.id)).not.toContain(match.id);
+    for (const q of ["现金流 100% growth_!", "cashflow YIELD 100%", "现金流 +20%"] ) {
+      const found = (await call("get", "/", { query: { symbol: "JSEARCH", kind: "research", q } })).json.mock.calls[0][0];
+      expect(found.entries.map(row => row.id)).toEqual([match.id]); expect(found.nextCursor).toBeNull();
+    }
+  });
+  it("bounds search inputs and keeps cursor validation for search requests", async () => {
+    for (const q of ["x".repeat(201), "a b c d e f g h i", ["a", "b"]])
+      expect((await call("get", "/", { query: { q } })).status).toHaveBeenCalledWith(400);
+    expect((await call("get", "/", { query: { q: "cash", before: "0" } })).status).toHaveBeenCalledWith(400);
+    await call("post", "/", { body: { ...note, symbol: "JBOUND" } });
+    const blank = await call("get", "/", { query: { q: "   ", symbol: "JBOUND" } });
+    expect(blank.json.mock.calls[0][0].entries).toHaveLength(1);
+  });
 });

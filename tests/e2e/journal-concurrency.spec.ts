@@ -2,6 +2,18 @@ import {test,expect,type Page,type Route} from '@playwright/test';
 import {signIn,blank} from './helpers';
 test.use({serviceWorkers:'block'});
 
+test('searches journal titles and bodies through the authenticated proxy with literal special characters',async({page})=>{
+ await signIn(page);
+ const note={symbol:'JHTTP',title:'现金流 +20% C++',body:'100% growth_! evidence',kind:'research'};
+ const match=await(await page.request.post('/api/journal',{headers,data:note})).json();
+ await page.request.post('/api/journal',{headers,data:{...note,title:'现金流 20% C',body:'100X growthZ! evidence'}});
+ await page.request.post('/api/journal',{headers,data:{...note,kind:'trade'}});
+ const parameters=new URLSearchParams({symbol:'JHTTP',kind:'research',q:'现金流 +20% C++ 100% growth_!'});
+ const response=await page.request.get(`/api/journal?${parameters}`);expect(response.status()).toBe(200);
+ const found=await response.json();expect(found.entries.map((entry:any)=>entry.id)).toEqual([match.id]);expect(found.nextCursor).toBeNull();expect(found.query).toBe(parameters.get('q'));
+ parameters.set('before',String(match.id));expect((await(await page.request.get(`/api/journal?${parameters}`)).json()).entries).toEqual([]);
+});
+
 const headers={origin:'http://127.0.0.1:3100'};
 async function holdCreate(page:Page) {
  let release!:()=>void;const gate=new Promise<void>(resolve=>release=resolve);

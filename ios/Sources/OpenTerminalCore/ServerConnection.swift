@@ -33,7 +33,11 @@ public struct ServerConnection: Equatable, Sendable {
         guard path.hasPrefix("/api/"), !path.contains(".."), !path.contains("?"), !path.contains("#"), !path.contains("\\") else { throw ConnectionError.invalidPath }
         var parts = URLComponents(url: origin, resolvingAgainstBaseURL: false)!
         parts.path = path
-        if !query.isEmpty { parts.queryItems = query.sorted(by: { $0.key < $1.key }).map { URLQueryItem(name: $0.key, value: $0.value) } }
+        if !query.isEmpty {
+            parts.queryItems = query.sorted(by: { $0.key < $1.key }).map { URLQueryItem(name: $0.key, value: $0.value) }
+            // The backend's form-style query decoder treats an unescaped '+' as whitespace.
+            parts.percentEncodedQuery = parts.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
+        }
         return parts.url!
     }
     public func researchURL(symbol: String) -> URL {

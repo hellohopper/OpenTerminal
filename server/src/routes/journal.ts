@@ -48,16 +48,26 @@ journalRouter.get(
     const before = Number(req.query.before ?? Number.MAX_SAFE_INTEGER);
     if (!Number.isSafeInteger(before) || before < 1)
       return res.status(400).json({ error: "invalid cursor" });
+    const search = z.string().trim().max(200).refine(value => !value || value.split(/\s+/).length <= 8).safeParse(req.query.q ?? "");
+    if (!search.success) return res.status(400).json({ error: "Use up to 200 characters and eight search keywords." });
+    const terms = search.data ? search.data.split(/\s+/) : [];
+    // Treat SQL wildcard characters literally; every keyword may match either field.
+    const patterns = terms.flatMap(term => {
+      const pattern = `%${term.replace(/[!%_]/g, "!$&")}%`;
+      return [pattern, pattern];
+    });
+    const matching = terms.map(() => "(LOWER(title) LIKE LOWER(?) ESCAPE '!' OR LOWER(body) LIKE LOWER(?) ESCAPE '!')");
     const rows = (await db
       .prepare(
-        "SELECT id, symbol, title, body, kind, version, created_at, updated_at, CASE WHEN image IS NOT NULL THEN 1 ELSE 0 END AS \"hasImage\" FROM journal_entries WHERE (? = '' OR symbol = ?) AND (? = '' OR kind = ?) AND id < ? ORDER BY id DESC LIMIT 51",
+        `SELECT id, symbol, title, body, kind, version, created_at, updated_at, CASE WHEN image IS NOT NULL THEN 1 ELSE 0 END AS "hasImage" FROM journal_entries WHERE (? = '' OR symbol = ?) AND (? = '' OR kind = ?) AND id < ?${matching.length ? ` AND ${matching.join(" AND ")}` : ""} ORDER BY id DESC LIMIT 51`,
       )
-      .all(symbol, symbol, kind, kind, before)) as Array<{
+      .all(symbol, symbol, kind, kind, before, ...patterns)) as Array<{
       id: number;
     }>;
     res.json({
       entries: rows.slice(0, 50),
       nextCursor: rows.length > 50 ? rows[49].id : null,
+      query: search.data,
     });
   }),
 );

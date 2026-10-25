@@ -158,3 +158,14 @@
 "Your watchlist is empty." = "Your watchlist is empty.";
 "Data unavailable." = "Data unavailable.";
 "The backend is not ready." = "The backend is not ready.";
+"Search note titles and text" = "Search note titles and text";
+"Search notes" = "Search notes";
+"Clear search" = "Clear search";
+"Results for “%@”" = "Results for “%@”";
+"No research notes yet." = "No research notes yet.";
+"No matching notes." = "No matching notes.";
+"Loading older notes…" = "Loading older notes…";
+"Load older notes" = "Load older notes";
+"Retry older notes" = "Retry older notes";
+"Use up to 200 characters and eight search keywords." = "Use up to 200 characters and eight search keywords.";
+"Update the Mac backend to search research notes." = "Update the Mac backend to search research notes.";

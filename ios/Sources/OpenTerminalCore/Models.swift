@@ -61,7 +61,7 @@ public struct Briefing: Decodable, Sendable {
 }
 public struct Candle: Decodable, Identifiable, Sendable { public var id: Double { time }; public let time: Double; public let close: Double; public var date: Date { Date(timeIntervalSince1970: time) } }
 public struct JournalEntry: Decodable, Identifiable, Sendable { public let id: Int; public let symbol: String; public let title: String; public let body: String }
-public struct JournalList: Decodable, Sendable { public let entries: [JournalEntry] }
+public struct JournalList: Decodable, Sendable { public let entries: [JournalEntry]; public let nextCursor: Int?; public let query: String? }
 public struct NoteInput: Encodable, Sendable {
     public let symbol: String; public let title: String; public let body: String; public let kind = "research"
     public init(symbol: String, title: String, body: String) { self.symbol = symbol; self.title = title; self.body = body }

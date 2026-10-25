@@ -341,6 +341,102 @@ import OpenTerminalCore
         #expect(defaults.string(forKey: prefix + "portfolio") == nil)
         let (reopened, _) = try fixture(defaults: defaults); await reopened.restoreSession(); #expect(reopened.portfolioID == nil)
     }
+    @Test func olderNotesKeepTheirCursorOnFailureAndRetryWithoutDuplicates() async throws {
+        ModelProtocol.handler = { request in
+            if request.request.url?.path == "/api/journal" { request.respondNotesPage(ids: Array((11...60).reversed()), cursor: 11) }
+            else { request.respondFixture() }
+        }
+        defer { ModelProtocol.handler = nil }
+        let (terminal, _) = try fixture(); await terminal.restoreSession()
+        let research = ResearchModel(terminal: terminal, symbol: "AAPL"); research.title = "Keep my draft"
+        await research.load(.notes); #expect(research.notes.count == 50 && research.nextNoteCursor == 11)
+        let gate = ResponseGate()
+        ModelProtocol.handler = { request in
+            #expect(request.request.url?.path == "/api/journal")
+            let parameters = URLComponents(url: request.request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            #expect(parameters.contains(URLQueryItem(name: "before", value: "11")))
+            gate.hold(request)
+        }
+        let more = Task { await research.loadMoreNotes() }; await eventually { gate.isHeld }
+        await research.loadMoreNotes() // A second tap cannot start another request.
+        gate.release(503, #"{"error":"Older notes unavailable"}"#); await more.value
+        #expect(research.notes.count == 50 && research.nextNoteCursor == 11)
+        #expect(research.notePageError != nil && !research.loadingMoreNotes)
+        ModelProtocol.handler = { $0.respondNotesPage(ids: Array((1...11).reversed())) }
+        await research.loadMoreNotes()
+        #expect(research.notes.count == 60 && Set(research.notes.map(\.id)).count == 60)
+        #expect(research.nextNoteCursor == nil && research.notePageError == nil)
+        #expect(research.title == "Keep my draft")
+    }
+    @Test func searchingNotesRejectsEarlierSearchAndPaginationResponsesAndPreservesDrafts() async throws {
+        let pageGate = ResponseGate(), searchGate = ResponseGate()
+        ModelProtocol.handler = { request in
+            guard request.request.url?.path == "/api/journal" else { request.respondFixture(); return }
+            let parameters = URLComponents(url: request.request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            let query = parameters.first { $0.name == "q" }?.value
+            if parameters.contains(where: { $0.name == "before" }) { pageGate.hold(request) }
+            else if query == "old" { searchGate.hold(request) }
+            else if let query { #expect(query == "现金流 100%"); request.respondNotesPage(ids: [5]) }
+            else { request.respondNotesPage(ids: [90], cursor: 90) }
+        }
+        defer { ModelProtocol.handler = nil }
+        let (terminal, _) = try fixture(); await terminal.restoreSession()
+        let research = ResearchModel(terminal: terminal, symbol: "AAPL"); research.title = "Draft survives searches"
+        await research.load(.notes)
+        let oldPage = Task { await research.loadMoreNotes() }; await eventually { pageGate.isHeld }
+        research.noteSearch = "old"; let oldSearch = Task { await research.searchNotes() }; await eventually { searchGate.isHeld }
+        research.noteSearch = "现金流 100%"; await research.searchNotes()
+        #expect(research.notes.map(\.id) == [5] && research.notesQuery == "现金流 100%")
+        searchGate.release(200, #"{"entries":[{"id":88,"symbol":"AAPL","title":"Old search","body":"Late"}],"nextCursor":88}"#)
+        pageGate.release(200, #"{"entries":[{"id":89,"symbol":"AAPL","title":"Old page","body":"Late"}],"nextCursor":89}"#)
+        await oldSearch.value; await oldPage.value
+        #expect(research.notes.map(\.id) == [5] && research.nextNoteCursor == nil)
+        #expect(!research.loadingMoreNotes && !research.loading.contains(.notes))
+        await research.clearNotesSearch()
+        #expect(research.notesQuery.isEmpty && research.noteSearch.isEmpty && research.notes.map(\.id) == [90])
+        research.noteSearch = String(repeating: "x", count: 201); await research.searchNotes()
+        #expect(research.noteSearchError != nil && research.notesQuery.isEmpty && research.notes.map(\.id) == [90])
+        #expect(research.title == "Draft survives searches")
+    }
+    @Test func savingANoteReloadsTheActiveSearchAndInvalidatesAnOlderPageRequest() async throws {
+        let gate = ResponseGate()
+        ModelProtocol.handler = { request in
+            if request.request.url?.path == "/api/journal" {
+                if request.request.url?.query?.contains("before=") == true { gate.hold(request) }
+                else { request.respondNotesPage(ids: [2], cursor: 2) }
+            } else { request.respondFixture() }
+        }
+        defer { ModelProtocol.handler = nil }
+        let (terminal, _) = try fixture(); await terminal.restoreSession()
+        let research = ResearchModel(terminal: terminal, symbol: "AAPL"); research.noteSearch = "cash"; await research.searchNotes()
+        let oldPage = Task { await research.loadMoreNotes() }; await eventually { gate.isHeld }
+        ModelProtocol.handler = { request in
+            #expect(request.request.url?.path == "/api/journal")
+            if request.request.httpMethod == "POST" { request.respond(201, #"{"id":3}"#) }
+            else {
+                let parameters = URLComponents(url: request.request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
+                #expect(parameters.contains(URLQueryItem(name: "q", value: "cash")))
+                #expect(!parameters.contains(where: { $0.name == "before" }))
+                request.respondNotesPage(ids: [3, 2], cursor: 2)
+            }
+        }
+        research.title = "cash update"; await research.saveNote()
+        gate.release(200, #"{"entries":[{"id":1,"symbol":"AAPL","title":"Late page","body":"Old"}],"nextCursor":null}"#); await oldPage.value
+        #expect(research.notes.map(\.id) == [3, 2] && research.nextNoteCursor == 2)
+        #expect(research.notesQuery == "cash" && !research.hasDraft && !research.loadingMoreNotes)
+    }
+    @Test func searchingAgainstAnOlderBackendDoesNotPresentUnfilteredNotesAsMatches() async throws {
+        ModelProtocol.handler = { request in
+            if request.request.url?.path == "/api/journal" { request.respond(200, #"{"entries":[{"id":4,"symbol":"AAPL","title":"Unfiltered note","body":"Not a search result"}],"nextCursor":null}"#) }
+            else { request.respondFixture() }
+        }
+        defer { ModelProtocol.handler = nil }
+        let (terminal, _) = try fixture(); await terminal.restoreSession()
+        let research = ResearchModel(terminal: terminal, symbol: "AAPL"); research.noteSearch = "cashflow"; await research.searchNotes()
+        #expect(research.notes.isEmpty && research.errors[.notes]?.contains("Update the Mac") == true)
+        await research.clearNotesSearch()
+        #expect(research.notes.map(\.id) == [4] && research.errors[.notes] == nil)
+    }
     private func eventually(_ condition: () -> Bool) async {
         for _ in 0..<300 { if condition() { return }; try? await Task.sleep(for: .milliseconds(10)) }
         #expect(condition(), "Independent sections should complete while another request is held")
@@ -392,5 +488,12 @@ private final class ModelProtocol: URLProtocol, @unchecked Sendable {
         if request.url?.path == "/api/portfolios" { respond(200, #"[{"id":1,"name":"Trading account"},{"id":2,"name":"Long-term account"}]"#) }
         else if request.url?.path.hasSuffix("/positions") == true { respond(200, "[]") }
         else { respondFixture() }
+    }
+    func respondNotesPage(ids: [Int], cursor: Int? = nil) {
+        let query = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "q" }?.value ?? ""
+        var page: [String: Any] = ["entries": ids.map { ["id": $0, "symbol": "AAPL", "title": "Note \($0)", "body": "Evidence"] }, "query": query]
+        if let cursor { page["nextCursor"] = cursor } else { page["nextCursor"] = NSNull() }
+        let data = try! JSONSerialization.data(withJSONObject: page)
+        respond(200, String(decoding: data, as: UTF8.self))
     }
 }
