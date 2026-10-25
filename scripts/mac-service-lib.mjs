@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync, existsSync, statSync, renameSync } from 'node:fs';
 import { dirname, join, resolve, relative, sep } from 'node:path';
 import { randomBytes, createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 export const readme = 'node scripts/mac-service.mjs setup --origin https://your-mac.your-tailnet.ts.net';
 export function directories(root) { return Object.fromEntries(['data','config','logs','backups'].map(name=>[name,join(root,name)])); }
 export function validateOrigin(value) {
@@ -48,4 +49,31 @@ export function launchPlist(root,config,service) {
 export function rotateLog(file,limit=5*1024*1024) {
   if(!existsSync(file)||statSync(file).size<limit)return;
   for(let i=2;i>=0;i--){const from=i?`${file}.${i}`:file;if(existsSync(from))renameSync(from,`${file}.${i+1}`);}
+}
+export function serviceStatus(root, service, { command = spawnSync, uid = process.getuid() } = {}) {
+  const target = `gui/${uid}/${labelFor(root, service)}`;
+  const result = command('launchctl', ['print', target], { encoding: 'utf8', timeout: 5000 });
+  if (result.error) throw result.error;
+  if (result.status !== 0) return { target, registered: false, state: 'not registered' };
+  const output = result.stdout ?? '';
+  return { target, registered: true, state: output.match(/^\s*state = (.+)$/m)?.[1] ?? 'registered',
+    pid: Number(output.match(/^\s*pid = (\d+)$/m)?.[1]) || undefined,
+    lastExit: output.match(/^\s*last exit code = (.+)$/m)?.[1] };
+}
+/** A submitted job avoids launchd's root-side ownership checks on ownership-disabled volumes. */
+export function startService(root, config, service, { command = spawnSync, uid = process.getuid() } = {}) {
+  const options = { encoding: 'utf8', timeout: 10000 };
+  const check = result => { if (result.error) throw result.error; if (result.status !== 0) throw new Error((result.stderr ?? '').trim() || `launchctl exited with status ${result.status}`); };
+  const state = serviceStatus(root, service, { command, uid });
+  if (state.registered) { check(command('launchctl', ['kickstart', state.target], options)); return 'existing'; }
+  const loaded = command('launchctl', ['bootstrap', `gui/${uid}`, join(root, 'config/launchd', `${labelFor(root,service)}.plist`)], options);
+  if (loaded.error) throw loaded.error;
+  if (loaded.status === 0) return 'plist';
+  // Only retry the I/O failure used for rejected external-volume plist ownership.
+  if (loaded.status !== 5) check(loaded);
+  const latest = serviceStatus(root, service, { command, uid });
+  if (latest.registered) return 'existing';
+  // launchd also opens stdout/stderr before dropping privileges, so the wrapper owns logging.
+  check(command('launchctl', ['submit', '-l', labelFor(root,service), '--', config.node, join(root,'scripts/mac-service.mjs'), 'run', service], options));
+  return 'submitted';
 }
