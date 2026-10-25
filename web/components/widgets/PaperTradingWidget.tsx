@@ -1,7 +1,8 @@
 "use client";
 import { useI18n } from "../../lib/use-i18n";
 
-import {useState} from 'react';import {useQuery,useMutation,useQueryClient} from '@tanstack/react-query';import {apiGet,apiPost,fmt} from '../../lib/api';
+import {useState} from 'react';import { useMutation,useQueryClient } from "@tanstack/react-query";
+import { usePollingQuery as useQuery } from "../../lib/use-polling-query";import {apiGet,apiPost,fmt} from '../../lib/api';
 type Account={id:number;version:number;payload:{name:string;cash:number;realized:number;lastDate:string;positions:Record<string,{quantity:number;mark:number}>}};type Order={id:number;version:number;payload:{accountId:number;symbol:string;side:string;type:string;quantity:number;status:string;reason?:string}};
 export default function PaperTradingWidget(){
   const { t: ui } = useI18n();

@@ -2,7 +2,8 @@
 import { useEffect } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { usePollingQuery as useQuery } from "./use-polling-query";
 import { useTerminal } from "../store/terminal";
 import { apiGet, apiPost } from "./api";
 export type SharedWatchlist = {id:number;version:number;payload:{name:string;symbols:string[]}};

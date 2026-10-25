@@ -1,7 +1,7 @@
 "use client";
 import { useI18n } from "../../lib/use-i18n";
 
-import { useQuery } from "@tanstack/react-query";
+import { usePollingQuery as useQuery } from "../../lib/use-polling-query";
 import { useState } from "react";
 import { apiGet, fmt, pctClass } from "../../lib/api";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from "recharts";

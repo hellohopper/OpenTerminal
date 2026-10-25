@@ -168,6 +168,16 @@ button.term-btn.active {
 .simple-home { max-width: 100rem; margin: auto; padding: 1.5rem; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif; font-size: max(14px, 1rem); }
 .simple-home .term-btn, .simple-home select, .simple-home input { font: inherit; }
 .simple-nav { display: flex; gap: .75rem; flex-wrap: wrap; }
+.terminal-dialog.layout-preview-dialog { width: min(44rem, 94vw); }
+.layout-preview-map { position: relative; height: 16rem; background: var(--panel); border: 1px solid var(--border); }
+.layout-preview-panel { position: absolute; box-sizing: border-box; border: 2px solid var(--panel); background: var(--panel-2); overflow: hidden; padding: .25rem; }
+.layout-preview-panel span { overflow-wrap: anywhere; }
+.layout-preview-hidden { opacity: .55; border-style: dashed; }
+.layout-mobile-label { display: none; }
+@media (max-width: 767px) {
+  .layout-desktop-action, .layout-desktop-label { display: none; }
+  .layout-mobile-label { display: inline; }
+}
 .simple-nav .term-btn { padding: .75rem 1.5rem; }
 .simple-heading { display: flex; gap: 1rem; align-items: center; justify-content: space-between; margin: 1.5rem 0; }
 .simple-heading h1 { font-size: 2rem; font-weight: 600; }
@@ -193,7 +203,7 @@ button.term-btn.active {
 @media (max-width: 767px) {
   .simple-home .simple-nav { display: none; }
   .price-alert-toasts { top: auto; bottom: calc(5rem + env(safe-area-inset-bottom)); max-height: 35dvh; overflow-y: auto; }
-  .simple-mobile-nav button { padding-inline: .25rem; }
+  .simple-mobile-nav button { padding-inline: .25rem; padding-block: .5rem; overflow-wrap: anywhere; line-height: 1.2; }
   .terminal-shell { padding-top: env(safe-area-inset-top); padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
   .simple-shell button, .simple-shell summary, .simple-shell select { min-height: 44px; }
   .simple-shell .topbar > .mode-control { flex-shrink: 1; min-width: 0; }

@@ -1,7 +1,7 @@
 "use client";
 import { useI18n } from "../../lib/use-i18n";
 
-import {useEffect,useState} from 'react';import {useQuery} from '@tanstack/react-query';
+import {useEffect,useState} from 'react';import { usePollingQuery as useQuery } from "../../lib/use-polling-query";
 import {apiGet,fmt,type Quote} from '../../lib/api';import {quoteQuality} from '../../lib/valuation';import {symbolsParam} from '../../lib/symbol';import {useTerminal} from '../../store/terminal';
 type Status={providers:Array<{name:string;ok:number;failed:number;lastLatencyMs:number|null}>};
 export default function QualityWidget(){

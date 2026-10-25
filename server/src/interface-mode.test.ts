@@ -17,3 +17,9 @@ it("remembers the interface and simple page independently of desktop layouts", (
   terminal.getState().switchWorkspace(first);
   expect(terminal.getState().simpleCards).toEqual(["watchlist", "alerts"]);
 });
+it("remembers a different portfolio per workspace and validates restored account IDs",()=>{
+ const storage=memory(),ui=createInterfaceStore(storage);ui.getState().setAccount("one",4);ui.getState().setAccount("two",9);
+ expect(createInterfaceStore(storage).getState().accounts).toEqual({one:4,two:9});
+ storage.setItem("openterminal-interface",JSON.stringify({state:{accounts:{one:-1,two:"oops",three:3}},version:0}));
+ expect(createInterfaceStore(storage).getState().accounts).toEqual({three:3});
+});

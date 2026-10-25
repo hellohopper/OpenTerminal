@@ -12,6 +12,11 @@ export function pollingInterval(interval: number, visible: boolean, active = tru
   if (!active || interval === 0) return false;
   return Math.max(interval, minimum, visible ? 0 : 60_000);
 }
+export function managedPollingInterval(configured: number, requested: number | false | undefined, active: boolean, failures = 0): number | false {
+  if (!active || configured === 0 || !requested) return false;
+  const minimum = Math.max(configured, requested);
+  return Math.max(minimum, Math.min(60_000, minimum * 2 ** Math.min(4, Math.max(0, failures))));
+}
 
 export type DisplayPreferences = {
   language: "en" | "zh";

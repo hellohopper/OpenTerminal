@@ -8,6 +8,7 @@ import { normalizeSymbol } from "../lib/symbol";
 import { useDisplay } from "./display";
 import { useInterface } from "./interface";
 import { SIMPLE_CARDS, type SimpleCard } from "../lib/workspaces";
+import { layoutCheckpoint } from "../lib/workspaces";
 import { makeWorkspace, readWorkspace, restoreWorkspaces, workspaceName, newId, SIZE_BY_TYPE, MAX_WORKSPACES, type Preset, type SavedWorkspace, type WorkspaceData, type WorkspacePresentation, type WidgetType, type LayoutItem } from "../lib/workspaces";
 export type { WidgetType, WidgetInstance, LayoutItem } from "../lib/workspaces";
 
@@ -26,6 +27,8 @@ type TerminalState = WorkspaceData & {
   savePresentation: (includeAppearance?: boolean) => void;
   restorePresentation: () => void;
   saveWorkspaceAs: (name: string, includeAppearance: boolean) => void;
+  saveLayout: (includeAppearance?: boolean) => void;
+  restoreSavedLayout: () => void;
   commandOpen: boolean;
   researchSymbol: string | null;
   researchTarget: ResearchTarget | null;
@@ -83,7 +86,20 @@ export function createTerminalStore(storage?: StateStorage, display = useDisplay
       restorePresentation: () => { const w = get().workspaces.find(w => w.id === get().activeWorkspaceId); if (w) applyPresentation(w); },
       saveWorkspaceAs: (name, includeAppearance) => {
         const current = get().workspaces.find(w => w.id === get().activeWorkspaceId)!;
-        addWorkspace(readWorkspace({ ...current, name: workspaceName(name), presentation: presentation(includeAppearance) }));
+        const choices=presentation(includeAppearance);
+        addWorkspace(readWorkspace({ ...current, name: workspaceName(name), presentation: choices, savedLayout:layoutCheckpoint(current,choices) }));
+      },
+      saveLayout: includeAppearance => set(st=>{
+        const current=st.workspaces.find(w=>w.id===st.activeWorkspaceId)!;
+        const choices=presentation(includeAppearance??!!current.savedLayout?.presentation?.appearance);
+        return {workspaces:st.workspaces.map(w=>w.id===current.id?{...w,presentation:choices,savedLayout:layoutCheckpoint(st,choices)}:w)};
+      }),
+      restoreSavedLayout:()=>{
+        const current=get().workspaces.find(w=>w.id===get().activeWorkspaceId)!,saved=current.savedLayout;
+        if(!saved)return;
+        const restored={...current,...structuredClone(saved)};
+        set(st=>({...activePatch(st,{widgets:restored.widgets,layout:restored.layout,simpleCards:restored.simpleCards}),workspaces:st.workspaces.map(w=>w.id===current.id?restored:w),layoutEditing:false,lastAddedWidgetId:null,lastRemovedPanel:null}));
+        applyPresentation(restored);
       },
       dismissPanelNotice: () => set({ lastAddedWidgetId: null, lastRemovedPanel: null }),
       openResearch: (symbol,target) => { const sym = normalizeSymbol(symbol); if (sym) { get().setActiveSymbol(sym); set({ researchSymbol: sym, researchTarget: target??null, commandOpen: false }); if(typeof window!=="undefined")window.history.replaceState(null,"",researchLink(sym,target)); } },

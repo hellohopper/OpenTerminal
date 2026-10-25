@@ -1,7 +1,8 @@
 "use client";
 import { useI18n } from "../../lib/use-i18n";
 
-import {useState} from 'react';import {useQuery,useMutation,useQueryClient} from '@tanstack/react-query';import {apiGet,apiPost,apiPut,apiDelete,fmt} from '../../lib/api';import {useTerminal} from '../../store/terminal';import {usePreferences} from '../../store/preferences';
+import {useState} from 'react';import { useMutation,useQueryClient } from "@tanstack/react-query";
+import { usePollingQuery as useQuery } from "../../lib/use-polling-query";import {apiGet,apiPost,apiPut,apiDelete,fmt} from '../../lib/api';import {useTerminal} from '../../store/terminal';import {usePreferences} from '../../store/preferences';
 type Tracker={id:number;version:number;payload:{name:string;market:string;enabled:boolean}};type Snapshot={id:number;payload:{trackerId:number;date:string;retrievedAt:string;universeSize:number;matchCount:number;truncated:boolean;baseline:boolean;added:string[];removed:string[];rows:{symbol:string;name:string;price:number|null;streak:number}[]}};
 export default function ScreenerTrackingWidget(){
   const { t: ui } = useI18n();

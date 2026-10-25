@@ -3,7 +3,8 @@ import { useI18n } from "../../lib/use-i18n";
 
 import {usePreferences} from "../../store/preferences";
 import {useResearchDraft} from "../../lib/use-research-draft";
-import {useState} from 'react';import {useQuery,useMutation,useQueryClient} from '@tanstack/react-query';import {apiGet,apiPost} from '../../lib/api';import {useTerminal,type WidgetType} from '../../store/terminal';
+import {useState} from 'react';import { useMutation,useQueryClient } from "@tanstack/react-query";
+import { usePollingQuery as useQuery } from "../../lib/use-polling-query";import {apiGet,apiPost} from '../../lib/api';import {useTerminal,type WidgetType} from '../../store/terminal';
 type Task={key:string;kind:string;title:string;detail:string;symbol:string|null;target:WidgetType;status:string;version:number;until:string|null;record?:{kind:string;id:number}};
 export default function TodayWidget(){
   const { t: ui } = useI18n();

@@ -23,9 +23,9 @@ typealias ViewState<Value> = SwiftUI.State<Value>
                 .onReceive(NotificationCenter.default.publisher(for:.init("terminal-open-research"))) { value in if let symbol=value.object as? String,let normalized=normalizedSymbol(symbol){model.researchSymbol=normalized} }
                 .onOpenURL { url in
                     guard url.scheme=="openterminal",url.host=="connect",let address=URLComponents(url:url,resolvingAgainstBaseURL:false)?.queryItems?.first(where:{$0.name=="server"})?.value,let server=try? ServerConnection(address)else{return}
-                    if model.signedIn{model.error="Sign out before connecting to another server."}else{model.serverText=server.origin.absoluteString}
+                    if model.signedIn{model.error=nativeText("Sign out before connecting to another server.")}else{model.serverText=server.origin.absoluteString}
                 }
-                .sheet(isPresented:Binding(get:{model.signedIn && model.researchSymbol != nil},set:{if !$0{model.researchSymbol=nil}})) { NavigationStack { if let symbol=model.researchSymbol { ResearchView(symbol:symbol).toolbar{Button("Close"){model.researchSymbol=nil}} } }.environmentObject(model) }
+                .sheet(isPresented:Binding(get:{model.signedIn && model.researchSymbol != nil},set:{if !$0{model.researchSymbol=nil}})) { NavigationStack { if let symbol=model.researchSymbol { ResearchView(symbol:symbol, isModal:true) } }.environmentObject(model) }
         }
     }
 }
@@ -57,9 +57,16 @@ private struct SignInView: View {
     }
 }
 extension View {
-    @ViewBuilder func terminalInput() -> some View {
+    @ViewBuilder func terminalPriceInput() -> some View {
         #if os(iOS)
-        textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
+        keyboardType(.decimalPad)
+        #else
+        self
+        #endif
+    }
+    @ViewBuilder func terminalInput(ticker: Bool = false) -> some View {
+        #if os(iOS)
+        textInputAutocapitalization(ticker ? .characters : .never).autocorrectionDisabled().keyboardType(ticker ? .asciiCapable : .URL).submitLabel(ticker ? .done : .go)
         #else
         autocorrectionDisabled()
         #endif

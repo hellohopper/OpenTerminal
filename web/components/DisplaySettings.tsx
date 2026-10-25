@@ -72,7 +72,7 @@ export default function DisplaySettings() {
         </select><span className="dim block mt-1">{ui("Adjust spacing independently of font size.")}</span></label>
         <label className="block">{ui("Automatic data refresh")}<select aria-label={ui("Automatic data refresh")} className="block w-full mt-2" value={display.refreshInterval} onChange={event => display.setRefreshInterval(Number(event.target.value))}>
           <option value={1000}>{ui("Every second")}</option><option value={5000}>{ui("Every 5 seconds")}</option><option value={15000}>{ui("Every 15 seconds")}</option><option value={30000}>{ui("Every 30 seconds")}</option><option value={0}>{ui("Manual only")}</option>
-        </select><span className="dim block mt-1">{ui("Applies to quotes, watchlists, macro panels and option chains. Offscreen panels refresh at most once a minute. Hidden panels pause; charts retain their data cadence.")}</span></label>
+        </select><span className="dim block mt-1">{ui("Periodic refresh follows this preference and pauses while offline or in the background. Some feeds use a slower minimum interval. Manual refresh remains available.")}</span></label>
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <label htmlFor="terminal-font-size">{ui("Global font size")}</label>
           <output htmlFor="terminal-font-size" className="amber" aria-live="polite">{fontSize}px · {Math.round(fontSize / DEFAULT_FONT_SIZE * 100)}%</output>

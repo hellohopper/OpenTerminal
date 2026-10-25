@@ -2,7 +2,8 @@
 import { useI18n } from "../../lib/use-i18n";
 
 import {useState} from 'react';
-import {useQuery,useMutation,useQueryClient} from '@tanstack/react-query';
+import { useMutation,useQueryClient } from "@tanstack/react-query";
+import { usePollingQuery as useQuery } from "../../lib/use-polling-query";
 import {apiGet,apiPost,apiPut,apiDelete} from '../../lib/api';
 import {useTerminal} from '../../store/terminal';
 type Row={id:number;version:number;payload:{name:string;symbols:string[];enabled:boolean;symbol?:string;date?:string;historical?:boolean;monitor?:{checkedAt:string;remaining:number;errors:string[];warnings:string[]};evidence?:unknown[]}};

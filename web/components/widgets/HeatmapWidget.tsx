@@ -1,7 +1,7 @@
 "use client";
 import { useI18n } from "../../lib/use-i18n";
 
-import { useQuery } from "@tanstack/react-query";
+import { usePollingQuery as useQuery } from "../../lib/use-polling-query";
 import { useEffect, useRef, useState } from "react";
 import * as d3 from "d3";
 import { apiGet } from "../../lib/api";
