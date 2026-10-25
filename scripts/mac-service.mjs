@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { existsSync, mkdirSync, writeFileSync, readFileSync, cpSync, chmodSync, appendFileSync } from 'node:fs';
 import { spawn, spawnSync } from 'node:child_process';
-import { setup, configuration, runtimeEnvironment, launchPlist, labelFor, rotateLog } from './mac-service-lib.mjs';
+import { setup, configuration, runtimeEnvironment, launchPlist, labelFor, rotateLog, startService, serviceStatus } from './mac-service-lib.mjs';
 import { inspectMac } from './mac-health.mjs';
 const root=dirname(dirname(fileURLToPath(import.meta.url))),[command='help',argument,...extra]=process.argv.slice(2);
 const run=(program,args,options={})=>{const result=spawnSync(program,args,{stdio:'inherit',...options});if(result.error)throw result.error;if(result.status!==0)throw new Error(`${program} exited with status ${result.status}`);};
@@ -51,14 +51,15 @@ async function main(){
    const quote=s=>"'"+s.replaceAll("'","'\"'\"'")+"'";
    writeFileSync(join(macos,'launch'),`#!/bin/sh\nexec ${quote(config.node)} ${quote(join(root,'scripts/mac-service.mjs'))} start\n`,{mode:0o700});chmodSync(join(macos,'launch'),0o700);
    writeFileSync(join(contents,'Info.plist'),'<?xml version="1.0"?><plist version="1.0"><dict><key>CFBundleExecutable</key><string>launch</string><key>CFBundleIdentifier</key><string>'+labelFor(root,'launcher')+'</string><key>CFBundlePackageType</key><string>APPL</string><key>LSBackgroundOnly</key><true/></dict></plist>');
-   run('/usr/bin/osascript',['-e','on run argv\n tell application "System Events"\n if exists login item (item 2 of argv) then delete login item (item 2 of argv)\n make new login item at end with properties {path:item 1 of argv,name:item 2 of argv,hidden:true}\n end tell\nend run',app,labelFor(root,'launcher')]);
+   try { run('/usr/bin/osascript',['-e','on run argv\n tell application "System Events"\n if exists login item (item 2 of argv) then delete login item (item 2 of argv)\n make new login item at end with properties {path:item 1 of argv,name:item 2 of argv,hidden:true}\n end tell\nend run',app,labelFor(root,'launcher')],{timeout:30000}); }
+   catch { throw new Error('Repo-local service files are ready, but login-item registration did not complete. Unlock the Mac and retry install, or add config/OpenTerminal Launcher.app in System Settings → General → Login Items. You can still run start for this session.'); }
    console.log('Created repo-local launchd files and registered the repo-local launcher as a login item. Run start for this session.');return;
   }
   if(command==='uninstall'){for(const service of services){const target=`${domain}/${labelFor(root,service)}`;if(spawnSync('launchctl',['print',target],{stdio:'ignore'}).status===0)run('launchctl',['bootout',target]);}run('/usr/bin/osascript',['-e','on run argv\n tell application "System Events"\n if exists login item (item 1 of argv) then delete login item (item 1 of argv)\n end tell\nend run',labelFor(root,'launcher')]);return;}
   for(const service of services){const target=`${domain}/${labelFor(root,service)}`;
-   if(command==='start'){if(!existsSync(serviceFile(service)))throw new Error('Run install first.');const state=spawnSync('launchctl',['print',target],{stdio:'ignore'});if(state.status!==0)run('launchctl',['bootstrap',domain,serviceFile(service)]);else run('launchctl',['kickstart',target]);}
+   if(command==='start'){if(!existsSync(serviceFile(service)))throw new Error('Run install first.');const method=startService(root,config,service);if(method==='submitted')console.log(`${service}: submitted directly to launchd (external-volume plist fallback).`);}
    if(command==='stop'){const state=spawnSync('launchctl',['print',target],{stdio:'ignore'});if(state.status===0)run('launchctl',['bootout',target]);}
-   if(command==='status'){const state=spawnSync('launchctl',['print',target],{encoding:'utf8'});console.log(`${service}: ${state.status===0?(state.stdout.match(/state = (\S+)/)?.[1]??'registered'):'not registered'}`);}
+   if(command==='status'){const state=serviceStatus(root,service);console.log(`${service}: ${state.state}${state.pid?` (PID ${state.pid})`:''}${state.lastExit?`; last exit: ${state.lastExit}`:''}`);}
   }return;
  }
  if(command==='logs'){if(!services.includes(argument))throw new Error('Choose logs api or logs web.');run('/usr/bin/tail',['-n','80',join(root,'logs',`${argument}.log`),join(root,'logs',`${argument}.error.log`)]);return;}
@@ -72,4 +73,9 @@ async function main(){
  }
  throw new Error('Unknown command. Run help.');
 }
-main().catch(error=>{console.error(error.message);process.exitCode=1;});
+main().catch(error=>{
+ if(command==='run'&&services.includes(argument)){
+  try { const file=join(root,'logs',`${argument}.launcher.error.log`);mkdirSync(dirname(file),{recursive:true,mode:0o700});rotateLog(file);appendFileSync(file,`${error.message}\n`,{mode:0o600}); } catch { /* The stderr fallback still reports unreadable runtime paths. */ }
+ }
+ console.error(error.message);process.exitCode=1;
+});
