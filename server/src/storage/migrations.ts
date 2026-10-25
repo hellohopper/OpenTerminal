@@ -32,5 +32,8 @@ export const MIGRATIONS = [
   { id: 8,
     sqlite: "CREATE TABLE mobile_devices (id TEXT PRIMARY KEY,name TEXT NOT NULL,token_hash TEXT NOT NULL UNIQUE,binding TEXT NOT NULL,expires_at TEXT NOT NULL,created_at TEXT NOT NULL,revoked_at TEXT);",
     postgres: "CREATE TABLE mobile_devices (id TEXT PRIMARY KEY,name TEXT NOT NULL,token_hash TEXT NOT NULL UNIQUE,binding TEXT NOT NULL,expires_at TEXT NOT NULL,created_at TEXT NOT NULL,revoked_at TEXT);" },
+  { id: 9,
+    sqlite: "ALTER TABLE journal_entries ADD COLUMN version TEXT NOT NULL DEFAULT 'legacy';",
+    postgres: "ALTER TABLE journal_entries ADD COLUMN version TEXT NOT NULL DEFAULT 'legacy';" },
 ];
 export const SCHEMA_VERSION = MIGRATIONS.at(-1)!.id;

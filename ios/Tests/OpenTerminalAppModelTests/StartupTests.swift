@@ -247,6 +247,47 @@ import OpenTerminalCore
         #expect(chinese.localizedString(forKey: "Your session expired. Sign in again.", value: nil, table: nil) == "登录已过期，请重新登录。")
         #expect(english.localizedString(forKey: "Research notes", value: nil, table: nil) == "Research notes")
     }
+    @Test func reopenedResearchSharesPendingSaveAndClearsTheSubmittedDraft() async throws {
+        let gate = ResponseGate()
+        ModelProtocol.handler = { request in
+            if request.request.url?.path == "/api/journal" {
+                if request.request.httpMethod == "POST" { gate.hold(request) }
+                else { request.respond(200, #"{"entries":[]}"#) }
+            } else { request.respondFixture() }
+        }
+        defer { ModelProtocol.handler = nil }
+        let (terminal, _) = try fixture(); await terminal.restoreSession()
+        let original = ResearchModel(terminal: terminal, symbol: "AAPL")
+        original.title = "Saving note"; original.bodyText = "Same draft"
+        let save = Task { await original.saveNote() }; await eventually { gate.isHeld }
+        let reopened = ResearchModel(terminal: terminal, symbol: "AAPL")
+        #expect(reopened.saving, "Reopened view should disable a second submission while the same draft saves")
+        gate.release(201, #"{"id":1}"#); await save.value
+        #expect(!reopened.hasDraft, "Successful unchanged draft should disappear from the reopened editor")
+    }
+    @Test func switchingListsFetchesTheNewSelectionWhileAnOldRefreshIsPending() async throws {
+        let gate = ResponseGate()
+        ModelProtocol.handler = { request in
+            switch request.request.url?.path {
+            case "/api/watchlists": request.respond(200, #"[{"id":1,"version":1,"payload":{"name":"First","symbols":["AAPL"]}},{"id":2,"version":1,"payload":{"name":"Second","symbols":["MSFT"]}}]"#)
+            case "/api/quotes":
+                if request.request.url?.query?.contains("AAPL") == true { gate.hold(request) }
+                else { request.respond(200, #"[{"symbol":"MSFT","price":100,"source":"fixture"}]"#) }
+            case "/api/briefings/current": request.respond(200, #"{"date":"2026-10-25","summary":"Ready","indexes":[],"headlines":[],"warnings":[]}"#)
+            default: request.respondFixture()
+            }
+        }
+        defer { ModelProtocol.handler = nil }
+        let (model, _) = try fixture(); await model.restoreSession()
+        let refresh = Task { await model.refresh() }; await eventually { gate.isHeld }
+        model.chooseList(2)
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(model.quotes.first?.symbol == "MSFT", "New prices must load before the old response is released")
+        gate.release(200, #"[{"symbol":"AAPL","price":50,"source":"fixture"}]"#); await refresh.value
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(model.watchlist == ["MSFT"])
+        #expect(model.quotes.first?.symbol == "MSFT", "Changing selection must fetch the new list without waiting another polling cycle")
+    }
     private func eventually(_ condition: () -> Bool) async {
         for _ in 0..<300 { if condition() { return }; try? await Task.sleep(for: .milliseconds(10)) }
         #expect(condition(), "Independent sections should complete while another request is held")

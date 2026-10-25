@@ -112,6 +112,7 @@ export async function restoreBackup(db: AppDatabase, input: unknown) {
                     original.status === "running" ? "failed" : original.status,
                   token: randomUUID(),
                 }
+              : table === "journal_entries" ? { ...original, version: randomUUID() }
               : table === "workspace_sync"
                 ? { ...original, version: randomUUID() }
                 : table === "research_records" ? {...original,version:Date.now()} : original;
