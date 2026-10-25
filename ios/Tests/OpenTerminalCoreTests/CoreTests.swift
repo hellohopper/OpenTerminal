@@ -8,6 +8,11 @@ import Testing
         expectEqual(server.origin.absoluteString, "https://terminal.example.com")
         let url = try server.url(path: "/api/quotes", query: ["symbols": "^GSPC,EURUSD=X"])
         expectEqual(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first?.value, "^GSPC,EURUSD=X")
+        let terms = "现金流 +20% C++"
+        let search = try server.url(path: "/api/journal", query: ["q": terms])
+        let encoded = URLComponents(url: search, resolvingAgainstBaseURL: false)!.percentEncodedQuery!
+        // Express decodes '+' as a space before percent-decoding query strings.
+        expectEqual(encoded.replacingOccurrences(of: "+", with: " ").removingPercentEncoding, "q=" + terms)
         for value in ["http://example.com", "https://user:secret@example.com", "https://example.com/api", "https://example.com?password=x", "file:///tmp", "https://example.com#x"] {
             expectThrows(try ServerConnection(value))
         }

@@ -158,3 +158,14 @@
 "Your watchlist is empty." = "自选列表为空。";
 "Data unavailable." = "数据暂不可用。";
 "The backend is not ready." = "后端服务尚未就绪。";
+"Search note titles and text" = "搜索笔记标题和正文";
+"Search notes" = "搜索笔记";
+"Clear search" = "清除搜索";
+"Results for “%@”" = "“%@”的搜索结果";
+"No research notes yet." = "暂无研究笔记。";
+"No matching notes." = "未找到匹配的笔记。";
+"Loading older notes…" = "正在加载较早的笔记…";
+"Load older notes" = "加载较早的笔记";
+"Retry older notes" = "重试加载较早的笔记";
+"Use up to 200 characters and eight search keywords." = "请输入不超过 200 个字符、8 个搜索关键词。";
+"Update the Mac backend to search research notes." = "请更新 Mac 后端以使用研究笔记搜索。";

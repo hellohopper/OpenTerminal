@@ -20,6 +20,12 @@ struct ResearchDraft: Equatable { var title = ""; var body = ""; var isEmpty: Bo
     @Published var candles: [Candle] = []
     @Published var news: [NewsItem] = []
     @Published var notes: [JournalEntry] = []
+    @Published var noteSearch = "" { didSet { noteSearchError = nil } }
+    @Published private(set) var notesQuery = ""
+    @Published private(set) var nextNoteCursor: Int?
+    @Published private(set) var loadingMoreNotes = false
+    @Published private(set) var notePageError: String?
+    @Published private(set) var noteSearchError: String?
     @Published var range = "6M" { didSet { if current { terminal.rememberChartRange(range) } } }
     @Published var loading: Set<ResearchSection> = []
     @Published var errors: [ResearchSection: String] = [:]
@@ -63,6 +69,7 @@ struct ResearchDraft: Equatable { var title = ""; var body = ""; var isEmpty: Bo
         _ = await (overview, chart)
     }
     func load(_ section: ResearchSection) async {
+        if section == .notes { await loadNotes(); return }
         guard current, let api = terminal.api else { return }
         let request = UUID(), selectedRange = range
         requests[section] = request; loading.insert(section); errors[section] = nil
@@ -80,15 +87,61 @@ struct ResearchDraft: Equatable { var title = ""; var body = ""; var isEmpty: Bo
             case .news:
                 let values: [NewsItem] = try await api.get("/api/news", query: ["symbol": symbol])
                 guard accept() else { return }; news = values
-            case .notes:
-                let values: JournalList = try await api.get("/api/journal", query: ["symbol": symbol, "kind": "research"])
-                guard accept() else { return }; notes = values.entries
+            case .notes: break // Notes use their own cursor and search request guard.
             }
             updated[section] = .now
         } catch {
             guard accept(), !(error is CancellationError) else { return }
             if error as? ConnectionError == .unauthorized { await terminal.report(error) }
             else { errors[section] = error.localizedDescription }
+        }
+    }
+    func searchNotes() async {
+        let query = noteSearch.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard query.utf16.count <= 200, query.split(whereSeparator: { $0.isWhitespace }).count <= 8 else {
+            noteSearchError = nativeText("Use up to 200 characters and eight search keywords."); return
+        }
+        guard current else { return }
+        noteSearchError = nil
+        if query != notesQuery { notes = []; nextNoteCursor = nil; updated[.notes] = nil }
+        notesQuery = query
+        await loadNotes()
+    }
+    func clearNotesSearch() async { noteSearch = ""; await searchNotes() }
+    func loadMoreNotes() async {
+        guard let cursor = nextNoteCursor, !loading.contains(.notes), !loadingMoreNotes else { return }
+        await loadNotes(before: cursor)
+    }
+    private func loadNotes(before: Int? = nil) async {
+        guard current, let api = terminal.api else { return }
+        let request = UUID(), query = notesQuery
+        requests[.notes] = request
+        if before == nil { loading.insert(.notes); errors[.notes] = nil; loadingMoreNotes = false }
+        else { loadingMoreNotes = true }
+        notePageError = nil
+        defer {
+            if requests[.notes] == request { loading.remove(.notes); loadingMoreNotes = false }
+        }
+        func accept() -> Bool { current && !Task.isCancelled && requests[.notes] == request && notesQuery == query }
+        var parameters = ["symbol": symbol, "kind": "research"]
+        if !query.isEmpty { parameters["q"] = query }
+        if let before { parameters["before"] = String(before) }
+        do {
+            let page: JournalList = try await api.get("/api/journal", query: parameters)
+            guard accept() else { return }
+            guard query.isEmpty || page.query == query else {
+                throw ConnectionError.response(409, "Update the Mac backend to search research notes.")
+            }
+            var seen = Set(before == nil ? [] : notes.map(\.id))
+            let rows = page.entries.filter { seen.insert($0.id).inserted }
+            notes = before == nil ? rows : notes + rows
+            nextNoteCursor = page.nextCursor.flatMap { $0 > 0 && $0 < (before ?? Int.max) ? $0 : nil }
+            updated[.notes] = .now
+        } catch {
+            guard accept(), !(error is CancellationError) else { return }
+            if error as? ConnectionError == .unauthorized { await terminal.report(error) }
+            else if before == nil { errors[.notes] = error.localizedDescription }
+            else { notePageError = error.localizedDescription }
         }
     }
     private var loadedRange: String?

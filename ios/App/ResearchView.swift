@@ -46,8 +46,25 @@ private struct ResearchContent: View {
                 if research.news.isEmpty && !research.loading.contains(.news) && research.errors[.news] == nil { Text("No headlines available.").foregroundStyle(.secondary) }
             }
             Section("Research notes") {
+                TextField("Search note titles and text", text: $research.noteSearch)
+                    .autocorrectionDisabled().submitLabel(.search).onSubmit { Task { await research.searchNotes() } }
+                HStack {
+                    Button("Search notes") { Task { await research.searchNotes() } }
+                    if !research.noteSearch.isEmpty || !research.notesQuery.isEmpty { Button("Clear search") { Task { await research.clearNotesSearch() } } }
+                }.buttonStyle(.borderless)
+                if let error = research.noteSearchError { Text(error).foregroundStyle(.orange) }
+                if !research.notesQuery.isEmpty { Text("Results for “\(research.notesQuery)”").font(.caption).foregroundStyle(.secondary) }
                 status(.notes)
                 ForEach(research.notes) { note in VStack(alignment: .leading, spacing: 6) { Text(note.title).font(.headline); Text(note.body).font(.callout) } }
+                if research.notes.isEmpty && !research.loading.contains(.notes) && research.errors[.notes] == nil {
+                    Text(LocalizedStringKey(research.notesQuery.isEmpty ? "No research notes yet." : "No matching notes.")).foregroundStyle(.secondary)
+                }
+                if research.loadingMoreNotes { ProgressView("Loading older notes…") }
+                if let error = research.notePageError { Text(error).foregroundStyle(.orange) }
+                if research.nextNoteCursor != nil {
+                    Button(LocalizedStringKey(research.notePageError == nil ? "Load older notes" : "Retry older notes")) { Task { await research.loadMoreNotes() } }
+                        .disabled(research.loading.contains(.notes) || research.loadingMoreNotes)
+                }
                 TextField("Note title", text: $research.title)
                 TextEditor(text: $research.bodyText).frame(minHeight: 120).accessibilityLabel("Note body")
                 Button(LocalizedStringKey(research.saving ? "Saving…" : "Save note")) { Task { await research.saveNote() } }.disabled(research.saving || research.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
