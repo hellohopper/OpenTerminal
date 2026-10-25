@@ -6,6 +6,8 @@ import UIKit
 import UserNotifications
 #endif
 
+enum TerminalTab: String, CaseIterable { case today, watchlist, holdings, alerts }
+
 @MainActor final class TerminalModel: ObservableObject {
     @Published var serverText: String
     @Published var signedIn = false
@@ -30,7 +32,19 @@ import UserNotifications
     @Published var researchSymbol: String?
     @Published var quotes: [Quote] = []
     @Published var portfolios: [Portfolio] = []
-    @Published var portfolioID: Int?
+    @Published private(set) var portfolioID: Int? {
+        didSet {
+            guard portfolioID != oldValue else { return }
+            positions = []; holdingQuotes = []; holdingsReady = false
+            sectionUpdated[.holdings] = nil; sectionErrors[.holdings] = nil; sectionRequests[.holdings] = UUID()
+            saveViewChoice(portfolioID.map { String($0) }, field: "portfolio")
+        }
+    }
+    @Published var selectedTab: TerminalTab = .today {
+        didSet { saveViewChoice(selectedTab.rawValue, field: "tab") }
+    }
+    static let chartRanges = ["1M", "6M", "1Y", "5Y"]
+    private(set) var preferredChartRange = "6M"
     @Published var positions: [Position] = []
     @Published var holdingQuotes: [Quote] = []
     @Published var holdingsReady = false
@@ -46,6 +60,7 @@ import UserNotifications
     var researchNoteStates: [String: ResearchNoteState] = [:]
     private var refreshID: UUID?
     private var selectionRefresh: Task<Void, Never>?
+    private var portfolioRefresh: Task<Void, Never>?
     private var sectionRequests: [DataSection: UUID] = [:]
     private let defaults: UserDefaults
     private let credentials: any CredentialStorage
@@ -57,11 +72,38 @@ import UserNotifications
     private var enableDeliveryAfterRegistration = false
     var retryDelay: Double = 2
     var valuation: HoldingValuation? { holdingsReady ? HoldingValuation(positions: positions, quotes: holdingQuotes) : nil }
+    var selectedPortfolio: Portfolio? { portfolios.first { $0.id == portfolioID } }
 
     init(defaults: UserDefaults = .standard, credentials: any CredentialStorage = KeychainCredentialStorage(),
          makeClient: @escaping (ServerConnection, MobileCredential?) -> TerminalAPI = { TerminalAPI(server: $0, credential: $1) }) {
         self.defaults = defaults; self.credentials = credentials; self.makeClient = makeClient
         serverText = defaults.string(forKey: "server") ?? ""
+    }
+
+    private func saveViewChoice(_ value: String?, field: String) {
+        guard signedIn, let server else { return }
+        defaults.set(value, forKey: "ios-view:\(server.origin.absoluteString):\(field)")
+    }
+    private func restoreViewChoices(at connection: ServerConnection) {
+        let prefix = "ios-view:\(connection.origin.absoluteString):"
+        selectedTab = defaults.string(forKey: prefix + "tab").flatMap(TerminalTab.init(rawValue:)) ?? .today
+        let savedID = defaults.string(forKey: prefix + "portfolio").flatMap(Int.init)
+        portfolioID = savedID.flatMap { $0 > 0 ? $0 : nil }
+        let range = defaults.string(forKey: prefix + "range") ?? "6M"
+        preferredChartRange = Self.chartRanges.contains(range) ? range : "6M"
+    }
+    func rememberChartRange(_ range: String) {
+        guard signedIn, Self.chartRanges.contains(range) else { return }
+        preferredChartRange = range; saveViewChoice(range, field: "range")
+    }
+    func choosePortfolio(_ id: Int?) {
+        guard signedIn, id != portfolioID, portfolios.contains(where: { $0.id == id }) else { return }
+        portfolioID = id; portfolioRefresh?.cancel()
+        let token = generation
+        portfolioRefresh = Task {
+            guard token == generation, !Task.isCancelled else { return }
+            await refreshHoldings()
+        }
     }
 
     private func persist(_ value: MobileCredential, at connection: ServerConnection) throws {
@@ -74,7 +116,8 @@ import UserNotifications
             let connection = try ServerConnection(serverText), client = makeClient(connection, nil)
             let value = try await client.pair(password: password, name: deviceName)
             do { try persist(value, at: connection) } catch { await client.signOut(); throw error }
-            credential = value; renewedAt = .now; generation = UUID(); api = client; server = connection; signedIn = true
+            credential = value; renewedAt = .now; generation = UUID(); api = client; server = connection
+            restoreViewChoices(at: connection); signedIn = true
             defaults.set(connection.origin.absoluteString, forKey: "server")
         } catch { self.error = error.localizedDescription }
     }
@@ -87,7 +130,8 @@ import UserNotifications
             server = connection
             let client = makeClient(connection, value), fresh = try await client.renewDevice()
             try persist(fresh, at: connection)
-            api = client; credential = fresh; renewedAt = .now; generation = UUID(); signedIn = true
+            api = client; credential = fresh; renewedAt = .now; generation = UUID()
+            restoreViewChoices(at: connection); signedIn = true
         } catch ConnectionError.invalidServer { }
         catch {
             if error as? ConnectionError == .unauthorized, let server { credentials.remove(server.origin.absoluteString) }
@@ -100,6 +144,7 @@ import UserNotifications
         generation = UUID(); credential = nil; api = nil; server = nil; signedIn = false
         researchDrafts = [:]; researchNoteStates = [:]
         selectionRefresh?.cancel(); selectionRefresh = nil; sectionRequests = [:]
+        portfolioRefresh?.cancel(); portfolioRefresh = nil; selectedTab = .today; preferredChartRange = "6M"
         quotes = []; portfolios = []; positions = []; holdingQuotes = []; alerts = []; briefing = nil; workspaces = []; portfolioID = nil; holdingsReady = false
         sharedLists = []; sharedListID = nil; devices = []; watchlist = []; lastUpdated = nil; reconnecting = false; error = nil
         managingLists = false; listManagementError = nil

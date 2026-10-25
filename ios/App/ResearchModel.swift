@@ -20,7 +20,7 @@ struct ResearchDraft: Equatable { var title = ""; var body = ""; var isEmpty: Bo
     @Published var candles: [Candle] = []
     @Published var news: [NewsItem] = []
     @Published var notes: [JournalEntry] = []
-    @Published var range = "6M"
+    @Published var range = "6M" { didSet { if current { terminal.rememberChartRange(range) } } }
     @Published var loading: Set<ResearchSection> = []
     @Published var errors: [ResearchSection: String] = [:]
     @Published var updated: [ResearchSection: Date] = [:]
@@ -45,6 +45,7 @@ struct ResearchDraft: Equatable { var title = ""; var body = ""; var isEmpty: Bo
         draftKey = "\(terminal.server?.origin.absoluteString ?? "")|\(symbol)"
         let state = terminal.researchNoteStates[draftKey] ?? ResearchNoteState(terminal.researchDrafts[draftKey] ?? ResearchDraft())
         terminal.researchNoteStates[draftKey] = state; noteState = state
+        range = terminal.preferredChartRange
         noteUpdates = state.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
     }
     private var current: Bool { terminal.sessionID == session && terminal.signedIn }

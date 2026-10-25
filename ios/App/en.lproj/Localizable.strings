@@ -82,6 +82,7 @@
 "No alerts yet." = "No alerts yet.";
 "No headlines available." = "No headlines available.";
 "No holdings yet." = "No holdings yet.";
+"No portfolio selected." = "No portfolio selected.";
 "No network connection. Connect to Wi-Fi or cellular and enable Tailscale." = "No network connection. Connect to Wi-Fi or cellular and enable Tailscale.";
 "No saved device authorization for this server. Sign in once to pair it." = "No saved device authorization for this server. Sign in once to pair it.";
 "No successful scheduled backup recorded yet." = "No successful scheduled backup recorded yet.";
