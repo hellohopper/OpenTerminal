@@ -5,11 +5,11 @@ struct TerminalTabs: View {
     @EnvironmentObject private var model: TerminalModel
     @Environment(\.scenePhase) private var phase
     var body: some View {
-        TabView {
-            TerminalPage(title: "Today") { TodayView() }.tabItem { Label("Today", systemImage: "sun.max") }
-            TerminalPage(title: "Watchlist") { WatchlistView() }.tabItem { Label("Watchlist", systemImage: "star") }
-            TerminalPage(title: "Holdings") { HoldingsView() }.tabItem { Label("Holdings", systemImage: "chart.pie") }
-            TerminalPage(title: "Alerts") { AlertsView() }.tabItem { Label("Alerts", systemImage: "bell") }
+        TabView(selection: $model.selectedTab) {
+            TerminalPage(title: "Today") { TodayView() }.tabItem { Label("Today", systemImage: "sun.max") }.tag(TerminalTab.today)
+            TerminalPage(title: "Watchlist") { WatchlistView() }.tabItem { Label("Watchlist", systemImage: "star") }.tag(TerminalTab.watchlist)
+            TerminalPage(title: "Holdings") { HoldingsView() }.tabItem { Label("Holdings", systemImage: "chart.pie") }.tag(TerminalTab.holdings)
+            TerminalPage(title: "Alerts") { AlertsView() }.tabItem { Label("Alerts", systemImage: "bell") }.tag(TerminalTab.alerts)
         }.task(id: phase) {
             guard phase == .active else { return }
             await model.registerExistingPush()
@@ -53,6 +53,8 @@ private struct TodayView: View {
                 if !briefing.warnings.isEmpty { Section("Data coverage") { ForEach(briefing.warnings, id: \.self) { Text($0).font(.callout).foregroundStyle(.secondary) } } }
             } else if !model.loadingSections.contains(.briefing) && model.sectionErrors[.briefing] == nil { Section { Text("Add symbols to your watchlist and pull to refresh your briefing.") } }
             Section("Your holdings") {
+                if let account = model.selectedPortfolio { LabeledContent("Portfolio account", value: account.name) }
+                else if !model.loadingSections.contains(.holdings) { Text("No portfolio selected.").foregroundStyle(.secondary) }
                 LabeledContent("Position value", value: number(model.valuation?.marketValue))
                 LabeledContent("Unrealized P&L", value: number(model.valuation?.unrealized))
                 Text("Positions only; excludes cash. Missing, stale or unverified USD quotes withhold totals.").font(.caption).foregroundStyle(.secondary)
@@ -176,8 +178,7 @@ private struct HoldingsView: View {
     var body: some View {
         List {
             if !model.portfolios.isEmpty {
-                Picker("Portfolio account", selection: $model.portfolioID) { ForEach(model.portfolios) { Text($0.name).tag(Optional($0.id)) } }
-                    .onChange(of: model.portfolioID) { _, _ in model.positions=[];model.holdingsReady=false;Task { await model.refreshHoldings() } }
+                Picker("Portfolio account", selection: Binding(get: { model.portfolioID }, set: { model.choosePortfolio($0) })) { ForEach(model.portfolios) { Text($0.name).tag(Optional($0.id)) } }
             }
             Section("Positions · USD") {
                 DataSectionStatus(section: .holdings)

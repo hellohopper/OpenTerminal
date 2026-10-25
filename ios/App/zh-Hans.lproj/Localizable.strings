@@ -82,6 +82,7 @@
 "No alerts yet." = "暂无提醒。";
 "No headlines available." = "暂无新闻。";
 "No holdings yet." = "暂无持仓。";
+"No portfolio selected." = "尚未选择投资账户。";
 "No network connection. Connect to Wi-Fi or cellular and enable Tailscale." = "当前无网络，请连接 Wi-Fi 或蜂窝网络并启用 Tailscale。";
 "No saved device authorization for this server. Sign in once to pair it." = "此服务器没有已保存的设备授权，请先登录一次以授权设备。";
 "No successful scheduled backup recorded yet." = "尚无成功的定时备份记录。";

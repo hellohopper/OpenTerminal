@@ -4,14 +4,14 @@ import OpenTerminalCore
 @testable import OpenTerminalAppModel
 
 @Suite(.serialized) @MainActor struct StartupTests {
-    private func fixture() throws -> (TerminalModel, MemoryCredentials) {
+    private func fixture(defaults: UserDefaults? = nil, server: String = "https://fixture.example.com") throws -> (TerminalModel, MemoryCredentials) {
         let vault = MemoryCredentials()
         vault.data = try JSONEncoder().encode(MobileCredential(id: "phone", name: "Phone", token: "device-token", expiresAt: "2030-01-01T00:00:00Z"))
         let configuration = URLSessionConfiguration.ephemeral; configuration.protocolClasses = [ModelProtocol.self]
         // All preference and credential writes stay in memory.
-        let defaults = MemoryDefaults(suiteName: "openterminal-test-\(UUID())")!
-        let model = TerminalModel(defaults: defaults, credentials: vault) { TerminalAPI(server: $0, credential: $1, configuration: configuration) }
-        model.serverText = "https://fixture.example.com"
+        let preferences = defaults ?? MemoryDefaults(suiteName: "openterminal-test-\(UUID())")!
+        let model = TerminalModel(defaults: preferences, credentials: vault) { TerminalAPI(server: $0, credential: $1, configuration: configuration) }
+        model.serverText = server
         return (model, vault)
     }
     @Test func restoringAuthorizationDoesNotWaitForMarketRequests() async throws {
@@ -288,6 +288,59 @@ import OpenTerminalCore
         #expect(model.watchlist == ["MSFT"])
         #expect(model.quotes.first?.symbol == "MSFT", "Changing selection must fetch the new list without waiting another polling cycle")
     }
+    @Test func restoresTheLastTabAccountAndChartRangeWithoutRestoringAccountData() async throws {
+        ModelProtocol.handler = { $0.respondAccountsFixture() }
+        defer { ModelProtocol.handler = nil }
+        let defaults = MemoryDefaults(suiteName: "memory-only-view-choices")!
+        let (first, _) = try fixture(defaults: defaults); await first.restoreSession(); await first.refresh()
+        first.choosePortfolio(2); first.selectedTab = .holdings
+        let research = ResearchModel(terminal: first, symbol: "AAPL"); research.range = "1Y"
+        await eventually { first.sectionUpdated[.holdings] != nil && first.portfolioID == 2 }
+        let (reopened, _) = try fixture(defaults: defaults); await reopened.restoreSession()
+        #expect(reopened.selectedTab == .holdings); #expect(reopened.portfolioID == 2)
+        #expect(reopened.positions.isEmpty && reopened.holdingQuotes.isEmpty && !reopened.holdingsReady)
+        #expect(reopened.selectedPortfolio == nil)
+        #expect(ResearchModel(terminal: reopened, symbol: "MSFT").range == "1Y")
+        await reopened.refresh()
+        #expect(reopened.selectedPortfolio?.name == "Long-term account")
+        #expect(reopened.portfolioID == 2 && reopened.holdingsReady)
+    }
+    @Test func viewChoicesAreIsolatedByServerAndSurviveSigningOut() async throws {
+        ModelProtocol.handler = { $0.respondAccountsFixture() }
+        defer { ModelProtocol.handler = nil }
+        let defaults = MemoryDefaults(suiteName: "memory-only-server-choices")!
+        let (first, _) = try fixture(defaults: defaults); await first.restoreSession(); await first.refresh()
+        first.choosePortfolio(2); first.selectedTab = .alerts
+        let oldResearch = ResearchModel(terminal: first, symbol: "AAPL"); oldResearch.range = "5Y"
+        await first.signOut(); oldResearch.range = "1M"
+        #expect(first.selectedTab == .today && first.portfolioID == nil && first.preferredChartRange == "6M")
+        let (other, _) = try fixture(defaults: defaults, server: "https://other.example.com"); await other.restoreSession()
+        #expect(other.selectedTab == .today && other.portfolioID == nil && other.preferredChartRange == "6M")
+        other.selectedTab = .watchlist; other.rememberChartRange("1M")
+        let (reopened, _) = try fixture(defaults: defaults); await reopened.restoreSession()
+        #expect(reopened.selectedTab == .alerts && reopened.portfolioID == 2 && reopened.preferredChartRange == "5Y")
+    }
+    @Test func invalidPreferencesAndDeletedAccountsFallBackToAvailableAccounts() async throws {
+        let defaults = MemoryDefaults(suiteName: "memory-only-invalid-choices")!, prefix = "ios-view:https://fixture.example.com:"
+        defaults.set("invalid-tab", forKey: prefix + "tab"); defaults.set("-1", forKey: prefix + "portfolio"); defaults.set("invalid-range", forKey: prefix + "range")
+        ModelProtocol.handler = { $0.respondAccountsFixture() }
+        defer { ModelProtocol.handler = nil }
+        let (model, _) = try fixture(defaults: defaults); await model.restoreSession()
+        #expect(model.selectedTab == .today && model.portfolioID == nil && model.preferredChartRange == "6M")
+        await model.refresh(); model.choosePortfolio(2)
+        await eventually { model.sectionUpdated[.holdings] != nil && model.portfolioID == 2 }
+        ModelProtocol.handler = { request in
+            if request.request.url?.path == "/api/portfolios" { request.respond(200, #"[{"id":1,"name":"Trading account"}]"#) }
+            else { request.respondAccountsFixture() }
+        }
+        await model.refresh()
+        #expect(model.portfolioID == 1 && model.selectedPortfolio?.name == "Trading account")
+        #expect(defaults.string(forKey: prefix + "portfolio") == "1")
+        ModelProtocol.handler = { $0.respondFixture() }; await model.refresh()
+        #expect(model.portfolioID == nil && model.selectedPortfolio == nil && model.positions.isEmpty)
+        #expect(defaults.string(forKey: prefix + "portfolio") == nil)
+        let (reopened, _) = try fixture(defaults: defaults); await reopened.restoreSession(); #expect(reopened.portfolioID == nil)
+    }
     private func eventually(_ condition: () -> Bool) async {
         for _ in 0..<300 { if condition() { return }; try? await Task.sleep(for: .milliseconds(10)) }
         #expect(condition(), "Independent sections should complete while another request is held")
@@ -334,5 +387,10 @@ private final class ModelProtocol: URLProtocol, @unchecked Sendable {
         case "/api/alerts": respond(200, #"{"alerts":[{"id":1,"symbol":"AAPL","condition":"PRICE_ABOVE","threshold":100,"label":"Test","armed":1}]}"#)
         default: respond(404, #"{"error":"Unexpected fixture path"}"#)
         }
+    }
+    func respondAccountsFixture() {
+        if request.url?.path == "/api/portfolios" { respond(200, #"[{"id":1,"name":"Trading account"},{"id":2,"name":"Long-term account"}]"#) }
+        else if request.url?.path.hasSuffix("/positions") == true { respond(200, "[]") }
+        else { respondFixture() }
     }
 }

@@ -32,7 +32,7 @@ private struct ResearchContent: View {
                 if let quote = research.quote { QuoteRow(quote: quote); Text("\(quote.currency ?? "—") · \(quote.source)").font(.caption).foregroundStyle(.secondary) }
             }
             Section("Price chart") {
-                Picker("Range", selection: $research.range) { ForEach(["1M", "6M", "1Y", "5Y"], id: \.self) { Text($0) } }.pickerStyle(.segmented)
+                Picker("Range", selection: $research.range) { ForEach(TerminalModel.chartRanges, id: \.self) { Text($0) } }.pickerStyle(.segmented)
                 status(.chart)
                 if !research.candles.isEmpty {
                     Chart(research.candles) { point in LineMark(x: .value("Date", point.date), y: .value("Close", point.close)).foregroundStyle(.orange) }
