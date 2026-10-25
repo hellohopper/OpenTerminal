@@ -5,7 +5,7 @@ import { useWidgetSetting } from "../../lib/use-widget-setting";
 import { useDisplay } from "../../store/display";
 import { useI18n } from "../../lib/use-i18n";
 
-import { useQuery } from "@tanstack/react-query";
+import { usePollingQuery as useQuery } from "../../lib/use-polling-query";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { apiGet, fmt, fmtBig } from "../../lib/api";
 import {

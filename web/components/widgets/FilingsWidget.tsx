@@ -1,7 +1,8 @@
 "use client";
 import { useI18n } from "../../lib/use-i18n";
 
-import {useState} from 'react';import {useQuery,useMutation,useQueryClient} from '@tanstack/react-query';import {apiGet,apiPost,apiPut} from '../../lib/api';import {useTerminal} from '../../store/terminal';import {isSafeHttpUrl} from '../../lib/links';
+import {useState} from 'react';import { useMutation,useQueryClient } from "@tanstack/react-query";
+import { usePollingQuery as useQuery } from "../../lib/use-polling-query";import {apiGet,apiPost,apiPut} from '../../lib/api';import {useTerminal} from '../../store/terminal';import {isSafeHttpUrl} from '../../lib/links';
 type Row={id:number;version:number;payload:{symbol:string;accession:string;form:string;filedAt:string;acceptedAt:string|null;description:string;url:string;read:boolean;bookmarked:boolean}};
 export default function FilingsWidget({initialSymbol}:{initialSymbol?:string}={}){
   const { t: ui } = useI18n();

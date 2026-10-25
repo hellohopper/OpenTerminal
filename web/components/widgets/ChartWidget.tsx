@@ -3,7 +3,8 @@ import { useWidgetSetting } from "../../lib/use-widget-setting";
 import { useI18n } from "../../lib/use-i18n";
 import { useAdaptiveRefresh } from "../../lib/use-adaptive-refresh";
 
-import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueries, useQueryClient } from "@tanstack/react-query";
+import { usePollingQuery as useQuery } from "../../lib/use-polling-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DEFAULT_FONT_SIZE, useDisplay } from "../../store/display";
 import {

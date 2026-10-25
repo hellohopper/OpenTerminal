@@ -1,5 +1,12 @@
 /** UI-owned text only. Symbols, user records and provider content retain their original text. */
 export const zh: Record<string, string> = {
+  "Layouts":"布局",
+  "Periodic refresh follows this preference and pauses while offline or in the background. Some feeds use a slower minimum interval. Manual refresh remains available.":"定时刷新遵守此设置，离线或切到后台时暂停。部分数据源会采用更慢的最低刷新间隔，仍可手动刷新。",
+  "Hidden":"已隐藏",
+  "Save current layout":"保存当前布局", "Preview layout":"预览布局", "Layout preview":"布局预览", "Current view":"当前视图", "Panel positions preview":"面板位置预览", "Restore saved layout":"恢复已保存布局", "Confirm layout restore":"确认恢复布局", "Confirm restore":"确认恢复",
+  "No saved layout yet":"尚无手动保存的布局", "Changes since saved layout":"当前布局与已保存版本不同", "Saved layout matches current view":"当前布局与已保存版本一致", "Layout saved.":"布局已保存。", "Saved layout restored.":"已恢复保存的布局。",
+  "Working changes save automatically in this browser. Save a layout version to restore it later.":"当前修改会自动保存在此浏览器中。手动保存一个布局版本，便可随时恢复。",
+  "Restore saved panels, home cards and appearance? Watchlist symbols and server records are kept.":"要恢复已保存的面板、首页卡片和外观吗？自选股票和服务器记录会保留。",
   "Create empty list": "新建空列表", "Manage shared lists": "管理共享列表", "Shared list order": "共享列表顺序", "Shared symbol order": "共享股票顺序",
   "Move up": "上移", "Move down": "下移", "Delete shared list": "删除共享列表", "Rename shared list": "重命名共享列表", "New list name": "新列表名称",
   "List and symbol order sync across devices. Deleting a shared list restores your local workspace list.": "列表和股票顺序会跨设备同步。删除当前共享列表后，会恢复工作区的本地列表。",

@@ -17,7 +17,15 @@ export type WorkspacePresentation = {
   hiddenPanelIds: string[];
   appearance?: { language: "en" | "zh"; fontSize: number; density: "compact" | "standard" | "comfortable" };
 };
-export type SavedWorkspace = WorkspaceData & { id: string; name: string; presentation?: WorkspacePresentation };
+export type LayoutCheckpoint = Pick<WorkspaceData,"widgets"|"layout"|"simpleCards"> & { presentation?: WorkspacePresentation };
+export type SavedWorkspace = WorkspaceData & { id: string; name: string; presentation?: WorkspacePresentation; savedLayout?: LayoutCheckpoint };
+export function layoutCheckpoint(workspace: WorkspaceData, presentation?: WorkspacePresentation): LayoutCheckpoint {
+  return structuredClone({widgets:workspace.widgets,layout:workspace.layout,simpleCards:workspace.simpleCards??[...SIMPLE_CARDS],...(presentation?{presentation}:{})});
+}
+export function layoutChanged(workspace: WorkspaceData, saved: LayoutCheckpoint, presentation?: WorkspacePresentation) {
+  const canonical=(value:LayoutCheckpoint)=>JSON.stringify({...value,layout:[...value.layout].sort((a,b)=>a.i.localeCompare(b.i)),...(value.presentation?{presentation:{...value.presentation,hiddenPanelIds:[...value.presentation.hiddenPanelIds].sort()}}:{})});
+  return canonical(layoutCheckpoint(workspace,presentation))!==canonical({...saved,simpleCards:saved.simpleCards??[...SIMPLE_CARDS]});
+}
 export const MAX_WORKSPACES = 20;
 export const PRESETS = { daily: "Daily market", research: "Company research", options: "Options analysis", blank: "Blank" };
 export type Preset = keyof typeof PRESETS;
@@ -99,7 +107,13 @@ export function readWorkspace(value: unknown): SavedWorkspace {
   const watchlist = raw.watchlist.map((s) => typeof s === "string" ? normalizeSymbol(s) : null);
   if (watchlist.some((s) => !s)) throw new Error("Invalid watchlist symbol.");
   const presentation = readWorkspacePresentation(raw.presentation, ids);
-  return { id: newId(), name, activeSymbol: symbol, widgets, layout, watchlist: [...new Set(watchlist as string[])], ...(Array.isArray(raw.simpleCards) ? { simpleCards: SIMPLE_CARDS.filter(card => (raw.simpleCards as unknown[]).includes(card)) } : {}), ...(presentation ? { presentation } : {}) };
+  const workspace:SavedWorkspace = { id: newId(), name, activeSymbol: symbol, widgets, layout, watchlist: [...new Set(watchlist as string[])], ...(Array.isArray(raw.simpleCards) ? { simpleCards: SIMPLE_CARDS.filter(card => (raw.simpleCards as unknown[]).includes(card)) } : {}), ...(presentation ? { presentation } : {}) };
+  if(raw.savedLayout)try{
+    const saved=object(raw.savedLayout);
+    const checked=readWorkspace({name:"Saved layout",activeSymbol:"AAPL",watchlist:[],widgets:saved.widgets,layout:saved.layout,simpleCards:saved.simpleCards,presentation:saved.presentation});
+    workspace.savedLayout=layoutCheckpoint(checked,checked.presentation);
+  }catch{ /* An invalid checkpoint must not discard a valid working layout. */ }
+  return workspace;
 }
 export function readWorkspacePresentation(value: unknown, ids: Set<string>): WorkspacePresentation | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;

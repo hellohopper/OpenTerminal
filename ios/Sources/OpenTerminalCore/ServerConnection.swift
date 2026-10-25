@@ -4,14 +4,14 @@ public enum ConnectionError: LocalizedError, Equatable, Sendable {
     case invalidServer, invalidPath, unauthorized, offline, unreachable, tls, timedOut, response(Int, String)
     public var errorDescription: String? {
         switch self {
-        case .invalidServer: "Enter an HTTPS server origin, such as https://terminal.example.com."
-        case .invalidPath: "Invalid API path."
-        case .unauthorized: "Your session expired. Sign in again."
-        case .offline: "No network connection. Connect to Wi-Fi or cellular and enable Tailscale."
-        case .unreachable: "Cannot reach the Mac. Check Tailscale, the server address and whether the Mac is awake."
-        case .tls: "The server certificate could not be verified. Use the Mac’s configured HTTPS address."
-        case .timedOut: "The Mac did not respond in time. Check its connection and retry."
-        case let .response(code, message): "\(message) (\(code))"
+        case .invalidServer: NSLocalizedString("Enter an HTTPS server origin, such as https://terminal.example.com.", comment: "")
+        case .invalidPath: NSLocalizedString("Invalid API path.", comment: "")
+        case .unauthorized: NSLocalizedString("Your session expired. Sign in again.", comment: "")
+        case .offline: NSLocalizedString("No network connection. Connect to Wi-Fi or cellular and enable Tailscale.", comment: "")
+        case .unreachable: NSLocalizedString("Cannot reach the Mac. Check Tailscale, the server address and whether the Mac is awake.", comment: "")
+        case .tls: NSLocalizedString("The server certificate could not be verified. Use the Mac’s configured HTTPS address.", comment: "")
+        case .timedOut: NSLocalizedString("The Mac did not respond in time. Check its connection and retry.", comment: "")
+        case let .response(code, message): "\(NSLocalizedString(message, comment: "")) (\(code))"
         }
     }
 }

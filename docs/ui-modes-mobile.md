@@ -6,11 +6,17 @@ The workspace selector stores named layouts. Changes save automatically in this 
 
 Layouts are locked on selection and reload. **Edit layout** enables dragging and resizing; **Finish editing** locks them again. Adding, hiding and removing panels still uses the existing controls and removal undo.
 
+**Save current layout** stores an explicit saved version in the current workspace. **Preview layout** shows panel positions for the current view or that saved version, including hidden panels. The status beside the workspace controls reports whether the current view differs from its saved version. Working edits still auto-save in this browser. **Restore saved layout** asks before restoring panels, panel settings, home cards and any included appearance; it preserves current watchlist symbols, the active research symbol and server records. Saving a new version replaces the prior checkpoint; **Save layout as…** creates an independent workspace with its own checkpoint. Checkpoints travel with JSON exports and reviewed device snapshots.
+
+On narrow phone screens, **Layouts** opens the preview with save, save-as and restore actions together, keeping the workspace bar compact.
+
 Manage supports presets, rename, duplicate, delete and JSON import/export. Exports and reviewed device snapshots include layout presentation choices. Imports create a new workspace; syncing uses the existing preview and conflict checks.
 
 ## Simple and professional modes
 
-Use **Mode** in the header to switch interfaces. Professional mode retains the full panel library. Simple mode has Today, Watchlist, Holdings and Research navigation, with alerts available from Today. Mode and the last simple page are remembered on this device, independently of desktop grid coordinates. Existing users start in professional mode.
+Use **Mode** in the header to switch interfaces. Professional mode retains the full panel library. Simple mode has Today, Watchlist, Holdings, Research and Alerts navigation, even if the alert home card is hidden. Mode, the last simple page and each workspace's selected holdings account are remembered on this device, independently of desktop grid coordinates. If that account is removed, the next load falls back to an available account.
+
+Simple cards show the last successful retrieval and provide manual refresh/retry controls. Periodic queries across the terminal respect the automatic-refresh preference, including shared lists, holdings and alerts. Manual-only disables periodic refresh; background tabs and offline clients pause it. Failed periodic queries back off, and some feeds retain a slower minimum interval. These controls do not stop monitoring or scheduled jobs on the backend. Existing in-memory data remains visible with a warning after a failed refresh.
 
 **Customize home** selects the briefing, watchlist, holdings and alert cards. These choices belong to the named workspace and travel with exports and device snapshots. Holdings show position value, excluding cash; incomplete quotes withhold totals. **Open portfolio tools** opens the full portfolio editor in professional mode. Opening advanced panels through command search also switches to professional mode.
 

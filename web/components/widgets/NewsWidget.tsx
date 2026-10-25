@@ -2,7 +2,7 @@
 import { useWidgetSetting } from "../../lib/use-widget-setting";
 import { useI18n } from "../../lib/use-i18n";
 
-import { useQuery } from "@tanstack/react-query";
+import { usePollingQuery as useQuery } from "../../lib/use-polling-query";
 import { apiGet } from "../../lib/api";
 import { isSafeHttpUrl } from "../../lib/links";
 import { useTerminal, useWidgetSymbol, type WidgetInstance } from "../../store/terminal";

@@ -46,3 +46,27 @@ describe("named layout profiles", () => {
     expect(imported.presentation?.appearance?.fontSize).toBe(20);
   });
 });
+
+it("saves and restores an explicit layout checkpoint without replacing watchlist data",()=>{
+ const storage=memory(),display=createDisplayStore(memory()),terminal=createTerminalStore(storage,display),state=()=>terminal.getState();
+ const first=state().widgets[0].id;state().saveLayout(true);
+ const checkpoint=state().workspaces[0].savedLayout!;
+ state().removeWidget(first);state().setSimpleCards(["alerts"]);state().setWatchlist(["IBM"]);display.getState().setFontSize(20);
+ state().restoreSavedLayout();
+ expect(state().widgets.some(w=>w.id===first)).toBe(true);expect(state().watchlist).toEqual(["IBM"]);expect(display.getState().fontSize).toBe(12);
+ expect(state().simpleCards).toEqual(["briefing","watchlist","holdings","alerts"]);
+ expect(createTerminalStore(storage,display).getState().workspaces[0].savedLayout).toEqual(checkpoint);
+ const imported=importWorkspace(exportWorkspace(state().workspaces[0]));expect(imported.savedLayout).toEqual(checkpoint);
+});
+it("tracks panel and presentation changes while keeping business updates outside layout dirty state",async()=>{
+ const {layoutChanged}=await import("../../web/lib/workspaces");const display=createDisplayStore(memory()),terminal=createTerminalStore(memory(),display);
+ terminal.getState().saveLayout();const current=terminal.getState().workspaces[0],saved=current.savedLayout!;
+ terminal.getState().setWatchlist(["IBM"]);terminal.getState().setActiveSymbol("MSFT");
+ expect(layoutChanged(terminal.getState(),saved,current.presentation)).toBe(false);
+ terminal.getState().removeWidget(current.widgets[0].id);
+ expect(layoutChanged(terminal.getState(),saved,current.presentation)).toBe(true);
+ terminal.getState().saveWorkspaceAs("Copy checkpoint",false);
+ const copy=terminal.getState().workspaces.at(-1)!;expect(layoutChanged(copy,copy.savedLayout!,copy.presentation)).toBe(false);
+ const imported=importWorkspace(exportWorkspace({...copy,savedLayout:{widgets:[],layout:[{i:"missing",x:0,y:0,w:1,h:1}]}}));
+ expect(imported.widgets).toEqual(copy.widgets);expect(imported.savedLayout).toBeUndefined();
+});

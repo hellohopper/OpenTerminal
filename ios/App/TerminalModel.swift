@@ -41,6 +41,8 @@ import UserNotifications
     private(set) var api: TerminalAPI?
     private(set) var server: ServerConnection?
     private var generation = UUID()
+    var sessionID: UUID { generation }
+    var researchDrafts: [String: ResearchDraft] = [:]
     private var refreshID: UUID?
     private let defaults: UserDefaults
     private let credentials: any CredentialStorage
@@ -77,7 +79,7 @@ import UserNotifications
         guard force || !restoreAttempted else { return }; restoreAttempted = true; restoring = true; defer { restoring = false }
         do {
             let connection = try ServerConnection(serverText)
-            guard let data = try credentials.load(connection.origin.absoluteString) else { if force {error="No saved device authorization for this server. Sign in once to pair it."}; return }
+            guard let data = try credentials.load(connection.origin.absoluteString) else { if force {error=nativeText("No saved device authorization for this server. Sign in once to pair it.")}; return }
             let value = try JSONDecoder().decode(MobileCredential.self, from: data)
             server = connection
             let client = makeClient(connection, value), fresh = try await client.renewDevice()
@@ -93,6 +95,7 @@ import UserNotifications
         let old = api
         if let server { credentials.remove(server.origin.absoluteString) }
         generation = UUID(); credential = nil; api = nil; server = nil; signedIn = false
+        researchDrafts = [:]
         quotes = []; portfolios = []; positions = []; holdingQuotes = []; alerts = []; briefing = nil; workspaces = []; portfolioID = nil; holdingsReady = false
         sharedLists = []; sharedListID = nil; devices = []; watchlist = []; lastUpdated = nil; reconnecting = false; error = nil
         managingLists = false; listManagementError = nil
@@ -139,7 +142,7 @@ import UserNotifications
             _ = await (prices, summary)
         } catch { if token == generation {
             await report(error, section: .watchlist)
-            if token == generation && !(error is CancellationError) { sectionErrors[.briefing] = "Briefing could not refresh because the shared watchlist is unavailable." }
+            if token == generation && !(error is CancellationError) { sectionErrors[.briefing] = nativeText("Briefing could not refresh because the shared watchlist is unavailable.") }
         } }
     }
     private func refreshAccounts() async {
@@ -210,7 +213,7 @@ import UserNotifications
     }
     @discardableResult func createList(name: String, copyCurrent: Bool = false) async -> Bool {
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty, name.count <= 64 else { listManagementError = "Use a name of 1–64 characters."; return false }
+        guard !name.isEmpty, name.count <= 64 else { listManagementError = nativeText("Use a name of 1–64 characters."); return false }
         let symbols = copyCurrent ? watchlist : []
         return await manageLists { api in
             let result: CreatedList = try await api.post("/api/watchlists", body: NewList(name: name, symbols: symbols)); return result.id
@@ -218,7 +221,7 @@ import UserNotifications
     }
     @discardableResult func renameList(_ row: SharedWatchlist, name: String) async -> Bool {
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty, name.count <= 64 else { listManagementError = "Use a name of 1–64 characters."; return false }
+        guard !name.isEmpty, name.count <= 64 else { listManagementError = nativeText("Use a name of 1–64 characters."); return false }
         return await manageLists { api in
             let _: Acknowledgement = try await api.post("/api/watchlists/\(row.id)/rename", body: RenamedList(name: name, version: row.version)); return nil
         }
@@ -301,7 +304,7 @@ import UserNotifications
         async let connection: Void = healthCheck("Connection", token: token) {
             let status: BackendStatus = try await api.get("/api/status")
             guard status.ok else { throw ConnectionError.response(503, "The backend is not ready.") }
-            return "Connected to the Mac · \(status.database)"
+            return nativeText("Connected to the Mac") + " · \(status.database)"
         }
         async let backup: Void = healthCheck("Backups", token: token) {
             let schedule: BackupStatus = try await api.get("/api/data/schedule")
@@ -309,7 +312,7 @@ import UserNotifications
         }
         async let push: Void = healthCheck("Native push", token: token) {
             let status: NativePushStatus = try await api.get("/api/mobile/push")
-            return status.configured ? "Configured (\(status.environment ?? "unknown")); device delivery not verified." : "Optional native push is not configured."
+            return status.configured ? nativeText("Configured; device delivery not verified.") + " (\(status.environment ?? "unknown"))" : nativeText("Optional native push is not configured.")
         }
         _ = await (connection, backup, push)
     }
@@ -321,14 +324,14 @@ import UserNotifications
         guard let api else { return }
         do {
             let status: NativePushStatus = try await api.get("/api/mobile/push")
-            guard status.configured else { pushMessage = "Configure APNs keys on the Mac first."; return }
+            guard status.configured else { pushMessage = nativeText("Configure APNs keys on the Mac first."); return }
             #if os(iOS)
             let granted = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
-            guard granted else { pushMessage = "Allow notifications in iOS Settings to receive alerts."; return }
+            guard granted else { pushMessage = nativeText("Allow notifications in iOS Settings to receive alerts."); return }
             enableDeliveryAfterRegistration=true
-            UIApplication.shared.registerForRemoteNotifications(); pushMessage = "Registering this phone…"
+            UIApplication.shared.registerForRemoteNotifications(); pushMessage = nativeText("Registering this phone…")
             #else
-            pushMessage = "Native registration requires an iPhone or iPad."
+            pushMessage = nativeText("Native registration requires an iPhone or iPad.")
             #endif
         } catch { pushMessage = error.localizedDescription }
     }
@@ -353,7 +356,7 @@ import UserNotifications
                 let _:Acknowledgement=try await api.post("/api/notifications/settings",body:EnableDelivery(enabled:true,quietStart:policy.quietStart,quietEnd:policy.quietEnd,timezone:policy.timezone,version:state.settings.version))
                 enableDeliveryAfterRegistration=false
             }
-            pushMessage = "Native notifications registered. Server quiet hours still apply."
+            pushMessage = nativeText("Native notifications registered. Server quiet hours still apply.")
         }
         catch { pushMessage = error.localizedDescription }
     }
@@ -365,13 +368,13 @@ private struct BackupStatus: Decodable, Sendable {
     struct Status: Decodable, Sendable { let lastSuccess: String?; let error: String? }
     let policy: Policy; let status: Status
     var summary: String {
-        if !policy.enabled { return "Scheduled backups are disabled." }
-        if status.error != nil { return "Last backup attempt failed. Open the web Data panel to inspect and retry." }
-        guard let last = status.lastSuccess else { return "No successful scheduled backup recorded yet." }
+        if !policy.enabled { return nativeText("Scheduled backups are disabled.") }
+        if status.error != nil { return nativeText("Last backup attempt failed. Open the web Data panel to inspect and retry.") }
+        guard let last = status.lastSuccess else { return nativeText("No successful scheduled backup recorded yet.") }
         let format = ISO8601DateFormatter(); format.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let date = format.date(from: last) ?? ISO8601DateFormatter().date(from: last)
-        guard let date, Date.now.timeIntervalSince(date) >= 0, Date.now.timeIntervalSince(date) <= 36 * 3600 else { return "Last backup is stale or has an invalid timestamp: \(last)" }
-        return "Last successful backup: \(date.formatted(date: .abbreviated, time: .shortened))"
+        guard let date, Date.now.timeIntervalSince(date) >= 0, Date.now.timeIntervalSince(date) <= 36 * 3600 else { return nativeText("Last backup is stale or has an invalid timestamp:") + " \(last)" }
+        return nativeText("Last successful backup:") + " \(date.formatted(date: .abbreviated, time: .shortened))"
     }
 }
 private struct NewList: Encodable, Sendable { let name: String; let symbols: [String] }

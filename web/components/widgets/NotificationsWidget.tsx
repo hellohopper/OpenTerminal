@@ -1,7 +1,8 @@
 "use client";
 import { useI18n } from "../../lib/use-i18n";
 
-import {useState} from 'react';import {useQuery,useMutation,useQueryClient} from '@tanstack/react-query';import {apiGet,apiPost,apiPut,apiDelete} from '../../lib/api';import {useTerminal} from '../../store/terminal';
+import {useState} from 'react';import { useMutation,useQueryClient } from "@tanstack/react-query";
+import { usePollingQuery as useQuery } from "../../lib/use-polling-query";import {apiGet,apiPost,apiPut,apiDelete} from '../../lib/api';import {useTerminal} from '../../store/terminal';
 type Settings={enabled:boolean;quietStart:string;quietEnd:string;timezone:string};type Result={configured:boolean;publicKey:string|null;settings:{version:number;payload:Settings};devices:{id:number;name:string;joinedAt:string}[];notifications:{id:number;version:number;payload:{title:string;body:string;symbol:string;createdAt:string;read:boolean}}[];deliveries:{id:number;payload:{deviceId:number;notificationId:number;status:string;attempts:number;error?:string}}[]};
 export default function NotificationsWidget(){
   const { t: ui } = useI18n();

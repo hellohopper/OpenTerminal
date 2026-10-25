@@ -1,7 +1,7 @@
 "use client";
 import { useI18n } from "../../lib/use-i18n";
 
-import { useQuery } from "@tanstack/react-query";
+import { usePollingQuery as useQuery } from "../../lib/use-polling-query";
 import { apiGet, fmt, fmtBig, pctClass } from "../../lib/api";
 import Flash from "../Flash";
 import { useTerminal } from "../../store/terminal";

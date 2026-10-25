@@ -28,9 +28,9 @@ private struct TerminalPage<Content: View>: View {
     init(title: String, @ViewBuilder content: () -> Content) { self.title = title; self.content = content() }
     var body: some View {
         NavigationStack {
-            content.navigationTitle(title)
+            content.navigationTitle(LocalizedStringKey(title))
                 .safeAreaInset(edge: .top) {
-                    if let error = model.error ?? (model.sectionErrors.isEmpty ? nil : "\(model.sectionErrors.keys.map(\.rawValue).sorted().joined(separator: ", ")): data unavailable.") {
+                    if let error = model.error ?? (model.sectionErrors.isEmpty ? nil : model.sectionErrors.keys.map { nativeText($0.rawValue) }.sorted().joined(separator: ", ") + ": " + nativeText("Data unavailable.")) {
                         HStack { VStack(alignment:.leading){Text(error).font(.callout);if model.reconnecting{Text("Reconnecting automatically…").font(.caption)}}; Spacer(); Button("Retry") { Task { await model.refresh() } } }
                             .padding().background(.orange.opacity(0.15)).accessibilityElement(children: .contain)
                     }
@@ -66,9 +66,9 @@ private struct DataSectionStatus: View {
     let section: DataSection
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            if model.loadingSections.contains(section) { ProgressView("Loading \(section.rawValue.lowercased())…") }
-            if let error = model.sectionErrors[section] { Text("\(section.rawValue): \(error)").foregroundStyle(.orange).font(.callout) }
-            if let updated = model.sectionUpdated[section] { Text("\(section.rawValue) updated \(updated.formatted(date: .omitted, time: .shortened))").font(.caption).foregroundStyle(.secondary) }
+            if model.loadingSections.contains(section) { ProgressView("Loading…") }
+            if let error = model.sectionErrors[section] { Text("\(nativeText(section.rawValue)): \(error)").foregroundStyle(.orange).font(.callout) }
+            if let updated = model.sectionUpdated[section] { Text("\(nativeText(section.rawValue)) updated \(updated.formatted(date: .omitted, time: .shortened))").font(.caption).foregroundStyle(.secondary) }
         }
     }
 }
@@ -101,7 +101,7 @@ private struct WatchlistView: View {
                 Button("Manage shared lists") { manage = true }
                 if let error = model.listManagementError { Text(error).foregroundStyle(.orange) }
                 HStack {
-                    TextField("Ticker", text: $symbol).terminalInput().onSubmit(add)
+                    TextField("Ticker", text: $symbol).terminalInput(ticker: true).onSubmit(add)
                     Button("Add", action: add).disabled(model.watchlist.count >= 150 || model.sharedListID == nil)
                 }
                 if invalid { Text("Enter a valid ticker.").foregroundStyle(.red) }
@@ -127,10 +127,12 @@ private struct WatchlistView: View {
 private struct SharedListsView: View {
     @EnvironmentObject private var model: TerminalModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var typeSize
     @ViewState<String> private var name = ""
     @ViewState<SharedWatchlist?> private var renaming = nil
     @ViewState<SharedWatchlist?> private var deleting = nil
     @ViewState<String> private var renamed = ""
+    private var actionLayout: AnyLayout { typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12)) : AnyLayout(HStackLayout()) }
     var body: some View {
         NavigationStack {
             Form {
@@ -145,7 +147,7 @@ private struct SharedListsView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             Text(row.payload.name).font(.headline)
                             Text("\(row.payload.symbols.count) symbols").font(.caption).foregroundStyle(.secondary)
-                            HStack {
+                            actionLayout {
                                 Button { Task { await model.moveList(row, direction: "up") } } label: { Image(systemName: "arrow.up") }.accessibilityLabel("Move up \(row.payload.name)").disabled(model.sharedLists.first?.id == row.id)
                                 Button { Task { await model.moveList(row, direction: "down") } } label: { Image(systemName: "arrow.down") }.accessibilityLabel("Move down \(row.payload.name)").disabled(model.sharedLists.last?.id == row.id)
                                 Button("Rename") { renamed = row.payload.name; renaming = row }
@@ -208,7 +210,7 @@ private struct AlertsView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(rule.label.isEmpty ? rule.symbol : rule.label).font(.headline)
                     Text("\(rule.symbol) · \(rule.condition) · \(number(rule.threshold))").font(.callout)
-                    Button(rule.armed == 0 ? "Rearm" : "Pause") { Task { await model.setArmed(rule) } }
+                    Button(LocalizedStringKey(rule.armed == 0 ? "Rearm" : "Pause")) { Task { await model.setArmed(rule) } }
                 }.padding(.vertical, 4)
             }
             if model.alerts.isEmpty && !model.loadingSections.contains(.alerts) && model.sectionErrors[.alerts] == nil { Text("No alerts yet.") }
@@ -227,17 +229,17 @@ private struct AlertEditor: View {
     var body: some View {
         NavigationStack {
             Form {
-                TextField("Ticker", text: $symbol).terminalInput()
+                TextField("Ticker", text: $symbol).terminalInput(ticker: true)
                 Picker("Condition", selection: $condition) { Text("Price ≥").tag("PRICE_ABOVE"); Text("Price ≤").tag("PRICE_BELOW") }
-                TextField("Threshold", text: $threshold)
+                TextField("Threshold", text: $threshold).terminalPriceInput()
                 TextField("Label (optional)", text: $label)
                 if let error { Text(error).foregroundStyle(.red) }
-                Button(saving ? "Saving…" : "Save alert") { Task { await save() } }.disabled(saving)
+                Button(LocalizedStringKey(saving ? "Saving…" : "Save alert")) { Task { await save() } }.disabled(saving)
             }.navigationTitle("New alert").toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(saving) } }
         }
     }
     private func save() async {
-        guard let symbol = normalizedSymbol(symbol), let value = Double(threshold), value.isFinite, value > 0, let api = model.api else { error = "Enter a valid ticker and positive price."; return }
+        guard let symbol = normalizedSymbol(symbol), let value = Double(threshold), value.isFinite, value > 0, let api = model.api else { error = nativeText("Enter a valid ticker and positive price."); return }
         saving = true; defer { saving = false }
         do { let _: Acknowledgement = try await api.post("/api/alerts", body: AlertInput(symbol: symbol, condition: condition, threshold: value, label: String(label.prefix(120)))); await model.refresh(); dismiss() }
         catch { self.error = error.localizedDescription; if error as? ConnectionError == .unauthorized { await model.report(error) } }
@@ -259,7 +261,7 @@ private struct SettingsView: View {
                     Button("Check server health") { Task { await model.checkHealth() } }.disabled(model.checkingHealth)
                     if model.checkingHealth { ProgressView("Checking…") }
                     ForEach(["Connection", "Backups", "Native push"], id: \.self) { name in
-                        if let message = model.health[name] { VStack(alignment: .leading) { Text(name).font(.headline); Text(message).font(.callout) } }
+                        if let message = model.health[name] { VStack(alignment: .leading) { Text(LocalizedStringKey(name)).font(.headline); Text(message).font(.callout) } }
                     }
                 }
                 Section("Saved web layouts") {
@@ -268,7 +270,7 @@ private struct SettingsView: View {
                     Text("Upload a reviewed snapshot from the web Sync panel first. Importing replaces the selected shared watchlist on the server; other web layouts are preserved.").font(.caption).foregroundStyle(.secondary)
                 }
                 Section("Native notifications"){Button("Enable native notifications"){Task{await model.enableNotifications()}};if let message=model.pushMessage{Text(message).font(.callout)}}
-                Section("Paired devices"){Button("Refresh devices"){Task{await model.loadDevices()}};ForEach(model.devices){device in HStack{Text(device.name);Spacer();Button(device.revoked_at == nil ? "Revoke" : "Revoked",role:.destructive){Task{await model.revoke(device.id)}}.disabled(device.revoked_at != nil)}}}
+                Section("Paired devices"){Button("Refresh devices"){Task{await model.loadDevices()}};ForEach(model.devices){device in HStack{Text(device.name);Spacer();Button(LocalizedStringKey(device.revoked_at == nil ? "Revoke" : "Revoked"),role:.destructive){Task{await model.revoke(device.id)}}.disabled(device.revoked_at != nil)}}}
                 Section("Privacy") { Text("The owner password and account responses are never persisted. Remember this device stores only its revocable authorization token in this phone’s Keychain. Tokens expire after 30 days of inactivity and renew while the app is used.").font(.callout) }
             }.navigationTitle("Settings").toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
                 .confirmationDialog("Replace the selected shared watchlist on all devices?", isPresented: Binding(get: { selected != nil }, set: { if !$0 { selected = nil } }), titleVisibility: .visible) {

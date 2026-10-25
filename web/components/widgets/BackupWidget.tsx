@@ -1,6 +1,7 @@
 "use client";
 import { useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from "@tanstack/react-query";
+import { usePollingQuery as useQuery } from "../../lib/use-polling-query";
 import { useI18n } from '../../lib/use-i18n';
 import { apiGet, apiPost } from '../../lib/api';
 import { captureDevice } from '../../lib/capture-device';

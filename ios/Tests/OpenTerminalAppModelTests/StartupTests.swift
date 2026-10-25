@@ -163,6 +163,90 @@ import OpenTerminalCore
         #expect(!deleted); #expect(!model.signedIn); #expect(model.sharedLists.isEmpty); #expect(model.sharedListID == nil)
         #expect(!model.managingLists); #expect(model.listManagementError == nil)
     }
+    @Test func researchNotesAndChartLoadWhileQuoteIsStalledAndRetryIsSectionScoped() async throws {
+        let gate = ResponseGate()
+        ModelProtocol.handler = { request in
+            switch request.request.url?.path {
+            case "/api/quotes": gate.hold(request)
+            case "/api/history/AAPL": request.respond(200, #"[{"time":1,"close":12}]"#)
+            case "/api/news": request.respond(200, "[]")
+            case "/api/journal": request.respond(200, #"{"entries":[{"id":1,"symbol":"AAPL","title":"Private note","body":"Available"}]}"#)
+            default: request.respondFixture()
+            }
+        }
+        defer { ModelProtocol.handler = nil }
+        let (terminal, _) = try fixture(); await terminal.restoreSession()
+        let research = ResearchModel(terminal: terminal, symbol: "AAPL"), task = Task { await research.refresh() }
+        await eventually { gate.isHeld && research.updated[.notes] != nil && research.updated[.chart] != nil }
+        #expect(research.notes.first?.title == "Private note"); #expect(research.loading.contains(.quote)); #expect(research.errors[.notes] == nil)
+        gate.release(503, #"{"error":"Quotes temporarily unavailable"}"#); await task.value
+        #expect(research.errors[.quote] != nil); #expect(research.updated[.news] != nil)
+        let notesTime = research.updated[.notes]
+        ModelProtocol.handler = { request in
+            #expect(request.request.url?.path == "/api/quotes")
+            request.respond(200, "[]")
+        }
+        await research.load(.quote)
+        #expect(research.errors[.quote] == nil); #expect(research.updated[.notes] == notesTime)
+    }
+    @Test func changingChartRangeRejectsAnOlderResponse() async throws {
+        let gate = ResponseGate()
+        ModelProtocol.handler = { request in
+            if request.request.url?.path == "/api/history/AAPL" {
+                if request.request.url?.query?.contains("range=1M") == true { gate.hold(request) }
+                else { request.respond(200, #"[{"time":2,"close":20}]"#) }
+            } else { request.respondFixture() }
+        }
+        defer { ModelProtocol.handler = nil }
+        let (terminal, _) = try fixture(); await terminal.restoreSession()
+        let research = ResearchModel(terminal: terminal, symbol: "AAPL"); research.range = "1M"
+        let old = Task { await research.load(.chart) }; await eventually { gate.isHeld }
+        research.range = "1Y"; await research.load(.chart)
+        gate.release(200, #"[{"time":1,"close":10}]"#); await old.value
+        #expect(research.candles.map(\.close) == [20]); #expect(!research.loading.contains(.chart))
+    }
+    @Test func savingNotePreservesNewerDraftEvenWhenResearchIsReopened() async throws {
+        let gate = ResponseGate()
+        ModelProtocol.handler = { request in
+            if request.request.url?.path == "/api/journal" {
+                if request.request.httpMethod == "POST" { gate.hold(request) }
+                else { request.respond(200, #"{"entries":[]}"#) }
+            } else { request.respondFixture() }
+        }
+        defer { ModelProtocol.handler = nil }
+        let (terminal, _) = try fixture(); await terminal.restoreSession()
+        let research = ResearchModel(terminal: terminal, symbol: "AAPL"); research.title = "Original"; research.bodyText = "First draft"
+        let save = Task { await research.saveNote() }; await eventually { gate.isHeld }
+        let reopened = ResearchModel(terminal: terminal, symbol: "AAPL")
+        #expect(reopened.bodyText == "First draft"); reopened.bodyText = "Newer edits"
+        #expect(ResearchModel(terminal: terminal, symbol: "MSFT").bodyText.isEmpty)
+        gate.release(201, #"{"id":1}"#); await save.value
+        #expect(ResearchModel(terminal: terminal, symbol: "AAPL").bodyText == "Newer edits")
+        #expect(research.message?.contains("Newer edits") == true)
+        #expect(reopened.bodyText == "Newer edits")
+    }
+    @Test func completedSaveClearsOnlySubmittedDraftAndSignOutClearsAllDrafts() async throws {
+        ModelProtocol.handler = { request in
+            if request.request.url?.path == "/api/journal" { request.respond(200, request.request.httpMethod == "POST" ? #"{"id":1}"# : #"{"entries":[]}"#) }
+            else { request.respondFixture() }
+        }
+        defer { ModelProtocol.handler = nil }
+        let (terminal, _) = try fixture(); await terminal.restoreSession()
+        let research = ResearchModel(terminal: terminal, symbol: "AAPL"); research.title = "Saved"; research.bodyText = "Body"; await research.saveNote()
+        #expect(!research.hasDraft); #expect(terminal.researchDrafts.isEmpty)
+        research.title = "Unsaved"; #expect(!terminal.researchDrafts.isEmpty)
+        await terminal.signOut(); #expect(terminal.researchDrafts.isEmpty)
+        research.bodyText = "Old view cannot restore a signed-out draft"; #expect(terminal.researchDrafts.isEmpty)
+    }
+    @Test func simplifiedChineseResourcesIncludeInterfaceAndConnectionFeedback() throws {
+        let app = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("App")
+        let chinese = try #require(Bundle(path: app.appendingPathComponent("zh-Hans.lproj").path))
+        let english = try #require(Bundle(path: app.appendingPathComponent("en.lproj").path))
+        #expect(chinese.localizedString(forKey: "Research notes", value: nil, table: nil) == "研究笔记")
+        #expect(chinese.localizedString(forKey: "Note saved. Newer edits are kept as a draft.", value: nil, table: nil).contains("新输入"))
+        #expect(chinese.localizedString(forKey: "Your session expired. Sign in again.", value: nil, table: nil) == "登录已过期，请重新登录。")
+        #expect(english.localizedString(forKey: "Research notes", value: nil, table: nil) == "Research notes")
+    }
     private func eventually(_ condition: () -> Bool) async {
         for _ in 0..<300 { if condition() { return }; try? await Task.sleep(for: .milliseconds(10)) }
         #expect(condition(), "Independent sections should complete while another request is held")
