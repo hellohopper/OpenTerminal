@@ -74,6 +74,20 @@ import OpenTerminalCore
         #expect(!model.signedIn); #expect(model.alerts.isEmpty); #expect(model.sharedLists.isEmpty)
         #expect(model.loadingSections.isEmpty); #expect(model.sectionUpdated.isEmpty); #expect(vault.data == nil)
     }
+    @Test func lateNotificationFailureCannotWriteIntoASignedOutSession() async throws {
+        let gate = ResponseGate()
+        ModelProtocol.handler = { request in
+            if request.request.url?.path == "/api/mobile/push" { gate.hold(request) }
+            else { request.respondFixture() }
+        }
+        defer { ModelProtocol.handler = nil }
+        let (model, _) = try fixture(); await model.restoreSession()
+        let registration = Task { await model.enableNotifications() }; await eventually { gate.isHeld }
+        await model.signOut()
+        gate.release(503, #"{"error":"Old registration failed"}"#); await registration.value
+        #expect(!model.signedIn && model.pushMessage == nil)
+    }
+
     @Test func phoneHealthReportsPartialFailuresAndBackupFailuresIndependently() async throws {
         ModelProtocol.handler = { request in
             switch request.request.url?.path {

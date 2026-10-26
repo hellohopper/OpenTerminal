@@ -1,10 +1,6 @@
 import Foundation
 import SwiftUI
 import OpenTerminalCore
-#if os(iOS)
-import UIKit
-import UserNotifications
-#endif
 
 enum TerminalTab: String, CaseIterable { case today, watchlist, holdings, alerts }
 
@@ -30,6 +26,7 @@ enum TerminalTab: String, CaseIterable { case today, watchlist, holdings, alerts
     @Published var checkingHealth = false
     @Published var reconnecting = false
     @Published var pushMessage: String?
+    @Published private(set) var registeringPush = false
     @Published var devices: [MobileDeviceInfo] = []
     @Published var sharedLists: [SharedWatchlist] = []
     @Published var sharedListID: Int?
@@ -77,14 +74,16 @@ enum TerminalTab: String, CaseIterable { case today, watchlist, holdings, alerts
     private var restoreAttempted = false
     private var authenticationID: UUID?
     private var authenticationServer: String?
-    private var enableDeliveryAfterRegistration = false
+    private var pushOperation: UUID?
+    private let notifications: any NativeNotificationAccess
     var retryDelay: Double = 2
     var valuation: HoldingValuation? { holdingsReady ? HoldingValuation(positions: positions, quotes: holdingQuotes) : nil }
     var selectedPortfolio: Portfolio? { portfolios.first { $0.id == portfolioID } }
 
     init(defaults: UserDefaults = .standard, credentials: any CredentialStorage = KeychainCredentialStorage(),
+         notifications: any NativeNotificationAccess = SystemNotificationAccess(),
          makeClient: @escaping (ServerConnection, MobileCredential?) -> TerminalAPI = { TerminalAPI(server: $0, credential: $1) }) {
-        self.defaults = defaults; self.credentials = credentials; self.makeClient = makeClient
+        self.defaults = defaults; self.credentials = credentials; self.notifications = notifications; self.makeClient = makeClient
         serverText = defaults.string(forKey: "server") ?? ""
     }
 
@@ -184,7 +183,7 @@ enum TerminalTab: String, CaseIterable { case today, watchlist, holdings, alerts
         quotes = []; portfolios = []; positions = []; holdingQuotes = []; alerts = []; briefing = nil; workspaces = []; portfolioID = nil; holdingsReady = false
         sharedLists = []; sharedListID = nil; devices = []; watchlist = []; lastUpdated = nil; reconnecting = false; error = nil
         managingLists = false; listManagementError = nil
-        enableDeliveryAfterRegistration=false
+        pushOperation = nil; registeringPush = false; pushMessage = nil
         refreshID = nil; sectionErrors = [:]; sectionUpdated = [:]; loadingSections = []; health = [:]; checkingHealth = false
         await old?.signOut()
     }
@@ -423,46 +422,59 @@ enum TerminalTab: String, CaseIterable { case today, watchlist, holdings, alerts
         do { let message = try await read(); if token == generation { health[name] = message } }
         catch { if token == generation && !Task.isCancelled { if error as? ConnectionError == .unauthorized { await report(error) } else { health[name] = error.localizedDescription } } }
     }
-    func enableNotifications() async {
-        guard let api else { return }
+    func enableNotifications() async { await registerPush(enableDelivery: true) }
+    func registerExistingPush() async { await registerPush(enableDelivery: false) }
+    private func registerPush(enableDelivery: Bool) async {
+        guard signedIn, let api, pushOperation == nil else { return }
+        if !enableDelivery && !notifications.supported { return }
+        let session = generation, operation = UUID()
+        pushOperation = operation; registeringPush = true
+        if enableDelivery { pushMessage = nil }
+        defer {
+            if pushOperation == operation {
+                pushOperation = nil; registeringPush = false
+                if Task.isCancelled { pushMessage = nil }
+            }
+        }
+        func current() -> Bool { signedIn && generation == session && pushOperation == operation && !Task.isCancelled }
         do {
             let status: NativePushStatus = try await api.get("/api/mobile/push")
-            guard status.configured else { pushMessage = nativeText("Configure APNs keys on the Mac first."); return }
-            #if os(iOS)
-            let granted = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
-            guard granted else { pushMessage = nativeText("Allow notifications in iOS Settings to receive alerts."); return }
-            enableDeliveryAfterRegistration=true
-            UIApplication.shared.registerForRemoteNotifications(); pushMessage = nativeText("Registering this phone…")
+            guard current() else { return }
+            guard status.configured else {
+                if enableDelivery { pushMessage = nativeText("Configure APNs keys on the Mac first.") }; return
+            }
+            guard notifications.supported else { pushMessage = nativeText("Native registration requires an iPhone or iPad."); return }
+            let granted = enableDelivery ? try await notifications.requestAuthorization() : await notifications.isAuthorized()
+            guard current() else { return }
+            guard granted else {
+                if enableDelivery { pushMessage = nativeText("Allow notifications in iOS Settings to receive alerts.") }; return
+            }
+            pushMessage = nativeText("Registering this phone…")
+            let token = try await notifications.register()
+            guard current() else { return }
+            #if DEBUG
+            let environment = "sandbox"
             #else
-            pushMessage = nativeText("Native registration requires an iPhone or iPad.")
+            let environment = "production"
             #endif
-        } catch { pushMessage = error.localizedDescription }
-    }
-    func registerExistingPush() async {
-        #if os(iOS)
-        let settings = await UNUserNotificationCenter.current().notificationSettings()
-        if settings.authorizationStatus == .authorized { UIApplication.shared.registerForRemoteNotifications() }
-        #endif
-    }
-    func receivedPushToken(_ token: String) async {
-        guard let api else { return }
-        #if DEBUG
-        let environment = "sandbox"
-        #else
-        let environment = "production"
-        #endif
-        do {
             let _: Acknowledgement = try await api.post("/api/mobile/push", body: ["token": token, "environment": environment])
-            if enableDeliveryAfterRegistration {
-                let state:NotificationState=try await api.get("/api/notifications")
-                let policy=state.settings.payload
-                let _:Acknowledgement=try await api.post("/api/notifications/settings",body:EnableDelivery(enabled:true,quietStart:policy.quietStart,quietEnd:policy.quietEnd,timezone:policy.timezone,version:state.settings.version))
-                enableDeliveryAfterRegistration=false
+            guard current() else { return }
+            // Automatic registration never changes the owner's global delivery settings.
+            if enableDelivery {
+                let state: NotificationState = try await api.get("/api/notifications")
+                guard current() else { return }
+                let policy = state.settings.payload
+                let _: Acknowledgement = try await api.post("/api/notifications/settings", body: EnableDelivery(enabled: true, quietStart: policy.quietStart, quietEnd: policy.quietEnd, timezone: policy.timezone, version: state.settings.version))
+                guard current() else { return }
             }
             pushMessage = nativeText("Native notifications registered. Server quiet hours still apply.")
+        } catch {
+            guard current(), !(error is CancellationError) else { return }
+            if error as? ConnectionError == .unauthorized { await report(error) }
+            else { pushMessage = error.localizedDescription }
         }
-        catch { pushMessage = error.localizedDescription }
     }
+
 }
 enum DataSection: String, CaseIterable { case watchlist = "Watchlist", holdings = "Holdings", alerts = "Alerts", briefing = "Briefing" }
 private struct BackendStatus: Decodable, Sendable { let ok: Bool; let database: String }

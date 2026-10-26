@@ -12,11 +12,13 @@ struct TerminalTabs: View {
             TerminalPage(title: "Alerts") { AlertsView() }.tabItem { Label("Alerts", systemImage: "bell") }.tag(TerminalTab.alerts)
         }.task(id: phase) {
             guard phase == .active else { return }
-            await model.registerExistingPush()
             while !Task.isCancelled {
                 await model.refresh()
                 do { try await Task.sleep(for: .seconds(model.reconnecting ? model.retryDelay : 30)) } catch { break }
             }
+        }.task(id: phase) {
+            guard phase == .active else { return }
+            await model.registerExistingPush()
         }
     }
 }
@@ -270,7 +272,11 @@ private struct SettingsView: View {
                     ForEach(model.workspaces) { workspace in Button(workspace.name) { selected = workspace } }
                     Text("Upload a reviewed snapshot from the web Sync panel first. Importing replaces the selected shared watchlist on the server; other web layouts are preserved.").font(.caption).foregroundStyle(.secondary)
                 }
-                Section("Native notifications"){Button("Enable native notifications"){Task{await model.enableNotifications()}};if let message=model.pushMessage{Text(message).font(.callout)}}
+                Section("Native notifications") {
+                    Button("Enable native notifications") { Task { await model.enableNotifications() } }.disabled(model.registeringPush)
+                    if model.registeringPush { ProgressView().accessibilityLabel("Registering this phone…") }
+                    if let message = model.pushMessage { Text(message).font(.callout) }
+                }
                 Section("Paired devices"){Button("Refresh devices"){Task{await model.loadDevices()}};ForEach(model.devices){device in HStack{Text(device.name);Spacer();Button(LocalizedStringKey(device.revoked_at == nil ? "Revoke" : "Revoked"),role:.destructive){Task{await model.revoke(device.id)}}.disabled(device.revoked_at != nil)}}}
                 Section("Privacy") { Text("The owner password and account responses are never persisted. Remember this device stores only its revocable authorization token in this phone’s Keychain. Tokens expire after 30 days of inactivity and renew while the app is used.").font(.callout) }
             }.navigationTitle("Settings").toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
