@@ -78,6 +78,42 @@ import Testing
         do { try await api.signIn(password: "incorrect"); fail("Expected invalid password") }
         catch { expectEqual(error as? ConnectionError, .response(401, "Invalid password.")) }
     }
+    @Test(arguments: [200, 204, 205]) func bodylessWritesAcceptSuccessfulResponses(status: Int) async throws {
+        let configuration = URLSessionConfiguration.ephemeral; configuration.protocolClasses = [FixtureProtocol.self]
+        FixtureProtocol.handler = { request in
+            expectEqual(request.value(forHTTPHeaderField: "Origin"), "https://terminal.example.com")
+            expectEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer device-token")
+            if request.httpMethod == "DELETE" && request.url?.path == "/api/watchlists/1" {
+                expectEqual(URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems?.first?.value, "3")
+            }
+            return (status, status == 200 ? Data(#"{"ok":true}"#.utf8) : Data())
+        }
+        defer { FixtureProtocol.handler = nil }
+        let credential = MobileCredential(id: "phone", name: "Phone", token: "device-token", expiresAt: "2030-01-01T00:00:00Z")
+        let api = TerminalAPI(server: try ServerConnection("https://terminal.example.com"), credential: credential, configuration: configuration)
+        try await api.delete("/api/watchlists/1", query: ["version": "3"])
+        try await api.setAlertArmed(id: 1, armed: false)
+        try await api.signIn(password: "fixture password")
+        await api.signOut()
+    }
+    @Test(arguments: [301, 400, 401, 403, 404, 409, 500]) func deleteStillRejectsFailedResponses(status: Int) async throws {
+        let configuration = URLSessionConfiguration.ephemeral; configuration.protocolClasses = [FixtureProtocol.self]
+        FixtureProtocol.handler = { _ in (status, Data(#"{"error":"Delete rejected"}"#.utf8)) }
+        defer { FixtureProtocol.handler = nil }
+        let api = TerminalAPI(server: try ServerConnection("https://terminal.example.com"), configuration: configuration)
+        do { try await api.delete("/api/alerts/1"); fail("Expected rejected deletion") }
+        catch { expectEqual(error as? ConnectionError, status == 401 ? .unauthorized : .response(status, "Delete rejected")) }
+    }
+    @Test(arguments: [200, 204]) func typedResponsesStillRequireJSON(status: Int) async throws {
+        let configuration = URLSessionConfiguration.ephemeral; configuration.protocolClasses = [FixtureProtocol.self]
+        FixtureProtocol.handler = { _ in (status, Data()) }
+        defer { FixtureProtocol.handler = nil }
+        let api = TerminalAPI(server: try ServerConnection("https://terminal.example.com"), configuration: configuration)
+        do { let _: [Portfolio] = try await api.get("/api/portfolios"); fail("Expected missing response data") }
+        catch { #expect(error is DecodingError) }
+        do { _ = try await api.pair(password: "fixture password", name: "Phone"); fail("Expected missing credentials") }
+        catch { #expect(error is DecodingError) }
+    }
     @Test func testPairedCredentialsSurviveClientRecreationAndRenewWithoutTheOwnerPassword() async throws {
         let configuration=URLSessionConfiguration.ephemeral;configuration.protocolClasses=[FixtureProtocol.self]
         FixtureProtocol.handler={request in
