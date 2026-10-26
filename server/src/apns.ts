@@ -1,4 +1,4 @@
-import { createPrivateKey, sign } from "node:crypto";
+import { createHash, createPrivateKey, sign } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { connect } from "node:http2";
 export type ApnsConfig = { keyId: string; teamId: string; topic: string; keyFile: string; environment: "sandbox" | "production" };
@@ -14,21 +14,34 @@ export function apnsJwt(config: ApnsConfig, now = Date.now()) {
   if (key.asymmetricKeyType !== "ec" || key.asymmetricKeyDetails?.namedCurve !== "prime256v1") throw new Error("APNs requires a P-256 signing key.");
   return `${content}.${sign("sha256",Buffer.from(content),{key,dsaEncoding:"ieee-p1363"}).toString("base64url")}`;
 }
+// Routing metadata contains only public origin/device identity, never credentials or tokens.
+export function apnsPayload(payload: {title:string;body:string;symbol:string}, notificationId: number, deviceId?: string, origin = process.env.WEB_ORIGIN) {
+  let route: {serverOrigin:string;deviceId:string} | undefined;
+  try {
+    if (!origin || origin.length > 512 || !deviceId || !/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(deviceId)) throw new Error();
+    const url = new URL(origin);
+    if (url.origin.length > 512 || url.username || url.password || url.search || url.hash || url.pathname !== '/' ||
+        !(url.protocol === 'https:' || url.protocol === 'http:' && ['localhost','127.0.0.1','[::1]'].includes(url.hostname))) throw new Error();
+    route = {serverOrigin:url.origin,deviceId:deviceId.toLowerCase()};
+  } catch { /* An alert without valid routing metadata remains display-only. */ }
+  return {aps:{alert:{title:payload.title.slice(0,120),body:payload.body.slice(0,500)},sound:"default"},symbol:payload.symbol,notificationId,...route};
+}
 let cached: { signature: string; at: number; identity: string } | undefined;
-export async function sendApns(token: string, environment: string, payload: {title:string;body:string;symbol:string}, notificationId: number) {
+export async function sendApns(token: string, environment: string, payload: {title:string;body:string;symbol:string}, notificationId: number, deviceId?: string) {
   const config = apnsConfig(); if (!config) throw new Error("APNs is not configured.");
   if (!/^[a-f0-9]{64,256}$/.test(token) || environment !== config.environment) throw Object.assign(new Error("Invalid APNs registration."), {statusCode:410});
   const identity = JSON.stringify(config), now = Date.now();
   if (!cached || cached.identity !== identity || now - cached.at > 20*60000) cached = {signature:apnsJwt(config,now),at:now,identity};
   const signature = cached.signature;
-  const body = JSON.stringify({aps:{alert:{title:payload.title.slice(0,120),body:payload.body.slice(0,500)},sound:"default"},symbol:payload.symbol,notificationId});
+  const contents = apnsPayload(payload, notificationId, deviceId), body = JSON.stringify(contents);
+  const scope = createHash("sha256").update(contents.serverOrigin ?? config.topic).digest("hex").slice(0,12);
   await new Promise<void>((resolve,reject) => {
     const session = connect(config.environment === "production" ? "https://api.push.apple.com" : "https://api.sandbox.push.apple.com");
     let finished = false;
     const finish = (error?: Error) => { if (finished) return; finished = true; clearTimeout(timer); session.destroy(); error ? reject(error) : resolve(); };
     const timer = setTimeout(() => finish(new Error("APNs timed out.")), 8000);
     session.on("error", () => finish(new Error("APNs connection failed.")));
-    const request = session.request({":method":"POST",":path":`/3/device/${token}`,authorization:`bearer ${signature}`,"apns-topic":config.topic,"apns-push-type":"alert","apns-priority":"10","apns-expiration":String(Math.floor(now/1000)+3600),"apns-collapse-id":`terminal-${notificationId}`});
+    const request = session.request({":method":"POST",":path":`/3/device/${token}`,authorization:`bearer ${signature}`,"apns-topic":config.topic,"apns-push-type":"alert","apns-priority":"10","apns-expiration":String(Math.floor(now/1000)+3600),"apns-collapse-id":`terminal-${scope}-${notificationId}`});
     let status = 0, response = "";
     request.on("response", headers => { status = Number(headers[":status"]); });
     request.on("data", chunk => { if (response.length < 4096) response += chunk.toString(); });

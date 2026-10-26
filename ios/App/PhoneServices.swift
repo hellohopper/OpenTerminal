@@ -1,5 +1,6 @@
 import Foundation
 import Security
+import OpenTerminalCore
 @MainActor protocol CredentialStorage {
     func load(_ server: String) throws -> Data?
     func save(_ data: Data, server: String) throws
@@ -25,6 +26,42 @@ enum CredentialStore {
     }
     static func remove(_ server: String) { SecItemDelete(query(server) as CFDictionary) }
 }
+struct NotificationResearchTarget: Equatable, Sendable {
+    let server: ServerConnection
+    let deviceID: String
+    let symbol: String
+    init?(userInfo: [AnyHashable: Any]) {
+        guard let origin = userInfo["serverOrigin"] as? String, origin.count <= 512,
+              let server = try? ServerConnection(origin),
+              let value = userInfo["deviceId"] as? String, let id = UUID(uuidString: value),
+              let ticker = userInfo["symbol"] as? String, let symbol = normalizedSymbol(ticker) else { return nil }
+        self.server = server; deviceID = id.uuidString.lowercased(); self.symbol = symbol
+    }
+    func matches(_ connection: ServerConnection) -> Bool {
+        func identity(_ value: ServerConnection) -> String {
+            let url = value.origin
+            return "\(url.scheme ?? "")|\((url.host ?? "").lowercased())|\(url.port ?? (url.scheme == "https" ? 443 : 80))"
+        }
+        return identity(server) == identity(connection)
+    }
+}
+@MainActor protocol ResearchNotificationConsumer: AnyObject {
+    func receiveNotification(_ target: NotificationResearchTarget)
+}
+// Retain one tap until the app model exists; no NotificationCenter subscriber race on cold launch.
+@MainActor final class ResearchNotificationInbox {
+    static let shared = ResearchNotificationInbox()
+    private weak var consumer: (any ResearchNotificationConsumer)?
+    private var pending: NotificationResearchTarget?
+    func attach(_ consumer: any ResearchNotificationConsumer) {
+        self.consumer = consumer
+        if let target = pending { pending = nil; consumer.receiveNotification(target) }
+    }
+    func receive(_ target: NotificationResearchTarget) {
+        if let consumer { consumer.receiveNotification(target) } else { pending = target }
+    }
+}
+
 // The model awaits a token for its own session instead of consuming unscoped notifications.
 @MainActor protocol NativeNotificationAccess {
     var supported: Bool { get }
@@ -114,8 +151,8 @@ import UserNotifications
     func application(_ application:UIApplication,didRegisterForRemoteNotificationsWithDeviceToken deviceToken:Data){NativePushTokens.shared.complete(.success(deviceToken.map{String(format:"%02x",$0)}.joined()))}
     func application(_ application:UIApplication,didFailToRegisterForRemoteNotificationsWithError error:Error){NativePushTokens.shared.complete(.failure(error))}
     nonisolated func userNotificationCenter(_ center:UNUserNotificationCenter,didReceive response:UNNotificationResponse)async{
-        let symbol=response.notification.request.content.userInfo["symbol"] as? String
-        await MainActor.run {if let symbol{NotificationCenter.default.post(name:.init("terminal-open-research"),object:symbol)}}
+        guard let target = NotificationResearchTarget(userInfo: response.notification.request.content.userInfo) else { return }
+        await MainActor.run { ResearchNotificationInbox.shared.receive(target) }
     }
     nonisolated func userNotificationCenter(_ center:UNUserNotificationCenter,willPresent notification:UNNotification)async->UNNotificationPresentationOptions{[.banner,.sound,.list]}
 }
