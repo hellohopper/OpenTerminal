@@ -180,3 +180,11 @@
 "Delete alert" = "删除提醒";
 "This removes the shared alert from the Mac and every connected device." = "这会从 Mac 和所有已连接的设备中删除这条共享提醒。";
 "This alert changed. Review it and try again." = "这条提醒已更改。请检查后重试。";
+"Delete note" = "删除笔记";
+"Deleting note…" = "正在删除笔记…";
+"Refresh notes" = "刷新笔记";
+"Delete research note?" = "要删除这篇研究笔记吗？";
+"This removes the saved note from the Mac and every connected device. Your current draft is kept." = "这会从 Mac 和所有已连接的设备中删除这篇已保存的笔记。当前草稿会保留。";
+"This note changed. Refresh and review it before deleting." = "这篇笔记已更改，请刷新并检查后再删除。";
+"Update the Mac backend before deleting research notes." = "请先更新 Mac 后端，再删除研究笔记。";
+"This entry changed on another device. Refresh research notes and review it before deleting." = "这篇笔记已在另一台设备上更改，请刷新研究笔记并检查后再删除。";

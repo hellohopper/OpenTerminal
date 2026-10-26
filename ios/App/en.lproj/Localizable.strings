@@ -180,3 +180,11 @@
 "Delete alert" = "Delete alert";
 "This removes the shared alert from the Mac and every connected device." = "This removes the shared alert from the Mac and every connected device.";
 "This alert changed. Review it and try again." = "This alert changed. Review it and try again.";
+"Delete note" = "Delete note";
+"Deleting note…" = "Deleting note…";
+"Refresh notes" = "Refresh notes";
+"Delete research note?" = "Delete research note?";
+"This removes the saved note from the Mac and every connected device. Your current draft is kept." = "This removes the saved note from the Mac and every connected device. Your current draft is kept.";
+"This note changed. Refresh and review it before deleting." = "This note changed. Refresh and review it before deleting.";
+"Update the Mac backend before deleting research notes." = "Update the Mac backend before deleting research notes.";
+"This entry changed on another device. Refresh research notes and review it before deleting." = "This entry changed on another device. Refresh research notes and review it before deleting.";

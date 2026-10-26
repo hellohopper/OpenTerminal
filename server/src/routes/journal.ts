@@ -143,9 +143,15 @@ journalRouter.put(
 journalRouter.delete(
   "/:id",
   asyncRoute(async (req, res) => {
-    await db
-      .prepare("DELETE FROM journal_entries WHERE id = ?")
-      .run(req.params.id);
+    if (req.query.version !== undefined) {
+      const version = z.string().min(1).max(100).safeParse(req.query.version);
+      if (!version.success) return res.status(400).json({ error: "invalid entry version" });
+      const result = await db.prepare("DELETE FROM journal_entries WHERE id = ? AND version = ?").run(req.params.id, version.data);
+      if (!result.changes && await db.prepare("SELECT id FROM journal_entries WHERE id = ?").get(req.params.id))
+        return res.status(409).json({ error: "This entry changed on another device. Refresh research notes and review it before deleting." });
+    } else {
+      await db.prepare("DELETE FROM journal_entries WHERE id = ?").run(req.params.id);
+    }
     res.status(204).end();
   }),
 );
