@@ -175,3 +175,8 @@
 "Use a label of up to 120 characters." = "标签最多可包含 120 个字符。";
 "Leave alert?" = "离开提醒编辑页？";
 "Your alert is still saving. Newer edits will remain in memory." = "提醒仍在保存，新输入的内容会保留在内存中。";
+"Updating alert…" = "正在更新提醒…";
+"Delete alert?" = "要删除这条提醒吗？";
+"Delete alert" = "删除提醒";
+"This removes the shared alert from the Mac and every connected device." = "这会从 Mac 和所有已连接的设备中删除这条共享提醒。";
+"This alert changed. Review it and try again." = "这条提醒已更改。请检查后重试。";

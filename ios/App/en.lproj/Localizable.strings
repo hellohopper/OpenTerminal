@@ -175,3 +175,8 @@
 "Use a label of up to 120 characters." = "Use a label of up to 120 characters.";
 "Leave alert?" = "Leave alert?";
 "Your alert is still saving. Newer edits will remain in memory." = "Your alert is still saving. Newer edits will remain in memory.";
+"Updating alert…" = "Updating alert…";
+"Delete alert?" = "Delete alert?";
+"Delete alert" = "Delete alert";
+"This removes the shared alert from the Mac and every connected device." = "This removes the shared alert from the Mac and every connected device.";
+"This alert changed. Review it and try again." = "This alert changed. Review it and try again.";

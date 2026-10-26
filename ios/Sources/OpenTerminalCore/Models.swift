@@ -41,9 +41,12 @@ public struct HoldingValuation: Sendable {
         missingSymbols = missing; marketValue = missing.isEmpty ? value : nil; unrealized = missing.isEmpty ? pnl : nil
     }
 }
-public struct AlertRule: Decodable, Identifiable, Sendable {
+public struct AlertRule: Decodable, Identifiable, Equatable, Sendable {
     public let id: Int; public let symbol: String; public let condition: String
     public let threshold: Double; public let label: String; public let armed: Int
+    public func settingArmed(_ value: Bool) -> Self {
+        Self(id: id, symbol: symbol, condition: condition, threshold: threshold, label: label, armed: value ? 1 : 0)
+    }
 }
 public struct AlertList: Decodable, Sendable { public let alerts: [AlertRule] }
 public struct AlertInput: Encodable, Sendable {
