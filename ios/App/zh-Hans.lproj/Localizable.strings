@@ -170,3 +170,8 @@
 "Use up to 200 characters and eight search keywords." = "请输入不超过 200 个字符、8 个搜索关键词。";
 "Update the Mac backend to search research notes." = "请更新 Mac 后端以使用研究笔记搜索。";
 "Notification registration timed out. Please retry." = "通知注册超时，请重试。";
+"Alert saved." = "提醒已保存。";
+"Alert saved. Newer edits are kept as a draft." = "提醒已保存，新输入的内容已保留为草稿。";
+"Use a label of up to 120 characters." = "标签最多可包含 120 个字符。";
+"Leave alert?" = "离开提醒编辑页？";
+"Your alert is still saving. Newer edits will remain in memory." = "提醒仍在保存，新输入的内容会保留在内存中。";

@@ -217,35 +217,39 @@ private struct AlertsView: View {
                 }.padding(.vertical, 4)
             }
             if model.alerts.isEmpty && !model.loadingSections.contains(.alerts) && model.sectionErrors[.alerts] == nil { Text("No alerts yet.") }
-        }.refreshable { await model.refresh() }.sheet(isPresented: $create) { AlertEditor() }
+        }.refreshable { await model.refresh() }.sheet(isPresented: $create) { AlertEditor(state: model.alertEditor) }
     }
 }
 private struct AlertEditor: View {
     @EnvironmentObject private var model: TerminalModel
     @Environment(\.dismiss) private var dismiss
-    @ViewState<String> private var symbol = ""
-    @ViewState<String> private var threshold = ""
-    @ViewState<String> private var label = ""
-    @ViewState<String> private var condition = "PRICE_ABOVE"
-    @ViewState<Bool> private var saving = false
-    @ViewState<String?> private var error = nil
+    @ObservedObject var state: AlertEditorState
+    @ViewState<Bool> private var leaving = false
     var body: some View {
         NavigationStack {
             Form {
-                TextField("Ticker", text: $symbol).terminalInput(ticker: true)
-                Picker("Condition", selection: $condition) { Text("Price ≥").tag("PRICE_ABOVE"); Text("Price ≤").tag("PRICE_BELOW") }
-                TextField("Threshold", text: $threshold).terminalPriceInput()
-                TextField("Label (optional)", text: $label)
-                if let error { Text(error).foregroundStyle(.red) }
-                Button(LocalizedStringKey(saving ? "Saving…" : "Save alert")) { Task { await save() } }.disabled(saving)
-            }.navigationTitle("New alert").toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(saving) } }
+                TextField("Ticker", text: $state.draft.symbol).terminalInput(ticker: true)
+                Picker("Condition", selection: $state.draft.condition) { Text("Price ≥").tag("PRICE_ABOVE"); Text("Price ≤").tag("PRICE_BELOW") }
+                TextField("Threshold", text: $state.draft.threshold).terminalPriceInput()
+                TextField("Label (optional)", text: $state.draft.label)
+                if let error = state.error { Text(error).foregroundStyle(.red) }
+                if let message = state.message { Text(message).foregroundStyle(.secondary) }
+                if state.hasDraft { Text("Draft kept in memory until sign-out or the app closes.").font(.caption).foregroundStyle(.secondary) }
+                Button(LocalizedStringKey(state.saving ? "Saving…" : "Save alert")) { Task { await model.saveAlert(state) } }.disabled(state.saving)
+            }.navigationTitle("New alert")
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { if state.hasDraft || state.saving { leaving = true } else { dismiss() } } } }
+                .interactiveDismissDisabled(state.hasDraft || state.saving)
+                .onChange(of: state.savedRevision) { _, _ in
+                    if model.signedIn, state === model.alertEditor, !state.hasDraft { dismiss() }
+                }
+                .confirmationDialog("Leave alert?", isPresented: $leaving, titleVisibility: .visible) {
+                    Button("Keep draft and leave") { dismiss() }
+                    if !state.saving { Button("Discard draft and leave", role: .destructive) { state.discard(); dismiss() } }
+                    Button("Stay", role: .cancel) {}
+                } message: {
+                    Text(LocalizedStringKey(state.saving ? "Your alert is still saving. Newer edits will remain in memory." : "Your draft will remain in memory. It is cleared on sign-out or when the app closes."))
+                }
         }
-    }
-    private func save() async {
-        guard let symbol = normalizedSymbol(symbol), let value = Double(threshold), value.isFinite, value > 0, let api = model.api else { error = nativeText("Enter a valid ticker and positive price."); return }
-        saving = true; defer { saving = false }
-        do { let _: Acknowledgement = try await api.post("/api/alerts", body: AlertInput(symbol: symbol, condition: condition, threshold: value, label: String(label.prefix(120)))); await model.refresh(); dismiss() }
-        catch { self.error = error.localizedDescription; if error as? ConnectionError == .unauthorized { await model.report(error) } }
     }
 }
 private struct SettingsView: View {
