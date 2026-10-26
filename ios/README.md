@@ -51,6 +51,21 @@ Local validation in the authoring environment: core tests and SwiftUI source typ
 
 For Command Line Tools installations that do not discover the bundled Swift Testing plugin, pass `-Xswiftc -load-plugin-library -Xswiftc /Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing/libTestingMacros.dylib` to `swift test`. The exact plugin path depends on the selected toolchain.
 
+## Mac backend contract regression
+
+On macOS with Node.js 22.12+, Swift 6+ and repository dependencies installed:
+
+```sh
+npm run test:ios:integration -- --check
+npm run test:ios:integration
+```
+
+The first command checks prerequisites. The second builds a disposable production API/web stack from current sources under `test-results/ios-integration/run-*/`, chooses unused loopback ports, and runs the production Swift `TerminalAPI` against the actual Next.js proxy and SQLite routes. It verifies incorrect-password handling, pairing, restored credentials, renewal, revocation, cross-origin write rejection, browser-cookie access, shared watchlist edits/stale replacements/deletion, and research note pagination/search with Chinese, `+`, `%` and `_` characters.
+
+Each run generates its own test credentials. No deployment `config/server.json`, `.env`, existing database, launchd job or Tailscale setting is read or changed. Source copies and build output are isolated from the running deployment. External market-provider responses are fixtures; API/proxy/authentication/storage requests use real HTTP. All test database, backup and log paths stay below this checkout. The runner stops its child processes and removes temporary builds/databases on completion or interruption, retaining private logs and `result.json` in the run directory. Treat forced termination such as `kill -9` as an interrupted run that may require manual cleanup of that run's processes and files.
+
+Ordinary `swift test` skips the three backend tests; only the harness supplies their disposable origin and credentials. The iOS workflow also runs this contract suite when Actions is enabled and retains diagnostic logs. A passing contract check validates the native client and server protocol on macOS. It does not validate iOS UI rendering, Keychain behavior on a phone, ATS/TLS, Tailscale routing, simulator installation, signing or APNs delivery; those still require full Xcode and/or a physical device.
+
 ## Distribution
 
 The repository includes a shared scheme, app icon and UserDefaults required-reason privacy manifest. Before a TestFlight/App Store upload, use your Apple Developer team, configure signing and App Store Connect metadata for your deployment, and verify on a real device. This repository does not contain signing credentials or claim that the app is already distributed. Apple's [app icon guide](https://developer.apple.com/documentation/xcode/configuring-your-app-icon) and [required-reason API documentation](https://developer.apple.com/documentation/bundleresources/app-privacy-configuration/nsprivacyaccessedapitypes/nsprivacyaccessedapitype) describe the relevant project resources.

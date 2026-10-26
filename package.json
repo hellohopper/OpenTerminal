@@ -24,7 +24,8 @@
     "start": "concurrently -n api,web \"npm run start -w server\" \"npm run start -w web\"",
     "test": "npm run test -w server",
     "lint": "npm run lint -w web",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:ios:integration": "node scripts/ios-integration.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.1",

@@ -8,6 +8,7 @@ let package = Package(
     targets: [
         .target(name: "OpenTerminalCore"),
         .testTarget(name: "OpenTerminalCoreTests", dependencies: ["OpenTerminalCore"]),
+        .testTarget(name: "OpenTerminalBackendTests", dependencies: ["OpenTerminalCore"]),
         .target(name: "OpenTerminalAppModel", dependencies: ["OpenTerminalCore"], path: "App",
                 exclude: ["OpenTerminalApp.swift", "TerminalViews.swift", "ResearchView.swift", "Info.plist", "OpenTerminal.entitlements", "PrivacyInfo.xcprivacy", "Assets.xcassets", "en.lproj", "zh-Hans.lproj"],
                 sources: ["TerminalModel.swift", "PhoneServices.swift", "ResearchModel.swift"]),
