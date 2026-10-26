@@ -169,3 +169,4 @@
 "Retry older notes" = "重试加载较早的笔记";
 "Use up to 200 characters and eight search keywords." = "请输入不超过 200 个字符、8 个搜索关键词。";
 "Update the Mac backend to search research notes." = "请更新 Mac 后端以使用研究笔记搜索。";
+"Notification registration timed out. Please retry." = "通知注册超时，请重试。";
