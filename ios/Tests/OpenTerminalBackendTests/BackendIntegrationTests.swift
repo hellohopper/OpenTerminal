@@ -96,7 +96,7 @@ struct BackendIntegrationTests {
         await phone.signOut(); await browser.signOut()
     }
 
-    @Test func nativePriceAlertCreationAndPauseMatchTheBackendContract() async throws {
+    @Test func nativePriceAlertCreationPauseAndDeletionMatchTheBackendContract() async throws {
         let (phone, _) = try await paired("Alert contract phone")
         let created: Created = try await phone.post("/api/alerts", body: AlertInput(symbol: "AAPL", condition: "PRICE_ABOVE", threshold: 1000, label: "原生提醒"))
         let before: AlertList = try await phone.get("/api/alerts")
@@ -105,6 +105,10 @@ struct BackendIntegrationTests {
         try await phone.setAlertArmed(id: created.id, armed: false)
         let after: AlertList = try await phone.get("/api/alerts")
         #expect(after.alerts.first { $0.id == created.id }?.armed == 0)
+        // The actual delete route returns 204 with no JSON acknowledgement.
+        try await phone.delete("/api/alerts/\(created.id)")
+        let deleted: AlertList = try await phone.get("/api/alerts")
+        #expect(!deleted.alerts.contains { $0.id == created.id })
         await phone.signOut()
     }
 
@@ -131,6 +135,13 @@ struct BackendIntegrationTests {
         let seenOnWeb: JournalEntry = try await browser.get("/api/journal/\(older.id)")
         #expect(seenOnWeb.title == title)
         #expect(seenOnWeb.body == "Older phone note visible from the web")
+        try await phone.delete("/api/journal/\(older.id)")
+        let deleted: JournalList = try await phone.get("/api/journal", query: query.merging(["q": title]) { _, new in new })
+        #expect(deleted.entries.isEmpty)
+        do {
+            let _: JournalEntry = try await browser.get("/api/journal/\(older.id)")
+            Issue.record("Deleted research note remained visible on the web")
+        } catch { status(error, 404) }
         await phone.signOut(); await browser.signOut()
     }
 }

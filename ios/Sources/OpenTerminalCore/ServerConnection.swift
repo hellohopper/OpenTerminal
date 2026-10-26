@@ -69,11 +69,11 @@ public actor TerminalAPI {
         self.session = URLSession(configuration: configuration, delegate: NoRedirects(), delegateQueue: nil)
     }
     public func signIn(password: String) async throws {
-        do { let _: Acknowledgement = try await send("/api/session", method: "POST", body: JSONEncoder().encode(["password": password])) }
+        do { _ = try await requestData("/api/session", method: "POST", body: JSONEncoder().encode(["password": password])) }
         catch ConnectionError.unauthorized { throw ConnectionError.response(401, "Invalid password.") }
     }
     public func signOut() async {
-        let _: Acknowledgement? = try? await send(credential == nil ? "/api/session" : "/api/mobile/session", method: "DELETE")
+        _ = try? await requestData(credential == nil ? "/api/session" : "/api/mobile/session", method: "DELETE")
         credential = nil
         session.invalidateAndCancel()
     }
@@ -89,7 +89,7 @@ public actor TerminalAPI {
         let next = MobileCredential(id:value.id,name:value.name,token:current.token,expiresAt:value.expiresAt)
         credential=next; return next
     }
-    public func delete(_ path: String, query: [String: String] = [:]) async throws { let _: Acknowledgement = try await send(path, query: query, method:"DELETE") }
+    public func delete(_ path: String, query: [String: String] = [:]) async throws { _ = try await requestData(path, query: query, method:"DELETE") }
     public func get<T: Decodable & Sendable>(_ path: String, query: [String: String] = [:], as: T.Type = T.self) async throws -> T {
         try await send(path, query: query)
     }
@@ -100,9 +100,14 @@ public actor TerminalAPI {
         try await send(path, method: "PUT", body: JSONEncoder().encode(body))
     }
     public func setAlertArmed(id: Int, armed: Bool) async throws {
-        let _: Acknowledgement = try await send("/api/alerts/\(id)", method: "PUT", body: JSONEncoder().encode(["armed": armed]))
+        _ = try await requestData("/api/alerts/\(id)", method: "PUT", body: JSONEncoder().encode(["armed": armed]))
     }
     private func send<T: Decodable & Sendable>(_ path: String, query: [String: String] = [:], method: String = "GET", body: Data? = nil) async throws -> T {
+        let data = try await requestData(path, query: query, method: method, body: body)
+        return try JSONDecoder().decode(T.self, from: data)
+    }
+    // Commands returning Void need only a successful status; typed calls still require valid JSON.
+    private func requestData(_ path: String, query: [String: String] = [:], method: String = "GET", body: Data? = nil) async throws -> Data {
         var request = URLRequest(url: try server.url(path: path, query: query))
         request.httpMethod = method; request.httpBody = body
         request.setValue(server.origin.absoluteString, forHTTPHeaderField: "Origin")
@@ -126,7 +131,7 @@ public actor TerminalAPI {
             let message = (try? JSONDecoder().decode(ServerError.self, from: data))?.error ?? "The request could not be completed."
             throw ConnectionError.response(http.statusCode, message)
         }
-        return try JSONDecoder().decode(T.self, from: data)
+        return data
     }
 }
 private struct ServerError: Decodable { let error: String }
