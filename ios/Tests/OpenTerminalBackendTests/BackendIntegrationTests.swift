@@ -112,6 +112,37 @@ struct BackendIntegrationTests {
         await phone.signOut()
     }
 
+    @Test func conditionalNoteDeletionProtectsEditsFromAnotherDevice() async throws {
+        let (phone, _) = try await paired("Conditional note deletion phone")
+        let (server, password) = try connection(), browser = TerminalAPI(server: server)
+        try await browser.signIn(password: password)
+        let created: Created = try await phone.post("/api/journal", body: NoteInput(symbol: "MSFT", title: "Original note", body: "Original evidence"))
+        let original: JournalEntry = try await phone.get("/api/journal/\(created.id)")
+        let version = try #require(original.version)
+        let _: Acknowledgement = try await browser.put("/api/journal/\(created.id)", body: NoteUpdate(version: version))
+        do {
+            try await phone.delete("/api/journal/\(created.id)", query: ["version": version])
+            Issue.record("Stale phone confirmation deleted a newer web edit")
+        } catch { status(error, 409) }
+        for invalid in ["", String(repeating: "x", count: 101)] {
+            do {
+                try await phone.delete("/api/journal/\(created.id)", query: ["version": invalid])
+                Issue.record("An invalid delete version was accepted")
+            } catch { status(error, 400) }
+        }
+        let current: JournalEntry = try await phone.get("/api/journal/\(created.id)")
+        #expect(current.body == "New evidence from another device" && current.version != version)
+        let latest = try #require(current.version)
+        try await phone.delete("/api/journal/\(created.id)", query: ["version": latest])
+        // Retrying an acknowledged delete is harmless even when its response was lost.
+        try await phone.delete("/api/journal/\(created.id)", query: ["version": latest])
+        do {
+            let _: JournalEntry = try await browser.get("/api/journal/\(created.id)")
+            Issue.record("A confirmed deletion remained visible to the browser")
+        } catch { status(error, 404) }
+        await phone.signOut(); await browser.signOut()
+    }
+
     @Test func researchNotesSearchOlderPagesAndKeepLiteralQueryCharacters() async throws {
         let (phone, _) = try await paired("Research phone")
         let (server, password) = try connection(), browser = TerminalAPI(server: server)
@@ -148,3 +179,7 @@ struct BackendIntegrationTests {
 private struct Created: Decodable, Sendable { let id: Int }
 private struct NewList: Encodable, Sendable { let name: String; let symbols: [String] }
 private struct Replacement: Encodable, Sendable { let name: String; let symbols: [String]; let version: Int }
+private struct NoteUpdate: Encodable, Sendable {
+    let symbol = "MSFT", title = "Updated note", body = "New evidence from another device", kind = "research"
+    let version: String
+}

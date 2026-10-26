@@ -13,6 +13,7 @@ private struct ResearchContent: View {
     @StateObject private var research: ResearchModel
     @Environment(\.dismiss) private var dismiss
     @ViewState<Bool> private var leaving = false
+    @ViewState<JournalEntry?> private var deleting = nil
     let isModal: Bool
     init(terminal: TerminalModel, symbol: String, isModal: Bool) {
         self.terminal = terminal; self.isModal = isModal
@@ -55,7 +56,18 @@ private struct ResearchContent: View {
                 if let error = research.noteSearchError { Text(error).foregroundStyle(.orange) }
                 if !research.notesQuery.isEmpty { Text("Results for “\(research.notesQuery)”").font(.caption).foregroundStyle(.secondary) }
                 status(.notes)
-                ForEach(research.notes) { note in VStack(alignment: .leading, spacing: 6) { Text(note.title).font(.headline); Text(note.body).font(.callout) } }
+                ForEach(research.notes) { note in
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(note.title).font(.headline); Text(note.body).font(.callout)
+                        Button("Delete note", role: .destructive) { deleting = note }
+                            .buttonStyle(.borderless).disabled(research.deletingNoteIDs.contains(note.id))
+                        if research.deletingNoteIDs.contains(note.id) { ProgressView("Deleting note…") }
+                        if let error = research.noteDeleteErrors[note.id] {
+                            Text(error).font(.callout).foregroundStyle(.red)
+                            Button("Refresh notes") { Task { await research.load(.notes) } }.buttonStyle(.borderless)
+                        }
+                    }
+                }
                 if research.notes.isEmpty && !research.loading.contains(.notes) && research.errors[.notes] == nil {
                     Text(LocalizedStringKey(research.notesQuery.isEmpty ? "No research notes yet." : "No matching notes.")).foregroundStyle(.secondary)
                 }
@@ -92,6 +104,15 @@ private struct ResearchContent: View {
                 if !research.saving { Button("Discard draft and leave", role: .destructive) { research.discardDraft(); dismiss() } }
                 Button("Stay", role: .cancel) {}
             } message: { Text(research.saving ? "Your note is still saving. Newer edits will remain in memory." : "Your draft will remain in memory. It is cleared on sign-out or when the app closes.") }
+            .alert("Delete research note?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
+                Button("Delete note", role: .destructive) {
+                    if let note = deleting { Task { await research.deleteNote(note) } }
+                    deleting = nil
+                }
+                Button("Cancel", role: .cancel) { deleting = nil }
+            } message: {
+                if let note = deleting { Text("\(note.symbol) · \(note.title)\n\n\(nativeText("This removes the saved note from the Mac and every connected device. Your current draft is kept."))") }
+            }
     }
 }
 extension View {

@@ -12,6 +12,9 @@ struct ResearchDraft: Equatable { var title = ""; var body = ""; var isEmpty: Bo
     @Published var message: String?
     @Published var error: String?
     @Published var savedRevision = 0
+    @Published var deleting: Set<Int> = []
+    @Published var deleteErrors: [Int: String] = [:]
+    @Published var deletedIDs: Set<Int> = []
     init(_ draft: ResearchDraft) { title = draft.title; body = draft.body }
 }
 
@@ -36,12 +39,15 @@ struct ResearchDraft: Equatable { var title = ""; var body = ""; var isEmpty: Bo
     var message: String? { get { noteState.message } set { noteState.message = newValue } }
     var saveError: String? { get { noteState.error } set { noteState.error = newValue } }
     var noteRevision: Int { noteState.savedRevision }
+    var deletingNoteIDs: Set<Int> { noteState.deleting }
+    var noteDeleteErrors: [Int: String] { noteState.deleteErrors }
     let symbol: String
     private let terminal: TerminalModel
     private let session: UUID
     private let draftKey: String
     private let noteState: ResearchNoteState
     private var noteUpdates: AnyCancellable?
+    private var noteDeletions: AnyCancellable?
     private var requests: [ResearchSection: UUID] = [:]
     var hasDraft: Bool { !draft.isEmpty }
     private var draft: ResearchDraft { ResearchDraft(title: title, body: bodyText) }
@@ -53,6 +59,7 @@ struct ResearchDraft: Equatable { var title = ""; var body = ""; var isEmpty: Bo
         terminal.researchNoteStates[draftKey] = state; noteState = state
         range = terminal.preferredChartRange
         noteUpdates = state.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
+        noteDeletions = state.$deletedIDs.sink { [weak self] ids in self?.notes.removeAll { ids.contains($0.id) } }
     }
     private var current: Bool { terminal.sessionID == session && terminal.signedIn }
     private func keepDraft() { if current { terminal.researchDrafts[draftKey] = draft.isEmpty ? nil : draft } }
@@ -133,7 +140,7 @@ struct ResearchDraft: Equatable { var title = ""; var body = ""; var isEmpty: Bo
                 throw ConnectionError.response(409, "Update the Mac backend to search research notes.")
             }
             var seen = Set(before == nil ? [] : notes.map(\.id))
-            let rows = page.entries.filter { seen.insert($0.id).inserted }
+            let rows = page.entries.filter { !noteState.deletedIDs.contains($0.id) && seen.insert($0.id).inserted }
             notes = before == nil ? rows : notes + rows
             nextNoteCursor = page.nextCursor.flatMap { $0 > 0 && $0 < (before ?? Int.max) ? $0 : nil }
             updated[.notes] = .now
@@ -145,6 +152,27 @@ struct ResearchDraft: Equatable { var title = ""; var body = ""; var isEmpty: Bo
         }
     }
     private var loadedRange: String?
+    func deleteNote(_ note: JournalEntry) async {
+        guard current, let api = terminal.api, !Task.isCancelled, note.symbol == symbol,
+              !noteState.deleting.contains(note.id), !noteState.deletedIDs.contains(note.id),
+              let saved = notes.first(where: { $0.id == note.id }) else { return }
+        guard saved == note else { noteState.deleteErrors[note.id] = nativeText("This note changed. Refresh and review it before deleting."); return }
+        guard let version = note.version, !version.isEmpty, version.utf16.count <= 100 else {
+            noteState.deleteErrors[note.id] = nativeText("Update the Mac backend before deleting research notes."); return
+        }
+        noteState.deleting.insert(note.id); noteState.deleteErrors[note.id] = nil
+        defer { noteState.deleting.remove(note.id) }
+        do {
+            try await api.delete("/api/journal/\(note.id)", query: ["version": version])
+            guard current else { return }
+            // Share the confirmed removal with reopened views and filter delayed pages in this session.
+            noteState.deletedIDs.insert(note.id)
+        } catch {
+            guard current, !(error is CancellationError) else { return }
+            if error as? ConnectionError == .unauthorized { await terminal.report(error) }
+            else { noteState.deleteErrors[note.id] = error.localizedDescription }
+        }
+    }
     func saveNote() async {
         guard current, let api = terminal.api, !saving else { return }
         let submitted = draft
