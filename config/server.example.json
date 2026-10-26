@@ -1,4 +1,5 @@
 {
+  "accessMode": "tailscale",
   "origin": "https://your-mac.your-tailnet.ts.net",
   "webPort": 3000,
   "apiPort": 4000,

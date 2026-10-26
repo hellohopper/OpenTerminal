@@ -2,37 +2,54 @@ import { readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { createPrivateKey } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { inside } from './mac-service-lib.mjs';
+import { inside, accessMode } from './mac-service-lib.mjs';
+
+const check = (name, status, detail) => ({ name, status, detail });
+async function http(name, url, api, request, timeout = 4000) {
+  try {
+    const response = await request(url, { redirect: 'error', signal: AbortSignal.timeout(timeout) });
+    if (!response.ok) return check(name, 'error', `HTTP ${response.status}`);
+    if (api) {
+      const data = await response.json();
+      if (data.ok !== true || data.database !== 'sqlite') return check(name, 'error', 'Unexpected API response; expected the local SQLite backend.');
+    } else if (!(response.headers.get('content-type') ?? '').includes('text/html') || !(await response.text()).includes('OpenTerminal'))
+      return check(name, 'error', 'Unexpected web response; check the port or HTTPS route.');
+    return check(name, 'ok', 'Reachable');
+  } catch { return check(name, 'error', 'Unreachable, timed out, or certificate/response validation failed.'); }
+}
+export function inspectLocal(config, { request = fetch, timeout = 4000 } = {}) {
+  return Promise.all([
+    http('web', `http://127.0.0.1:${config.webPort}/login`, false, request, timeout),
+    http('api', `http://127.0.0.1:${config.apiPort}/api/status`, true, request, timeout),
+  ]);
+}
+export async function waitForLocalServices(config, { request = fetch, attempts = 12, pause = ms => new Promise(resolve => setTimeout(resolve, ms)) } = {}) {
+  let checks = [];
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    checks = await inspectLocal(config, { request, timeout: 1500 });
+    if (checks.every(item => item.status === 'ok')) return { ok: true, checks };
+    if (attempt + 1 < attempts) await pause(500);
+  }
+  return { ok: false, checks };
+}
 
 // Read-only diagnostics. Never return command output, credentials or key contents.
 export async function inspectMac(root, config, { request = fetch, command = spawnSync, now = Date.now() } = {}) {
-  const check = (name, status, detail) => ({ name, status, detail });
-  const http = async (name, url, api = false) => {
+  const mode = accessMode(config);
+  const [checks, https] = await Promise.all([inspectLocal(config, { request }),
+    mode === 'local' ? null : http('https', `${config.origin}/login`, false, request)]);
+  if (mode === 'local') checks.push(check('access', 'ok', `Local access: ${config.origin}.`));
+  else {
+    checks.push(https);
     try {
-      const response = await request(url, { redirect: 'error', signal: AbortSignal.timeout(4000) });
-      if (!response.ok) return check(name, 'error', `HTTP ${response.status}`);
-      if (api) {
-        const data = await response.json();
-        if (data.ok !== true || data.database !== 'sqlite') return check(name, 'error', 'Unexpected API response; expected the local SQLite backend.');
-      } else {
-        if (!(response.headers.get('content-type') ?? '').includes('text/html') || !(await response.text()).includes('OpenTerminal')) return check(name, 'error', 'Unexpected web response; check the port or HTTPS route.');
-      }
-      return check(name, 'ok', 'Reachable');
-    } catch { return check(name, 'error', 'Unreachable, timed out, or certificate/response validation failed.'); }
-  };
-  const checks = await Promise.all([
-    http('web', `http://127.0.0.1:${config.webPort}/login`),
-    http('api', `http://127.0.0.1:${config.apiPort}/api/status`, true),
-    http('https', `${config.origin}/login`),
-  ]);
-  try {
-    const result = command(config.tailscale ?? '/usr/local/bin/tailscale', ['status', '--json'], { encoding: 'utf8', timeout: 4000, maxBuffer: 1024 * 1024 });
-    if (result.status !== 0) throw new Error();
-    const state = JSON.parse(result.stdout);
-    const matches = state.Self?.DNSName?.replace(/\.$/, '') === new URL(config.origin).hostname;
-    checks.push(check('tailscale', state.BackendState === 'Running' && state.Self?.Online !== false && matches ? 'ok' : 'error',
-      state.BackendState === 'Running' && state.Self?.Online !== false && matches ? 'Online; hostname matches the configured HTTPS origin.' : 'Offline or hostname does not match the configured HTTPS origin.'));
-  } catch { checks.push(check('tailscale', 'error', 'Cannot read Tailscale status. Check the app and configured CLI path.')); }
+      const result = command(config.tailscale ?? '/usr/local/bin/tailscale', ['status', '--json'], { encoding: 'utf8', timeout: 4000, maxBuffer: 1024 * 1024 });
+      if (result.status !== 0) throw new Error();
+      const state = JSON.parse(result.stdout);
+      const matches = state.Self?.DNSName?.replace(/\.$/, '') === new URL(config.origin).hostname;
+      checks.push(check('tailscale', state.BackendState === 'Running' && state.Self?.Online !== false && matches ? 'ok' : 'error',
+        state.BackendState === 'Running' && state.Self?.Online !== false && matches ? 'Online; hostname matches the configured HTTPS origin.' : 'Offline or hostname does not match the configured HTTPS origin.'));
+    } catch { checks.push(check('tailscale', 'error', 'Cannot read Tailscale status. Check the app and configured CLI path.')); }
+  }
   try {
     const policy = JSON.parse(readFileSync(join(root, 'backups/policy.json'), 'utf8'));
     if (typeof policy.enabled !== 'boolean') throw new Error();
@@ -55,5 +72,5 @@ export async function inspectMac(root, config, { request = fetch, command = spaw
       checks.push(check('apns', 'ok', 'Signing configuration/key validated locally; device delivery is not verified.'));
     } catch { checks.push(check('apns', 'error', 'Invalid or unreadable APNs configuration/key, or key permissions are not private.')); }
   }
-  return { ok: checks.every(item => item.status !== 'error'), checkedAt: new Date(now).toISOString(), checks };
+  return { ok: checks.every(item => item.status !== 'error'), accessMode: mode, origin: config.origin, checkedAt: new Date(now).toISOString(), checks };
 }
