@@ -74,6 +74,14 @@ import OpenTerminalCore
         #expect(!model.signedIn); #expect(model.alerts.isEmpty); #expect(model.sharedLists.isEmpty)
         #expect(model.loadingSections.isEmpty); #expect(model.sectionUpdated.isEmpty); #expect(vault.data == nil)
     }
+    @Test func signOutClearsTheResearchSheetBeforeAnotherLogin() async throws {
+        ModelProtocol.handler = { $0.respondFixture() }; defer { ModelProtocol.handler = nil }
+        let (model, _) = try fixture(); await model.restoreSession()
+        model.researchSymbol = "AAPL"
+        await model.signOut()
+        #expect(model.researchSymbol == nil)
+    }
+
     @Test func lateNotificationFailureCannotWriteIntoASignedOutSession() async throws {
         let gate = ResponseGate()
         ModelProtocol.handler = { request in

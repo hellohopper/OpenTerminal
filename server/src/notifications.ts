@@ -14,7 +14,7 @@ type Delivery={deviceId:number;notificationId:number;status:'pending'|'sending'|
 export const pushConfig=()=>{const publicKey=process.env.WEB_PUSH_PUBLIC_KEY,privateKey=process.env.WEB_PUSH_PRIVATE_KEY,subject=process.env.WEB_PUSH_SUBJECT;return publicKey&&privateKey&&subject?{publicKey,privateKey,subject}:null;};
 export const digest=(v:unknown)=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
 async function sendPush(device:Device,notification:Inbox,id:number){
- if('nativeToken' in device){if(!await mobileDevices.active(device.ownerDeviceId))throw Object.assign(new Error('Device authorization expired.'),{statusCode:410});await sendApns(device.nativeToken,device.environment,notification,id);return;}
+ if('nativeToken' in device){if(!await mobileDevices.active(device.ownerDeviceId))throw Object.assign(new Error('Device authorization expired.'),{statusCode:410});await sendApns(device.nativeToken,device.environment,notification,id,device.ownerDeviceId);return;}
  const config=pushConfig();if(!config)throw new Error('Push keys not configured');if(!validPushEndpoint(device.endpoint))throw new Error('Unsupported push endpoint');await webpush.sendNotification({endpoint:device.endpoint,keys:device.keys},JSON.stringify({title:notification.title,body:notification.body,symbol:notification.symbol,tag:`terminal-${id}`}),{vapidDetails:config,timeout:5000,TTL:3600,topic:digest(id).slice(0,32)});}
 async function retainRoom(kind:string,terminal?:(p:any)=>boolean){const rows=await records(kind);if(rows.length<500)return true;const oldest=rows.filter(r=>!terminal||terminal(r.payload)).at(-1);if(!oldest)return false;await removeRecord(kind,oldest.id);return true;}
 export async function ingestNotifications(){return db.transaction(async()=>{

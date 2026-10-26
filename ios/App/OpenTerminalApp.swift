@@ -18,7 +18,6 @@ typealias ViewState<Value> = SwiftUI.State<Value>
                 .overlay { if phase != .active && model.signedIn { Color.black.ignoresSafeArea().overlay { Label("OpenTerminal", systemImage: "lock.fill").foregroundStyle(.orange) } } }
                 .onChange(of: phase) { _, value in if value == .active && model.signedIn { Task { await model.refresh() } } }
                 .task { await model.restoreSession() }
-                .onReceive(NotificationCenter.default.publisher(for:.init("terminal-open-research"))) { value in if let symbol=value.object as? String,let normalized=normalizedSymbol(symbol){model.researchSymbol=normalized} }
                 .onOpenURL { url in
                     guard url.scheme=="openterminal",url.host=="connect",let address=URLComponents(url:url,resolvingAgainstBaseURL:false)?.queryItems?.first(where:{$0.name=="server"})?.value,let server=try? ServerConnection(address)else{return}
                     if model.signedIn{model.error=nativeText("Sign out before connecting to another server.")}else{model.serverText=server.origin.absoluteString}

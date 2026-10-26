@@ -4,12 +4,13 @@ import OpenTerminalCore
 
 enum TerminalTab: String, CaseIterable { case today, watchlist, holdings, alerts }
 
-@MainActor final class TerminalModel: ObservableObject {
+@MainActor final class TerminalModel: ObservableObject, ResearchNotificationConsumer {
     @Published var serverText: String {
         didSet {
             // Whitespace and a trailing slash do not change the canonical origin.
             guard (try? ServerConnection(serverText)) != (try? ServerConnection(oldValue)) else { return }
             invalidateAuthentication(); restoreAttempted = false; error = nil
+            pendingResearch = nil; researchSymbol = nil
         }
     }
     @Published var signedIn = false
@@ -75,6 +76,7 @@ enum TerminalTab: String, CaseIterable { case today, watchlist, holdings, alerts
     private var authenticationID: UUID?
     private var authenticationServer: String?
     private var pushOperation: UUID?
+    private var pendingResearch: NotificationResearchTarget?
     private let notifications: any NativeNotificationAccess
     var retryDelay: Double = 2
     var valuation: HoldingValuation? { holdingsReady ? HoldingValuation(positions: positions, quotes: holdingQuotes) : nil }
@@ -82,9 +84,24 @@ enum TerminalTab: String, CaseIterable { case today, watchlist, holdings, alerts
 
     init(defaults: UserDefaults = .standard, credentials: any CredentialStorage = KeychainCredentialStorage(),
          notifications: any NativeNotificationAccess = SystemNotificationAccess(),
+         notificationInbox: ResearchNotificationInbox = .shared,
          makeClient: @escaping (ServerConnection, MobileCredential?) -> TerminalAPI = { TerminalAPI(server: $0, credential: $1) }) {
         self.defaults = defaults; self.credentials = credentials; self.notifications = notifications; self.makeClient = makeClient
         serverText = defaults.string(forKey: "server") ?? ""
+        notificationInbox.attach(self)
+    }
+
+    func receiveNotification(_ target: NotificationResearchTarget) {
+        pendingResearch = nil // A newer tap must not revive an earlier queued navigation.
+        if signedIn {
+            guard let server, target.matches(server), target.deviceID == credential?.id.lowercased() else { return }
+            researchSymbol = target.symbol
+        } else if let selected = try? ServerConnection(serverText), target.matches(selected) {
+            pendingResearch = target
+        }
+    }
+    private func openPendingResearch() {
+        if let target = pendingResearch { pendingResearch = nil; receiveNotification(target) }
     }
 
     private func saveViewChoice(_ value: String?, field: String) {
@@ -142,6 +159,7 @@ enum TerminalTab: String, CaseIterable { case today, watchlist, holdings, alerts
             credential = value; renewedAt = .now; generation = UUID(); api = client; server = connection
             restoreViewChoices(at: connection); signedIn = true
             defaults.set(connection.origin.absoluteString, forKey: "server")
+            openPendingResearch()
         } catch { if acceptsAuthentication(operation), !(error is CancellationError) { self.error = error.localizedDescription } }
     }
     func restoreSession(force: Bool = false) async {
@@ -164,6 +182,7 @@ enum TerminalTab: String, CaseIterable { case today, watchlist, holdings, alerts
             api = client; server = target; credential = fresh; renewedAt = .now; generation = UUID()
             restoreViewChoices(at: target); signedIn = true
             defaults.set(target.origin.absoluteString, forKey: "server")
+            openPendingResearch()
         } catch ConnectionError.invalidServer { }
         catch {
             guard acceptsAuthentication(operation), !(error is CancellationError) else { return }
@@ -177,7 +196,7 @@ enum TerminalTab: String, CaseIterable { case today, watchlist, holdings, alerts
         if let server { credentials.remove(server.origin.absoluteString) }
         if let pendingServer { credentials.remove(pendingServer) }
         generation = UUID(); credential = nil; api = nil; server = nil; signedIn = false
-        researchDrafts = [:]; researchNoteStates = [:]
+        researchDrafts = [:]; researchNoteStates = [:]; pendingResearch = nil; researchSymbol = nil
         selectionRefresh?.cancel(); selectionRefresh = nil; sectionRequests = [:]
         portfolioRefresh?.cancel(); portfolioRefresh = nil; selectedTab = .today; preferredChartRange = "6M"
         quotes = []; portfolios = []; positions = []; holdingQuotes = []; alerts = []; briefing = nil; workspaces = []; portfolioID = nil; holdingsReady = false
