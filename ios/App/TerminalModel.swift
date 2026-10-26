@@ -53,6 +53,8 @@ enum TerminalTab: String, CaseIterable { case today, watchlist, holdings, alerts
     @Published var holdingQuotes: [Quote] = []
     @Published var holdingsReady = false
     @Published var alerts: [AlertRule] = []
+    @Published private(set) var pendingAlertActions: Set<Int> = []
+    @Published private(set) var alertActionErrors: [Int: String] = [:]
     @Published private(set) var alertEditor = AlertEditorState()
     @Published var briefing: Briefing?
     @Published var workspaces: [SharedWorkspace] = []
@@ -200,6 +202,7 @@ enum TerminalTab: String, CaseIterable { case today, watchlist, holdings, alerts
         generation = UUID(); credential = nil; api = nil; server = nil; signedIn = false
         researchDrafts = [:]; researchNoteStates = [:]; pendingResearch = nil; researchSymbol = nil
         alertEditor.clear(); alertEditor = AlertEditorState(); alertRefresh?.cancel(); alertRefresh = nil
+        pendingAlertActions = []; alertActionErrors = [:]
         selectionRefresh?.cancel(); selectionRefresh = nil; sectionRequests = [:]
         portfolioRefresh?.cancel(); portfolioRefresh = nil; selectedTab = .today; preferredChartRange = "6M"
         quotes = []; portfolios = []; positions = []; holdingQuotes = []; alerts = []; briefing = nil; workspaces = []; portfolioID = nil; holdingsReady = false
@@ -268,7 +271,7 @@ enum TerminalTab: String, CaseIterable { case today, watchlist, holdings, alerts
             await refreshHoldings()
         } catch { if current(.holdings, request: request, token: token) { await report(error, section: .holdings) } }
     }
-    private func refreshAlerts() async {
+    func refreshAlerts() async {
         guard let api else { return }; let token = generation, request = begin(.alerts); defer { finish(.alerts, request: request, token: token) }
         do {
             let rules: AlertList = try await api.get("/api/alerts")
@@ -434,11 +437,7 @@ enum TerminalTab: String, CaseIterable { case today, watchlist, holdings, alerts
                 state.draft = AlertDraft(); state.message = nativeText("Alert saved.")
             } else { state.message = nativeText("Alert saved. Newer edits are kept as a draft.") }
             state.savedRevision += 1
-            alertRefresh?.cancel()
-            alertRefresh = Task {
-                guard session == generation, !Task.isCancelled else { return }
-                await refreshAlerts()
-            }
+            scheduleAlertRefresh(session: session)
         } catch {
             guard session == generation, state === alertEditor, !(error is CancellationError) else { return }
             if error as? ConnectionError == .unauthorized { await report(error) }
@@ -446,10 +445,41 @@ enum TerminalTab: String, CaseIterable { case today, watchlist, holdings, alerts
         }
     }
 
-    func setArmed(_ rule: AlertRule) async {
-        guard let api else { return }; let token = generation
-        do { try await api.setAlertArmed(id: rule.id, armed: rule.armed == 0); if token == generation { await refreshAlerts() } }
-        catch { if token == generation { await report(error) } }
+    private func scheduleAlertRefresh(session: UUID) {
+        // Invalidate snapshots started before the acknowledged write, before the new task runs.
+        sectionRequests[.alerts] = UUID(); loadingSections.remove(.alerts); sectionUpdated[.alerts] = nil
+        alertRefresh?.cancel()
+        alertRefresh = Task {
+            guard session == generation, !Task.isCancelled else { return }
+            await refreshAlerts()
+        }
+    }
+    func setArmed(_ rule: AlertRule, session: UUID) async {
+        await changeAlert(rule, session: session, deleting: false)
+    }
+    func deleteAlert(_ rule: AlertRule, session: UUID) async {
+        await changeAlert(rule, session: session, deleting: true)
+    }
+    private func changeAlert(_ rule: AlertRule, session: UUID, deleting: Bool) async {
+        guard signedIn, session == generation, let api, !Task.isCancelled, !pendingAlertActions.contains(rule.id),
+              let current = alerts.first(where: { $0.id == rule.id }) else { return }
+        guard current == rule else {
+            alertActionErrors[rule.id] = nativeText("This alert changed. Review it and try again."); return
+        }
+        pendingAlertActions.insert(rule.id); alertActionErrors[rule.id] = nil
+        defer { if session == generation { pendingAlertActions.remove(rule.id) } }
+        do {
+            if deleting { try await api.delete("/api/alerts/\(rule.id)") }
+            else { try await api.setAlertArmed(id: rule.id, armed: rule.armed == 0) }
+            guard session == generation else { return }
+            if deleting { alerts.removeAll { $0.id == rule.id } }
+            else { alerts = alerts.map { $0.id == rule.id ? $0.settingArmed(rule.armed == 0) : $0 } }
+            scheduleAlertRefresh(session: session)
+        } catch {
+            guard session == generation, !(error is CancellationError) else { return }
+            if error as? ConnectionError == .unauthorized { await report(error) }
+            else { alertActionErrors[rule.id] = error.localizedDescription }
+        }
     }
     func loadDevices() async { guard let api else { return }; let token = generation; do { let rows:[MobileDeviceInfo] = try await api.get("/api/mobile/devices"); if token == generation { devices = rows } } catch { if token == generation { await report(error) } } }
     func revoke(_ id: String) async {

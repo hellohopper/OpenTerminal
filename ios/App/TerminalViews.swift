@@ -202,6 +202,7 @@ private struct HoldingsView: View {
 private struct AlertsView: View {
     @EnvironmentObject private var model: TerminalModel
     @ViewState<Bool> private var create = false
+    @ViewState<(rule: AlertRule, session: UUID)?> private var deleting = nil
     var body: some View {
         List {
             Section {
@@ -213,11 +214,31 @@ private struct AlertsView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(rule.label.isEmpty ? rule.symbol : rule.label).font(.headline)
                     Text("\(rule.symbol) · \(rule.condition) · \(number(rule.threshold))").font(.callout)
-                    Button(LocalizedStringKey(rule.armed == 0 ? "Rearm" : "Pause")) { Task { await model.setArmed(rule) } }
+                    HStack {
+                        Button(LocalizedStringKey(rule.armed == 0 ? "Rearm" : "Pause")) {
+                            let session = model.sessionID
+                            Task { await model.setArmed(rule, session: session) }
+                        }
+                        Button("Delete", role: .destructive) { deleting = (rule, model.sessionID) }
+                    }.buttonStyle(.borderless).disabled(model.pendingAlertActions.contains(rule.id))
+                    if model.pendingAlertActions.contains(rule.id) { ProgressView("Updating alert…") }
+                    if let error = model.alertActionErrors[rule.id] { Text(error).font(.callout).foregroundStyle(.red) }
                 }.padding(.vertical, 4)
             }
             if model.alerts.isEmpty && !model.loadingSections.contains(.alerts) && model.sectionErrors[.alerts] == nil { Text("No alerts yet.") }
-        }.refreshable { await model.refresh() }.sheet(isPresented: $create) { AlertEditor(state: model.alertEditor) }
+        }.refreshable { await model.refreshAlerts() }.sheet(isPresented: $create) { AlertEditor(state: model.alertEditor) }
+            .onChange(of: model.sessionID) { _, _ in deleting = nil }
+            .confirmationDialog("Delete alert?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible) {
+                Button("Delete alert", role: .destructive) {
+                    if let target = deleting { Task { await model.deleteAlert(target.rule, session: target.session) } }
+                    deleting = nil
+                }
+                Button("Cancel", role: .cancel) { deleting = nil }
+            } message: {
+                if let rule = deleting?.rule {
+                    Text("\(rule.label.isEmpty ? rule.symbol : rule.label) · \(rule.symbol) · \(rule.condition) · \(number(rule.threshold))\n\n\(nativeText("This removes the shared alert from the Mac and every connected device."))")
+                }
+            }
     }
 }
 private struct AlertEditor: View {

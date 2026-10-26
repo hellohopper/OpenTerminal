@@ -17,6 +17,9 @@ import OpenTerminalCore
     private func populate(_ state: AlertEditorState) {
         state.draft = AlertDraft(symbol: " aapl ", threshold: " 200.5 ", label: " Price target ", condition: "PRICE_ABOVE")
     }
+    private func rule(id: Int = 1, armed: Int = 1) throws -> AlertRule {
+        try JSONDecoder().decode(AlertRule.self, from: Data("{\"id\":\(id),\"symbol\":\"AAPL\",\"condition\":\"PRICE_ABOVE\",\"threshold\":200,\"label\":\"Target\",\"armed\":\(armed)}".utf8))
+    }
     private func eventually(_ predicate: () -> Bool) async throws {
         for _ in 0..<200 { if predicate() { return }; try await Task.sleep(for: .milliseconds(5)) }
         #expect(predicate(), "Expected alert operation did not start")
@@ -178,6 +181,148 @@ import OpenTerminalCore
         let state = model.alertEditor; populate(state); state.error = "Old error"
         state.discard()
         #expect(!state.hasDraft && state.error == nil && state.message == nil && requests.all.isEmpty)
+    }
+
+    @Test(arguments: [false, true], [0, 1]) func pendingRuleActionBlocksDuplicateAndCompetingWrites(deleting: Bool, originalArmed: Int) async throws {
+        let (model, requests) = try await fixture(); defer { AlertProtocol.handler = nil }
+        let row = try rule(armed: originalArmed), write = AlertGate(), list = AlertGate(); model.alerts = [row]
+        let session = model.sessionID
+        AlertProtocol.handler = { request in
+            requests.append(request.request)
+            if request.request.httpMethod == "GET" { list.hold(request) } else { write.hold(request) }
+        }
+        let action = Task {
+            if deleting { await model.deleteAlert(row, session: session) }
+            else { await model.setArmed(row, session: session) }
+        }
+        try await eventually { write.waiting }
+        #expect(model.pendingAlertActions == [row.id] && model.alerts == [row])
+        await model.setArmed(row, session: session); await model.deleteAlert(row, session: session)
+        #expect(requests.all.count == 1)
+        #expect(requests.all.first?.httpMethod == (deleting ? "DELETE" : "PUT"))
+        if !deleting {
+            #expect(AlertProtocol.body(try #require(requests.all.first))?["armed"] as? Bool == (originalArmed == 0))
+        }
+        write.release(204, ""); await action.value
+        #expect(model.pendingAlertActions.isEmpty && model.alertActionErrors.isEmpty)
+        #expect(deleting ? model.alerts.isEmpty : model.alerts == [row.settingArmed(originalArmed == 0)])
+        try await eventually { list.waiting }
+        #expect(requests.all.allSatisfy { ["/api/alerts", "/api/alerts/1"].contains($0.url?.path ?? "") })
+        list.release(200, deleting ? #"{"alerts":[]}"# : "{\"alerts\":[{\"id\":1,\"symbol\":\"AAPL\",\"condition\":\"PRICE_ABOVE\",\"threshold\":200,\"label\":\"Target\",\"armed\":\(originalArmed == 0 ? 1 : 0)}]}")
+        try await eventually { model.sectionUpdated[.alerts] != nil }
+    }
+
+    @Test(arguments: [false, true]) func failedRuleActionKeepsTheRowAndAllowsRetry(deleting: Bool) async throws {
+        let (model, requests) = try await fixture(); defer { AlertProtocol.handler = nil }
+        let row = try rule(); model.alerts = [row]; let session = model.sessionID
+        AlertProtocol.handler = { request in requests.append(request.request); request.respond(409, #"{"error":"Review this rule"}"#) }
+        if deleting { await model.deleteAlert(row, session: session) } else { await model.setArmed(row, session: session) }
+        #expect(model.alerts == [row] && model.pendingAlertActions.isEmpty && model.alertActionErrors[row.id] != nil)
+        #expect(model.signedIn && model.error == nil && !model.reconnecting && requests.all.count == 1)
+        AlertProtocol.handler = { request in requests.append(request.request); request.fixture() }
+        if deleting { await model.deleteAlert(row, session: session) } else { await model.setArmed(row, session: session) }
+        #expect(model.alertActionErrors.isEmpty && model.pendingAlertActions.isEmpty)
+        try await eventually { model.sectionUpdated[.alerts] != nil }
+    }
+
+    @Test(arguments: [false, true], [200, 401]) func snapshotsStartedBeforeAWriteCannotRestoreOldState(deleting: Bool, oldStatus: Int) async throws {
+        let (model, requests) = try await fixture(); defer { AlertProtocol.handler = nil }
+        let row = try rule(), old = AlertGate(), latest = AlertGate(); model.alerts = [row]
+        AlertProtocol.handler = { request in
+            requests.append(request.request)
+            if request.request.httpMethod == "GET" {
+                if requests.all.filter({ $0.httpMethod == "GET" }).count == 1 { old.hold(request) } else { latest.hold(request) }
+            } else { request.respond(204, "") }
+        }
+        let refresh = Task { await model.refreshAlerts() }; try await eventually { old.waiting }
+        if deleting { await model.deleteAlert(row, session: model.sessionID) } else { await model.setArmed(row, session: model.sessionID) }
+        try await eventually { latest.waiting }
+        old.release(oldStatus, #"{"alerts":[{"id":1,"symbol":"AAPL","condition":"PRICE_ABOVE","threshold":200,"label":"Target","armed":1}]}"#)
+        await refresh.value
+        #expect(model.signedIn && model.error == nil && model.sectionErrors[.alerts] == nil)
+        #expect(deleting ? model.alerts.isEmpty : model.alerts == [row.settingArmed(false)])
+        #expect(model.loadingSections.contains(.alerts))
+        latest.release(200, #"{"alerts":[]}"#); try await eventually { !model.loadingSections.contains(.alerts) }
+    }
+
+    @Test(arguments: [false, true]) func listRefreshFailureDoesNotUndoAnAcknowledgedAction(deleting: Bool) async throws {
+        let (model, requests) = try await fixture(); defer { AlertProtocol.handler = nil }
+        let row = try rule(); model.alerts = [row]
+        AlertProtocol.handler = { request in
+            requests.append(request.request)
+            request.respond(request.request.httpMethod == "GET" ? 503 : 204, #"{"error":"List unavailable"}"#)
+        }
+        if deleting { await model.deleteAlert(row, session: model.sessionID) } else { await model.setArmed(row, session: model.sessionID) }
+        try await eventually { model.sectionErrors[.alerts] != nil }
+        #expect(model.pendingAlertActions.isEmpty && model.alertActionErrors.isEmpty)
+        #expect(deleting ? model.alerts.isEmpty : model.alerts == [row.settingArmed(false)])
+    }
+
+    @Test(arguments: [false, true], [204, 401]) func oldRuleActionCannotChangeANewerSessionOrItsPendingAction(deleting: Bool, status: Int) async throws {
+        let (model, requests) = try await fixture(); defer { AlertProtocol.handler = nil }
+        let row = try rule(), old = AlertGate(), logout = AlertGate(), latest = AlertGate(); model.alerts = [row]
+        let oldSession = model.sessionID
+        AlertProtocol.handler = { request in
+            requests.append(request.request)
+            if request.request.url?.host == "first.example.com" {
+                if request.request.url?.path == "/api/alerts/1" { old.hold(request) }
+                else if request.request.httpMethod == "DELETE" { logout.hold(request) }
+                else { request.fixture() }
+            } else if request.request.url?.path == "/api/alerts/1" { latest.hold(request) }
+            else { request.fixture() }
+        }
+        let oldAction = Task {
+            if deleting { await model.deleteAlert(row, session: oldSession) } else { await model.setArmed(row, session: oldSession) }
+        }
+        try await eventually { old.waiting }
+        let signOut = Task { await model.signOut() }; try await eventually { logout.waiting }
+        #expect(model.pendingAlertActions.isEmpty && model.alertActionErrors.isEmpty)
+        model.serverText = "https://second.example.com"; await model.restoreSession(force: true); model.alerts = [row]
+        let session = model.sessionID
+        // A confirmation captured on the previous server must not operate on an equal ID here.
+        await model.deleteAlert(row, session: oldSession); await model.setArmed(row, session: oldSession)
+        #expect(!latest.waiting)
+        let action = Task { await model.setArmed(row, session: session) }; try await eventually { latest.waiting }
+        old.release(status, ""); await oldAction.value
+        #expect(model.signedIn && model.server?.origin.host == "second.example.com" && model.error == nil)
+        #expect(model.pendingAlertActions == [row.id] && model.alerts == [row] && model.alertActionErrors.isEmpty)
+        logout.releaseFixture(); await signOut.value
+        latest.release(204, ""); await action.value
+        #expect(model.pendingAlertActions.isEmpty)
+        try await eventually { model.sectionUpdated[.alerts] != nil }
+    }
+
+    @Test(arguments: [false, true]) func currentRuleAuthorizationFailureClearsActionsAndRequiresSignIn(deleting: Bool) async throws {
+        let (model, requests) = try await fixture(); defer { AlertProtocol.handler = nil }
+        let row = try rule(); model.alerts = [row]
+        AlertProtocol.handler = { request in
+            requests.append(request.request)
+            if request.request.url?.path == "/api/alerts/1" { request.respond(401, "") } else { request.fixture() }
+        }
+        if deleting { await model.deleteAlert(row, session: model.sessionID) } else { await model.setArmed(row, session: model.sessionID) }
+        #expect(!model.signedIn && model.error != nil && model.alerts.isEmpty)
+        #expect(model.pendingAlertActions.isEmpty && model.alertActionErrors.isEmpty)
+    }
+
+    @Test func changedOrMissingRulesAreNotWrittenFromStaleControls() async throws {
+        let (model, requests) = try await fixture(); defer { AlertProtocol.handler = nil }
+        let old = try rule(), current = old.settingArmed(false); model.alerts = [current]
+        await model.deleteAlert(old, session: model.sessionID); await model.setArmed(old, session: model.sessionID)
+        #expect(model.alerts == [current] && model.alertActionErrors[old.id] != nil && requests.all.isEmpty)
+        model.alerts = []
+        await model.deleteAlert(current, session: model.sessionID)
+        #expect(requests.all.isEmpty && model.pendingAlertActions.isEmpty)
+    }
+
+    @Test func cancelingAPendingRuleWriteClearsProgressWithoutAnErrorOrRetry() async throws {
+        let (model, requests) = try await fixture(); defer { AlertProtocol.handler = nil }
+        let row = try rule(), gate = AlertGate(); model.alerts = [row]
+        AlertProtocol.handler = { request in requests.append(request.request); gate.hold(request) }
+        let action = Task { await model.deleteAlert(row, session: model.sessionID) }; try await eventually { gate.waiting }
+        action.cancel(); await action.value
+        #expect(model.alerts == [row] && model.pendingAlertActions.isEmpty && model.alertActionErrors.isEmpty)
+        #expect(requests.all.count == 1)
+        gate.release(204, "")
     }
 }
 

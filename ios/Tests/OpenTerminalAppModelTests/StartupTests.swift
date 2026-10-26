@@ -83,7 +83,8 @@ import OpenTerminalCore
             if request.request.httpMethod == "PUT" { request.respond(200, #"{"id":1}"#) }
             else { request.respondFixture() }
         }
-        await model.setArmed(rule)
+        await model.setArmed(rule, session: model.sessionID)
+        await eventually { model.sectionUpdated[.alerts] != nil }
         #expect(model.sectionErrors.isEmpty)
     }
 
