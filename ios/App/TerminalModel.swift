@@ -9,7 +9,13 @@ import UserNotifications
 enum TerminalTab: String, CaseIterable { case today, watchlist, holdings, alerts }
 
 @MainActor final class TerminalModel: ObservableObject {
-    @Published var serverText: String
+    @Published var serverText: String {
+        didSet {
+            // Whitespace and a trailing slash do not change the canonical origin.
+            guard (try? ServerConnection(serverText)) != (try? ServerConnection(oldValue)) else { return }
+            invalidateAuthentication(); restoreAttempted = false; error = nil
+        }
+    }
     @Published var signedIn = false
     @Published var busy = false
     @Published var restoring = true
@@ -69,6 +75,8 @@ enum TerminalTab: String, CaseIterable { case today, watchlist, holdings, alerts
     private var credential: MobileCredential?
     private var renewedAt = Date.now
     private var restoreAttempted = false
+    private var authenticationID: UUID?
+    private var authenticationServer: String?
     private var enableDeliveryAfterRegistration = false
     var retryDelay: Double = 2
     var valuation: HoldingValuation? { holdingsReady ? HoldingValuation(positions: positions, quotes: holdingQuotes) : nil }
@@ -110,37 +118,65 @@ enum TerminalTab: String, CaseIterable { case today, watchlist, holdings, alerts
         if rememberDevice { try credentials.save(JSONEncoder().encode(value), server: connection.origin.absoluteString) }
         else { credentials.remove(connection.origin.absoluteString) }
     }
+    private func invalidateAuthentication() {
+        authenticationID = nil; authenticationServer = nil; busy = false; restoring = false
+    }
+    private func finishAuthentication(_ operation: UUID) {
+        if authenticationID == operation { invalidateAuthentication() }
+    }
+    private func acceptsAuthentication(_ operation: UUID) -> Bool {
+        authenticationID == operation && !Task.isCancelled
+    }
     func signIn(password: String) async {
-        guard !busy else { return }; busy = true; error = nil; defer { busy = false }
+        guard !busy, !signedIn else { return }
+        let operation = UUID(); authenticationID = operation; authenticationServer = nil
+        busy = true; restoring = false; error = nil
+        defer { finishAuthentication(operation) }
         do {
             let connection = try ServerConnection(serverText), client = makeClient(connection, nil)
+            authenticationServer = connection.origin.absoluteString
             let value = try await client.pair(password: password, name: deviceName)
+            // A late pairing created a new token; try to revoke it without touching a newer session.
+            guard acceptsAuthentication(operation) else { await client.signOut(); return }
             do { try persist(value, at: connection) } catch { await client.signOut(); throw error }
+            guard acceptsAuthentication(operation) else { return }
             credential = value; renewedAt = .now; generation = UUID(); api = client; server = connection
             restoreViewChoices(at: connection); signedIn = true
             defaults.set(connection.origin.absoluteString, forKey: "server")
-        } catch { self.error = error.localizedDescription }
+        } catch { if acceptsAuthentication(operation), !(error is CancellationError) { self.error = error.localizedDescription } }
     }
     func restoreSession(force: Bool = false) async {
-        guard force || !restoreAttempted else { return }; restoreAttempted = true; restoring = true; defer { restoring = false }
+        guard !signedIn, !busy, authenticationID == nil, force || !restoreAttempted else { return }
+        restoreAttempted = true
+        let operation = UUID(); authenticationID = operation; restoring = true; error = nil
+        defer { finishAuthentication(operation) }
+        var connection: ServerConnection?
         do {
-            let connection = try ServerConnection(serverText)
-            guard let data = try credentials.load(connection.origin.absoluteString) else { if force {error=nativeText("No saved device authorization for this server. Sign in once to pair it.")}; return }
+            let target = try ServerConnection(serverText); connection = target
+            guard let data = try credentials.load(target.origin.absoluteString) else {
+                if force { error = nativeText("No saved device authorization for this server. Sign in once to pair it.") }; return
+            }
             let value = try JSONDecoder().decode(MobileCredential.self, from: data)
-            server = connection
-            let client = makeClient(connection, value), fresh = try await client.renewDevice()
-            try persist(fresh, at: connection)
-            api = client; credential = fresh; renewedAt = .now; generation = UUID()
-            restoreViewChoices(at: connection); signedIn = true
+            authenticationServer = target.origin.absoluteString
+            let client = makeClient(target, value), fresh = try await client.renewDevice()
+            // Restoring reuses an existing token: an obsolete response must neither save nor revoke it.
+            guard acceptsAuthentication(operation) else { return }
+            try persist(fresh, at: target)
+            api = client; server = target; credential = fresh; renewedAt = .now; generation = UUID()
+            restoreViewChoices(at: target); signedIn = true
+            defaults.set(target.origin.absoluteString, forKey: "server")
         } catch ConnectionError.invalidServer { }
         catch {
-            if error as? ConnectionError == .unauthorized, let server { credentials.remove(server.origin.absoluteString) }
+            guard acceptsAuthentication(operation), !(error is CancellationError) else { return }
+            if error as? ConnectionError == .unauthorized, let connection { credentials.remove(connection.origin.absoluteString) }
             self.error = error.localizedDescription
         }
     }
     func signOut() async {
-        let old = api
+        let old = api, pendingServer = authenticationServer
+        invalidateAuthentication(); restoreAttempted = true
         if let server { credentials.remove(server.origin.absoluteString) }
+        if let pendingServer { credentials.remove(pendingServer) }
         generation = UUID(); credential = nil; api = nil; server = nil; signedIn = false
         researchDrafts = [:]; researchNoteStates = [:]
         selectionRefresh?.cancel(); selectionRefresh = nil; sectionRequests = [:]
