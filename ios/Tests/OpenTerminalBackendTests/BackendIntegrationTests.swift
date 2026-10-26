@@ -96,6 +96,18 @@ struct BackendIntegrationTests {
         await phone.signOut(); await browser.signOut()
     }
 
+    @Test func nativePriceAlertCreationAndPauseMatchTheBackendContract() async throws {
+        let (phone, _) = try await paired("Alert contract phone")
+        let created: Created = try await phone.post("/api/alerts", body: AlertInput(symbol: "AAPL", condition: "PRICE_ABOVE", threshold: 1000, label: "原生提醒"))
+        let before: AlertList = try await phone.get("/api/alerts")
+        let rule = try #require(before.alerts.first { $0.id == created.id })
+        #expect(rule.symbol == "AAPL" && rule.threshold == 1000 && rule.label == "原生提醒" && rule.armed == 1)
+        try await phone.setAlertArmed(id: created.id, armed: false)
+        let after: AlertList = try await phone.get("/api/alerts")
+        #expect(after.alerts.first { $0.id == created.id }?.armed == 0)
+        await phone.signOut()
+    }
+
     @Test func researchNotesSearchOlderPagesAndKeepLiteralQueryCharacters() async throws {
         let (phone, _) = try await paired("Research phone")
         let (server, password) = try connection(), browser = TerminalAPI(server: server)

@@ -53,6 +53,7 @@ enum TerminalTab: String, CaseIterable { case today, watchlist, holdings, alerts
     @Published var holdingQuotes: [Quote] = []
     @Published var holdingsReady = false
     @Published var alerts: [AlertRule] = []
+    @Published private(set) var alertEditor = AlertEditorState()
     @Published var briefing: Briefing?
     @Published var workspaces: [SharedWorkspace] = []
     @Published var watchlist: [String] = []
@@ -65,6 +66,7 @@ enum TerminalTab: String, CaseIterable { case today, watchlist, holdings, alerts
     private var refreshID: UUID?
     private var selectionRefresh: Task<Void, Never>?
     private var portfolioRefresh: Task<Void, Never>?
+    private var alertRefresh: Task<Void, Never>?
     private var sectionRequests: [DataSection: UUID] = [:]
     private let defaults: UserDefaults
     private let credentials: any CredentialStorage
@@ -197,6 +199,7 @@ enum TerminalTab: String, CaseIterable { case today, watchlist, holdings, alerts
         if let pendingServer { credentials.remove(pendingServer) }
         generation = UUID(); credential = nil; api = nil; server = nil; signedIn = false
         researchDrafts = [:]; researchNoteStates = [:]; pendingResearch = nil; researchSymbol = nil
+        alertEditor.clear(); alertEditor = AlertEditorState(); alertRefresh?.cancel(); alertRefresh = nil
         selectionRefresh?.cancel(); selectionRefresh = nil; sectionRequests = [:]
         portfolioRefresh?.cancel(); portfolioRefresh = nil; selectedTab = .today; preferredChartRange = "6M"
         quotes = []; portfolios = []; positions = []; holdingQuotes = []; alerts = []; briefing = nil; workspaces = []; portfolioID = nil; holdingsReady = false
@@ -409,9 +412,43 @@ enum TerminalTab: String, CaseIterable { case today, watchlist, holdings, alerts
         do { let result: SyncSnapshot? = try await api.get("/api/sync"); if token == generation { workspaces = result?.payload.workspace.workspaces ?? [] } }
         catch { if token == generation { await report(error) } }
     }
+    func saveAlert(_ state: AlertEditorState) async {
+        guard signedIn, let api, state === alertEditor, !state.saving, !Task.isCancelled else { return }
+        let submitted = state.draft, revision = state.revision, session = generation
+        state.message = nil; state.error = nil
+        guard let symbol = normalizedSymbol(submitted.symbol),
+              let threshold = Double(submitted.threshold.trimmingCharacters(in: .whitespacesAndNewlines)),
+              threshold.isFinite, threshold > 0, threshold <= 1e15,
+              ["PRICE_ABOVE", "PRICE_BELOW"].contains(submitted.condition) else {
+            state.error = nativeText("Enter a valid ticker and positive price."); return
+        }
+        let label = submitted.label.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard label.utf16.count <= 120 else { state.error = nativeText("Use a label of up to 120 characters."); return }
+        state.saving = true
+        defer { if session == generation, state === alertEditor { state.saving = false } }
+        do {
+            let _: Acknowledgement = try await api.post("/api/alerts", body: AlertInput(symbol: symbol, condition: submitted.condition, threshold: threshold, label: label))
+            guard session == generation, state === alertEditor else { return }
+            // Once acknowledged, record the write even if the presenting view was canceled.
+            if state.revision == revision {
+                state.draft = AlertDraft(); state.message = nativeText("Alert saved.")
+            } else { state.message = nativeText("Alert saved. Newer edits are kept as a draft.") }
+            state.savedRevision += 1
+            alertRefresh?.cancel()
+            alertRefresh = Task {
+                guard session == generation, !Task.isCancelled else { return }
+                await refreshAlerts()
+            }
+        } catch {
+            guard session == generation, state === alertEditor, !(error is CancellationError) else { return }
+            if error as? ConnectionError == .unauthorized { await report(error) }
+            else { state.error = error.localizedDescription }
+        }
+    }
+
     func setArmed(_ rule: AlertRule) async {
         guard let api else { return }; let token = generation
-        do { try await api.setAlertArmed(id: rule.id, armed: rule.armed == 0); if token == generation { await refresh() } }
+        do { try await api.setAlertArmed(id: rule.id, armed: rule.armed == 0); if token == generation { await refreshAlerts() } }
         catch { if token == generation { await report(error) } }
     }
     func loadDevices() async { guard let api else { return }; let token = generation; do { let rows:[MobileDeviceInfo] = try await api.get("/api/mobile/devices"); if token == generation { devices = rows } } catch { if token == generation { await report(error) } } }

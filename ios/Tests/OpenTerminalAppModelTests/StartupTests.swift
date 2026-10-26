@@ -74,6 +74,19 @@ import OpenTerminalCore
         #expect(!model.signedIn); #expect(model.alerts.isEmpty); #expect(model.sharedLists.isEmpty)
         #expect(model.loadingSections.isEmpty); #expect(model.sectionUpdated.isEmpty); #expect(vault.data == nil)
     }
+    @Test func togglingAlertRefreshesOnlyAlertRules() async throws {
+        ModelProtocol.handler = { $0.respondFixture() }; defer { ModelProtocol.handler = nil }
+        let (model, _) = try fixture(); await model.restoreSession(); await model.refresh()
+        let rule = try #require(model.alerts.first)
+        ModelProtocol.handler = { request in
+            #expect(["/api/alerts", "/api/alerts/1"].contains(request.request.url?.path ?? ""), "Alert actions must not wait for watchlists, portfolios or market providers")
+            if request.request.httpMethod == "PUT" { request.respond(200, #"{"id":1}"#) }
+            else { request.respondFixture() }
+        }
+        await model.setArmed(rule)
+        #expect(model.sectionErrors.isEmpty)
+    }
+
     @Test func signOutClearsTheResearchSheetBeforeAnotherLogin() async throws {
         ModelProtocol.handler = { $0.respondFixture() }; defer { ModelProtocol.handler = nil }
         let (model, _) = try fixture(); await model.restoreSession()
