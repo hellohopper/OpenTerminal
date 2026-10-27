@@ -99,8 +99,8 @@ public actor TerminalAPI {
     public func put<B: Encodable & Sendable, T: Decodable & Sendable>(_ path: String, body: B, as: T.Type = T.self) async throws -> T {
         try await send(path, method: "PUT", body: JSONEncoder().encode(body))
     }
-    public func setAlertArmed(id: Int, armed: Bool) async throws {
-        _ = try await requestData("/api/alerts/\(id)", method: "PUT", body: JSONEncoder().encode(["armed": armed]))
+    public func setAlertArmed(id: Int, armed: Bool, query: [String: String] = [:]) async throws {
+        _ = try await requestData("/api/alerts/\(id)", query: query, method: "PUT", body: JSONEncoder().encode(["armed": armed]))
     }
     private func send<T: Decodable & Sendable>(_ path: String, query: [String: String] = [:], method: String = "GET", body: Data? = nil) async throws -> T {
         let data = try await requestData(path, query: query, method: method, body: body)

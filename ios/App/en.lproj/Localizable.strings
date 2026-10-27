@@ -188,3 +188,6 @@
 "This note changed. Refresh and review it before deleting." = "This note changed. Refresh and review it before deleting.";
 "Update the Mac backend before deleting research notes." = "Update the Mac backend before deleting research notes.";
 "This entry changed on another device. Refresh research notes and review it before deleting." = "This entry changed on another device. Refresh research notes and review it before deleting.";
+"Refresh alerts" = "Refresh alerts";
+"Update the Mac backend before changing saved alerts." = "Update the Mac backend before changing saved alerts.";
+"This alert changed on another device or was restored. Refresh alerts and review it before trying again." = "This alert changed on another device or was restored. Refresh alerts and review it before trying again.";

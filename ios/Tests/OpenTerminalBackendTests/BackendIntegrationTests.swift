@@ -112,6 +112,57 @@ struct BackendIntegrationTests {
         await phone.signOut()
     }
 
+    @Test func conditionalAlertActionsProtectRulesChangedOnAnotherDevice() async throws {
+        let (phone, _) = try await paired("Versioned alert phone")
+        let (server, password) = try connection(), browser = TerminalAPI(server: server)
+        try await browser.signIn(password: password)
+        let created: Created = try await phone.post("/api/alerts", body: AlertInput(symbol: "AAPL", condition: "PRICE_ABOVE", threshold: 1000, label: "Original"))
+        let before: AlertList = try await phone.get("/api/alerts")
+        let original = try #require(before.alerts.first { $0.id == created.id })
+        let oldVersion = try #require(original.mutationQuery)
+        let _: Acknowledgement = try await browser.put("/api/alerts/\(created.id)", body: AlertEdit())
+        do {
+            try await phone.setAlertArmed(id: created.id, armed: false, query: oldVersion)
+            Issue.record("An old phone view paused the browser's updated alert")
+        } catch { status(error, 409) }
+        do {
+            try await phone.delete("/api/alerts/\(created.id)", query: oldVersion)
+            Issue.record("An old phone confirmation deleted the browser's updated alert")
+        } catch { status(error, 409) }
+        let changed: AlertList = try await phone.get("/api/alerts")
+        let current = try #require(changed.alerts.first { $0.id == created.id })
+        #expect(current.threshold == 1200 && current.label == "Web changed" && current.armed == 1)
+        let version = try #require(current.mutationQuery)
+        var restored = version; restored["generation"] = "an-older-backup-generation"
+        do {
+            try await phone.setAlertArmed(id: created.id, armed: false, query: restored)
+            Issue.record("An old alert generation changed the current alert")
+        } catch { status(error, 409) }
+        do {
+            try await phone.delete("/api/alerts/\(created.id)", query: restored)
+            Issue.record("An old alert generation deleted the current alert")
+        } catch { status(error, 409) }
+        do {
+            try await phone.delete("/api/alerts/\(created.id)", query: ["revision": "1"])
+            Issue.record("A partial alert version was accepted")
+        } catch { status(error, 400) }
+        try await phone.setAlertArmed(id: created.id, armed: false, query: version)
+        let pausedList: AlertList = try await phone.get("/api/alerts")
+        let paused = try #require(pausedList.alerts.first { $0.id == created.id })
+        #expect(paused == current.settingArmed(false))
+        let pausedVersion = try #require(paused.mutationQuery)
+        try await phone.setAlertArmed(id: created.id, armed: true, query: pausedVersion)
+        let rearmedList: AlertList = try await phone.get("/api/alerts")
+        let rearmed = try #require(rearmedList.alerts.first { $0.id == created.id })
+        #expect(rearmed == paused.settingArmed(true))
+        let reviewed = try #require(rearmed.mutationQuery)
+        try await phone.delete("/api/alerts/\(created.id)", query: reviewed)
+        try await phone.delete("/api/alerts/\(created.id)", query: reviewed)
+        let deleted: AlertList = try await browser.get("/api/alerts")
+        #expect(!deleted.alerts.contains { $0.id == created.id })
+        await phone.signOut(); await browser.signOut()
+    }
+
     @Test func conditionalNoteDeletionProtectsEditsFromAnotherDevice() async throws {
         let (phone, _) = try await paired("Conditional note deletion phone")
         let (server, password) = try connection(), browser = TerminalAPI(server: server)
@@ -183,3 +234,4 @@ private struct NoteUpdate: Encodable, Sendable {
     let symbol = "MSFT", title = "Updated note", body = "New evidence from another device", kind = "research"
     let version: String
 }
+private struct AlertEdit: Encodable, Sendable { let threshold: Double = 1200; let label = "Web changed" }

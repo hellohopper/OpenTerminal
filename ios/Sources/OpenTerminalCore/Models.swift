@@ -44,8 +44,15 @@ public struct HoldingValuation: Sendable {
 public struct AlertRule: Decodable, Identifiable, Equatable, Sendable {
     public let id: Int; public let symbol: String; public let condition: String
     public let threshold: Double; public let label: String; public let armed: Int
+    public let revision: Int?; public let generation: String?
+    public var mutationQuery: [String: String]? {
+        guard let revision, revision >= 0, revision < 9_007_199_254_740_991,
+              let generation, !generation.isEmpty, generation.utf16.count <= 100 else { return nil }
+        return ["revision": String(revision), "generation": generation]
+    }
     public func settingArmed(_ value: Bool) -> Self {
-        Self(id: id, symbol: symbol, condition: condition, threshold: threshold, label: label, armed: value ? 1 : 0)
+        Self(id: id, symbol: symbol, condition: condition, threshold: threshold, label: label, armed: value ? 1 : 0,
+             revision: revision.flatMap { $0 < 9_007_199_254_740_991 ? $0 + 1 : nil }, generation: generation)
     }
 }
 public struct AlertList: Decodable, Sendable { public let alerts: [AlertRule] }

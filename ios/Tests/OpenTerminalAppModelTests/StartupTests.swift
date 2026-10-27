@@ -519,7 +519,7 @@ private final class ModelProtocol: URLProtocol, @unchecked Sendable {
         case "/api/mobile/session": respond(200, #"{"id":"phone","name":"Phone","expiresAt":"2030-01-01T00:00:00Z"}"#)
         case "/api/watchlists": respond(200, #"[{"id":1,"version":1,"payload":{"name":"Main","symbols":[]}}]"#)
         case "/api/portfolios": respond(200, "[]")
-        case "/api/alerts": respond(200, #"{"alerts":[{"id":1,"symbol":"AAPL","condition":"PRICE_ABOVE","threshold":100,"label":"Test","armed":1}]}"#)
+        case "/api/alerts": respond(200, #"{"alerts":[{"id":1,"symbol":"AAPL","condition":"PRICE_ABOVE","threshold":100,"label":"Test","armed":1,"revision":1,"generation":"g1"}]}"#)
         default: respond(404, #"{"error":"Unexpected fixture path"}"#)
         }
     }
