@@ -191,3 +191,4 @@
 "Refresh alerts" = "刷新提醒";
 "Update the Mac backend before changing saved alerts." = "请先更新 Mac 后端，再修改已保存的提醒。";
 "This alert changed on another device or was restored. Refresh alerts and review it before trying again." = "这条提醒已在另一台设备上更改，或已从备份恢复。请刷新提醒并检查后重试。";
+"Enter a price without thousands separators, for example %@." = "请输入不含千位分隔符的价格，例如 %@。";

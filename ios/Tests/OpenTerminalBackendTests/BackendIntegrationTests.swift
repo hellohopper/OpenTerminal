@@ -112,6 +112,20 @@ struct BackendIntegrationTests {
         await phone.signOut()
     }
 
+    @Test func localizedThresholdsReachTheBackendAsNumericPrices() async throws {
+        let (phone, _) = try await paired("Localized alert phone")
+        for (identifier, text) in [("en_US", "1000.5"), ("de_DE", "1000,5"), ("ar_EG", "١٠٠٠٫٥")] {
+            let threshold = try #require(PriceInput.parse(text, locale: Locale(identifier: identifier)))
+            let created: Created = try await phone.post("/api/alerts", body: AlertInput(symbol: "AAPL", condition: "PRICE_ABOVE", threshold: threshold, label: "Localized \(identifier)"))
+            let list: AlertList = try await phone.get("/api/alerts")
+            let row = try #require(list.alerts.first { $0.id == created.id })
+            #expect(row.threshold == 1000.5 && row.armed == 1)
+            let version = try #require(row.mutationQuery)
+            try await phone.delete("/api/alerts/\(created.id)", query: version)
+        }
+        await phone.signOut()
+    }
+
     @Test func conditionalAlertActionsProtectRulesChangedOnAnotherDevice() async throws {
         let (phone, _) = try await paired("Versioned alert phone")
         let (server, password) = try connection(), browser = TerminalAPI(server: server)
