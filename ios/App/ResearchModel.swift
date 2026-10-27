@@ -6,8 +6,8 @@ import OpenTerminalCore
 enum ResearchSection: String, CaseIterable { case quote = "Quote", chart = "Price chart", news = "News", notes = "Research notes" }
 struct ResearchDraft: Equatable { var title = ""; var body = ""; var isEmpty: Bool { title.isEmpty && body.isEmpty } }
 @MainActor final class ResearchNoteState: ObservableObject {
-    @Published var title: String
-    @Published var body: String
+    @Published var title: String { didSet { if title != oldValue { edited() } } }
+    @Published var body: String { didSet { if body != oldValue { edited() } } }
     @Published var saving = false
     @Published var message: String?
     @Published var error: String?
@@ -15,7 +15,9 @@ struct ResearchDraft: Equatable { var title = ""; var body = ""; var isEmpty: Bo
     @Published var deleting: Set<Int> = []
     @Published var deleteErrors: [Int: String] = [:]
     @Published var deletedIDs: Set<Int> = []
+    private(set) var draftRevision = 0
     init(_ draft: ResearchDraft) { title = draft.title; body = draft.body }
+    private func edited() { draftRevision += 1; message = nil; error = nil }
 }
 
 @MainActor final class ResearchModel: ObservableObject {
@@ -48,6 +50,8 @@ struct ResearchDraft: Equatable { var title = ""; var body = ""; var isEmpty: Bo
     private let noteState: ResearchNoteState
     private var noteUpdates: AnyCancellable?
     private var noteDeletions: AnyCancellable?
+    private var noteSaves: AnyCancellable?
+    private var notesRefresh: Task<Void, Never>?
     private var requests: [ResearchSection: UUID] = [:]
     var hasDraft: Bool { !draft.isEmpty }
     private var draft: ResearchDraft { ResearchDraft(title: title, body: bodyText) }
@@ -60,10 +64,11 @@ struct ResearchDraft: Equatable { var title = ""; var body = ""; var isEmpty: Bo
         range = terminal.preferredChartRange
         noteUpdates = state.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
         noteDeletions = state.$deletedIDs.sink { [weak self] ids in self?.notes.removeAll { ids.contains($0.id) } }
+        noteSaves = state.$savedRevision.dropFirst().sink { [weak self] _ in self?.scheduleNotesRefresh() }
     }
     private var current: Bool { terminal.sessionID == session && terminal.signedIn }
     private func keepDraft() { if current { terminal.researchDrafts[draftKey] = draft.isEmpty ? nil : draft } }
-    func discardDraft() { title = ""; bodyText = ""; message = nil; saveError = nil }
+    func discardDraft() { guard current, !saving else { return }; title = ""; bodyText = ""; message = nil; saveError = nil }
     func refreshOverview() async {
         async let quote: Void = load(.quote)
         async let news: Void = load(.news)
@@ -173,21 +178,32 @@ struct ResearchDraft: Equatable { var title = ""; var body = ""; var isEmpty: Bo
             else { noteState.deleteErrors[note.id] = error.localizedDescription }
         }
     }
+    private func scheduleNotesRefresh() {
+        guard current else { return }
+        // Invalidate pre-save pages immediately, before the replacement task starts.
+        requests[.notes] = UUID(); loading.remove(.notes); loadingMoreNotes = false; updated[.notes] = nil; notePageError = nil
+        notesRefresh?.cancel()
+        notesRefresh = Task { [weak self] in
+            guard !Task.isCancelled else { return }
+            await self?.load(.notes)
+        }
+    }
     func saveNote() async {
-        guard current, let api = terminal.api, !saving else { return }
-        let submitted = draft
-        guard !submitted.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, submitted.title.utf16.count <= 120, submitted.body.utf16.count <= 20000 else {
+        guard current, let api = terminal.api, !saving, !Task.isCancelled else { return }
+        let submitted = draft, revision = noteState.draftRevision
+        let submittedTitle = submitted.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !submittedTitle.isEmpty, submittedTitle.utf16.count <= 120, submitted.body.utf16.count <= 20000 else {
             saveError = nativeText("Use a title up to 120 characters and a note up to 20,000 characters."); return
         }
         saving = true; message = nil; saveError = nil; defer { saving = false }
         do {
-            let _: Acknowledgement = try await api.post("/api/journal", body: NoteInput(symbol: symbol, title: submitted.title.trimmingCharacters(in: .whitespacesAndNewlines), body: submitted.body))
-            guard current, !Task.isCancelled else { return }
-            if draft == submitted && terminal.researchDrafts[draftKey] == submitted {
+            let _: Acknowledgement = try await api.post("/api/journal", body: NoteInput(symbol: symbol, title: submittedTitle, body: submitted.body))
+            // An acknowledged write is complete even if its presenting task was canceled.
+            guard current else { return }
+            if noteState.draftRevision == revision {
                 title = ""; bodyText = ""; message = nativeText("Note saved.")
             } else { message = nativeText("Note saved. Newer edits are kept as a draft.") }
             noteState.savedRevision += 1
-            await load(.notes)
         } catch {
             guard current, !(error is CancellationError) else { return }
             if error as? ConnectionError == .unauthorized { await terminal.report(error) }
