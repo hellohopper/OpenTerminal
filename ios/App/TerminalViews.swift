@@ -248,6 +248,7 @@ private struct AlertsView: View {
 private struct AlertEditor: View {
     @EnvironmentObject private var model: TerminalModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.locale) private var locale
     @ObservedObject var state: AlertEditorState
     @ViewState<Bool> private var leaving = false
     var body: some View {
@@ -256,11 +257,12 @@ private struct AlertEditor: View {
                 TextField("Ticker", text: $state.draft.symbol).terminalInput(ticker: true)
                 Picker("Condition", selection: $state.draft.condition) { Text("Price ≥").tag("PRICE_ABOVE"); Text("Price ≤").tag("PRICE_BELOW") }
                 TextField("Threshold", text: $state.draft.threshold).terminalPriceInput()
+                Text("Enter a price without thousands separators, for example \(PriceInput.example(locale: locale)).").font(.caption).foregroundStyle(.secondary)
                 TextField("Label (optional)", text: $state.draft.label)
                 if let error = state.error { Text(error).foregroundStyle(.red) }
                 if let message = state.message { Text(message).foregroundStyle(.secondary) }
                 if state.hasDraft { Text("Draft kept in memory until sign-out or the app closes.").font(.caption).foregroundStyle(.secondary) }
-                Button(LocalizedStringKey(state.saving ? "Saving…" : "Save alert")) { Task { await model.saveAlert(state) } }.disabled(state.saving)
+                Button(LocalizedStringKey(state.saving ? "Saving…" : "Save alert")) { Task { await model.saveAlert(state, locale: locale) } }.disabled(state.saving)
             }.navigationTitle("New alert")
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { if state.hasDraft || state.saving { leaving = true } else { dismiss() } } } }
                 .interactiveDismissDisabled(state.hasDraft || state.saving)

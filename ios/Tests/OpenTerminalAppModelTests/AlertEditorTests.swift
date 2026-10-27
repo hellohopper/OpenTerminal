@@ -32,7 +32,7 @@ import OpenTerminalCore
             requests.append(request.request)
             if request.request.httpMethod == "GET" { gate.hold(request) } else { request.fixture() }
         }
-        await model.saveAlert(state)
+        await model.saveAlert(state, locale: Locale(identifier: "en_US_POSIX"))
         #expect(!state.saving && !state.hasDraft && state.savedRevision == 1 && state.message == "Alert saved.")
         try await eventually { gate.waiting }
         #expect(requests.all.allSatisfy { $0.url?.path == "/api/alerts" })
@@ -50,11 +50,11 @@ import OpenTerminalCore
             requests.append(request.request)
             if request.request.httpMethod == "POST" { gate.hold(request) } else { request.fixture() }
         }
-        let save = Task { await model.saveAlert(state) }; try await eventually { gate.waiting }
+        let save = Task { await model.saveAlert(state, locale: Locale(identifier: "en_US_POSIX")) }; try await eventually { gate.waiting }
         let reopened = model.alertEditor
         #expect(reopened === state && reopened.saving)
         reopened.discard(); #expect(reopened.hasDraft)
-        await model.saveAlert(reopened)
+        await model.saveAlert(reopened, locale: Locale(identifier: "en_US_POSIX"))
         #expect(requests.all.filter { $0.httpMethod == "POST" }.count == 1)
         gate.releaseFixture(); await save.value
         #expect(!reopened.hasDraft && !reopened.saving && reopened.savedRevision == 1)
@@ -68,7 +68,7 @@ import OpenTerminalCore
             requests.append(request.request)
             if request.request.httpMethod == "POST" { gate.hold(request) } else { request.fixture() }
         }
-        let save = Task { await model.saveAlert(state) }; try await eventually { gate.waiting }
+        let save = Task { await model.saveAlert(state, locale: Locale(identifier: "en_US_POSIX")) }; try await eventually { gate.waiting }
         let reopened = model.alertEditor
         reopened.draft.threshold = "250"
         if returnToOriginal { reopened.draft.threshold = " 200.5 " }
@@ -83,12 +83,12 @@ import OpenTerminalCore
         let (model, requests) = try await fixture(); defer { AlertProtocol.handler = nil }
         let state = model.alertEditor; populate(state); let original = state.draft
         AlertProtocol.handler = { request in requests.append(request.request); request.respond(503, #"{"error":"Retry later"}"#) }
-        await model.saveAlert(state)
+        await model.saveAlert(state, locale: Locale(identifier: "en_US_POSIX"))
         #expect(state.draft == original && state.error != nil && !state.saving && state.savedRevision == 0)
         let reopened = model.alertEditor; reopened.draft.label = "Revised target"
         #expect(reopened.error == nil)
         AlertProtocol.handler = { request in requests.append(request.request); request.fixture() }
-        await model.saveAlert(reopened)
+        await model.saveAlert(reopened, locale: Locale(identifier: "en_US_POSIX"))
         #expect(!reopened.hasDraft && reopened.savedRevision == 1)
         try await eventually { model.sectionUpdated[.alerts] != nil }
     }
@@ -105,12 +105,12 @@ import OpenTerminalCore
             } else if request.request.httpMethod == "POST" { newPost.hold(request) }
             else { request.fixture() }
         }
-        let oldSave = Task { await model.saveAlert(oldState) }; try await eventually { post.waiting }
+        let oldSave = Task { await model.saveAlert(oldState, locale: Locale(identifier: "en_US_POSIX")) }; try await eventually { post.waiting }
         let signOut = Task { await model.signOut() }; try await eventually { logout.waiting }
         #expect(oldState.draft.isEmpty && !oldState.saving)
         model.serverText = "https://second.example.com"; await model.restoreSession(force: true)
         let current = model.alertEditor; populate(current); current.draft.label = "Second server target"
-        let save = Task { await model.saveAlert(current) }; try await eventually { newPost.waiting }
+        let save = Task { await model.saveAlert(current, locale: Locale(identifier: "en_US_POSIX")) }; try await eventually { newPost.waiting }
         post.release(status, #"{"id":1}"#); await oldSave.value
         #expect(model.signedIn && model.server?.origin.host == "second.example.com" && model.error == nil)
         #expect(current.saving && current.draft.label == "Second server target" && current.savedRevision == 0)
@@ -127,7 +127,7 @@ import OpenTerminalCore
         let old = model.alertEditor; populate(old); await model.signOut()
         #expect(old.draft.isEmpty && old !== model.alertEditor)
         model.serverText = "https://second.example.com"; await model.restoreSession(force: true)
-        populate(old); await model.saveAlert(old)
+        populate(old); await model.saveAlert(old, locale: Locale(identifier: "en_US_POSIX"))
         #expect(model.alertEditor.draft.isEmpty && !model.alertEditor.saving)
         #expect(!requests.all.contains { $0.httpMethod == "POST" })
     }
@@ -140,7 +140,7 @@ import OpenTerminalCore
             if request.request.httpMethod == "GET" { request.respond(503, #"{"error":"List temporarily unavailable"}"#) }
             else { request.fixture() }
         }
-        await model.saveAlert(state); try await eventually { model.sectionErrors[.alerts] != nil }
+        await model.saveAlert(state, locale: Locale(identifier: "en_US_POSIX")); try await eventually { model.sectionErrors[.alerts] != nil }
         #expect(!state.hasDraft && !state.saving && state.error == nil && state.savedRevision == 1)
         #expect(state.message == "Alert saved.")
     }
@@ -152,7 +152,7 @@ import OpenTerminalCore
             requests.append(request.request)
             if request.request.httpMethod == "POST" { request.respond(401, #"{"error":"Revoked"}"#) } else { request.fixture() }
         }
-        await model.saveAlert(state)
+        await model.saveAlert(state, locale: Locale(identifier: "en_US_POSIX"))
         #expect(!model.signedIn && model.error != nil && state.draft.isEmpty && !state.saving)
         #expect(state !== model.alertEditor && model.alertEditor.draft.isEmpty)
     }
@@ -160,18 +160,18 @@ import OpenTerminalCore
     @Test(arguments: ["0", "-1", "nan", "inf", "1e16", "not-a-price"]) func invalidPricesNeverReachTheBackend(price: String) async throws {
         let (model, requests) = try await fixture(); defer { AlertProtocol.handler = nil }
         let state = model.alertEditor; populate(state); state.draft.threshold = price
-        await model.saveAlert(state)
+        await model.saveAlert(state, locale: Locale(identifier: "en_US_POSIX"))
         #expect(state.error != nil && !state.saving && state.hasDraft && requests.all.isEmpty)
     }
 
     @Test func invalidTickerConditionAndOverlongUnicodeLabelsAreRejectedWithoutTruncation() async throws {
         let (model, requests) = try await fixture(); defer { AlertProtocol.handler = nil }
         let state = model.alertEditor; populate(state); state.draft.symbol = "<script>"
-        await model.saveAlert(state); #expect(state.error != nil)
+        await model.saveAlert(state, locale: Locale(identifier: "en_US_POSIX")); #expect(state.error != nil)
         populate(state); state.draft.condition = "OTHER"
-        await model.saveAlert(state); #expect(state.error != nil)
+        await model.saveAlert(state, locale: Locale(identifier: "en_US_POSIX")); #expect(state.error != nil)
         populate(state); state.draft.label = String(repeating: "😀", count: 61)
-        await model.saveAlert(state)
+        await model.saveAlert(state, locale: Locale(identifier: "en_US_POSIX"))
         #expect(state.error == "Use a label of up to 120 characters.")
         #expect(state.draft.label == String(repeating: "😀", count: 61) && requests.all.isEmpty)
     }
@@ -181,6 +181,25 @@ import OpenTerminalCore
         let state = model.alertEditor; populate(state); state.error = "Old error"
         state.discard()
         #expect(!state.hasDraft && state.error == nil && state.message == nil && requests.all.isEmpty)
+    }
+
+    @Test(arguments: ["en_US", "zh_CN", "fr_FR", "ar_EG"]) func localizedPricesAreSentAsNumbersAndClearOnlyTheSubmittedDraft(identifier: String) async throws {
+        let (model, requests) = try await fixture(); defer { AlertProtocol.handler = nil }
+        let state = model.alertEditor; populate(state)
+        state.draft.threshold = identifier == "fr_FR" ? "200,5" : identifier == "ar_EG" ? "٢٠٠٫٥" : "200.5"
+        await model.saveAlert(state, locale: Locale(identifier: identifier))
+        #expect(!state.hasDraft && !state.saving && state.error == nil && state.savedRevision == 1)
+        let post = try #require(requests.all.first { $0.httpMethod == "POST" })
+        let body = try #require(AlertProtocol.body(post))
+        #expect(body["threshold"] as? Double == 200.5)
+        try await eventually { model.sectionUpdated[.alerts] != nil }
+    }
+
+    @Test(arguments: ["1.234", "1.234,5", "200,5 EUR", "200.5"]) func groupedOrWrongLocalePricesKeepTheDraftWithoutWriting(input: String) async throws {
+        let (model, requests) = try await fixture(); defer { AlertProtocol.handler = nil }
+        let state = model.alertEditor; populate(state); state.draft.threshold = input
+        await model.saveAlert(state, locale: Locale(identifier: "de_DE"))
+        #expect(state.error != nil && state.hasDraft && !state.saving && state.draft.threshold == input && requests.all.isEmpty)
     }
 
     @Test(arguments: [false, true], [0, 1]) func pendingRuleActionBlocksDuplicateAndCompetingWrites(deleting: Bool, originalArmed: Int) async throws {

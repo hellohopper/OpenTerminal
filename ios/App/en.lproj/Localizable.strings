@@ -191,3 +191,4 @@
 "Refresh alerts" = "Refresh alerts";
 "Update the Mac backend before changing saved alerts." = "Update the Mac backend before changing saved alerts.";
 "This alert changed on another device or was restored. Refresh alerts and review it before trying again." = "This alert changed on another device or was restored. Refresh alerts and review it before trying again.";
+"Enter a price without thousands separators, for example %@." = "Enter a price without thousands separators, for example %@.";

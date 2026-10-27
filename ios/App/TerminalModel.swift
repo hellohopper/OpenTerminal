@@ -415,13 +415,12 @@ enum TerminalTab: String, CaseIterable { case today, watchlist, holdings, alerts
         do { let result: SyncSnapshot? = try await api.get("/api/sync"); if token == generation { workspaces = result?.payload.workspace.workspaces ?? [] } }
         catch { if token == generation { await report(error) } }
     }
-    func saveAlert(_ state: AlertEditorState) async {
+    func saveAlert(_ state: AlertEditorState, locale: Locale = .current) async {
         guard signedIn, let api, state === alertEditor, !state.saving, !Task.isCancelled else { return }
         let submitted = state.draft, revision = state.revision, session = generation
         state.message = nil; state.error = nil
         guard let symbol = normalizedSymbol(submitted.symbol),
-              let threshold = Double(submitted.threshold.trimmingCharacters(in: .whitespacesAndNewlines)),
-              threshold.isFinite, threshold > 0, threshold <= 1e15,
+              let threshold = PriceInput.parse(submitted.threshold, locale: locale),
               ["PRICE_ABOVE", "PRICE_BELOW"].contains(submitted.condition) else {
             state.error = nativeText("Enter a valid ticker and positive price."); return
         }
