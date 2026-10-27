@@ -198,3 +198,13 @@
 "Revoke device access?" = "Revoke device access?";
 "Revoking this device signs you out. Pair it again with the OpenTerminal password to reconnect." = "Revoking this device signs you out. Pair it again with the OpenTerminal password to reconnect.";
 "This device will lose access to the Mac and stop receiving native notifications. Pair it again to reconnect." = "This device will lose access to the Mac and stop receiving native notifications. Pair it again to reconnect.";
+"Choose a shared watchlist before importing a layout." = "Choose a shared watchlist before importing a layout.";
+"Choose a layout with up to 150 valid symbols." = "Choose a layout with up to 150 valid symbols.";
+"The selected watchlist changed. Review the import again." = "The selected watchlist changed. Review the import again.";
+"The published layout changed. Load it again before importing." = "The published layout changed. Load it again before importing.";
+"Watchlist imported." = "Watchlist imported.";
+"Loading published layouts…" = "Loading published layouts…";
+"Importing watchlist…" = "Importing watchlist…";
+"No published layouts yet." = "No published layouts yet.";
+"Clear this shared watchlist?" = "Clear this shared watchlist?";
+"Import %lld symbols from “%@” into “%@” on every connected device." = "Import %lld symbols from “%@” into “%@” on every connected device.";

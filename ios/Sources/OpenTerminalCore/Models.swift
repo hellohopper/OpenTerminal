@@ -76,7 +76,7 @@ public struct NoteInput: Encodable, Sendable {
     public let symbol: String; public let title: String; public let body: String; public let kind = "research"
     public init(symbol: String, title: String, body: String) { self.symbol = symbol; self.title = title; self.body = body }
 }
-public struct SharedWorkspace: Decodable, Identifiable, Sendable { public let id: String; public let name: String; public let watchlist: [String] }
+public struct SharedWorkspace: Decodable, Identifiable, Equatable, Sendable { public let id: String; public let name: String; public let watchlist: [String] }
 public struct SyncSnapshot: Decodable, Sendable {
     public struct Payload: Decodable, Sendable {
         public struct Workspaces: Decodable, Sendable { public let workspaces: [SharedWorkspace] }
@@ -89,9 +89,12 @@ public struct MobileCredential: Codable, Sendable {
     public init(id: String, name: String, token: String, expiresAt: String) { self.id=id; self.name=name; self.token=token; self.expiresAt=expiresAt }
 }
 public struct MobileAuthorization: Decodable, Sendable { public let id: String; public let name: String; public let expiresAt: String }
-public struct SharedWatchlist: Decodable, Identifiable, Sendable {
-    public struct Payload: Decodable, Sendable { public let name: String; public let symbols: [String] }
+public struct SharedWatchlist: Decodable, Identifiable, Equatable, Sendable {
+    public struct Payload: Decodable, Equatable, Sendable { public let name: String; public let symbols: [String] }
     public let id: Int; public let version: Int; public let payload: Payload
+    public func replacingSymbols(_ symbols: [String], version: Int) -> Self {
+        Self(id: id, version: version, payload: Payload(name: payload.name, symbols: symbols))
+    }
 }
 public struct MobileDeviceInfo: Decodable, Identifiable, Equatable, Sendable {
     public let id: String; public let name: String; public let expires_at: String; public let revoked_at: String?

@@ -129,6 +129,46 @@ struct BackendIntegrationTests {
         await phone.signOut(); await browser.signOut()
     }
 
+    @Test func publishedLayoutImportChangesOnlyTheReviewedSharedList() async throws {
+        let (phone, _) = try await paired("Layout import phone")
+        let (server, password) = try connection(), browser = TerminalAPI(server: server)
+        try await browser.signIn(password: password)
+        let oldHead: SyncHead? = try await browser.get("/api/sync")
+        let _: Acknowledgement = try await browser.post("/api/sync", body: SyncUpload(baseVersion: oldHead?.version))
+        let savedHead: SyncHead = try await phone.get("/api/sync")
+        let snapshot: SyncSnapshot = try await phone.get("/api/sync")
+        let source = try #require(snapshot.payload.workspace.workspaces.first { $0.id == "published-full" })
+        let empty = try #require(snapshot.payload.workspace.workspaces.first { $0.id == "published-empty" })
+        #expect(source.watchlist == ["MSFT", "SPY"] && empty.watchlist.isEmpty)
+        let target: Created = try await phone.post("/api/watchlists", body: NewList(name: "Target one", symbols: ["AAPL"]))
+        let other: Created = try await phone.post("/api/watchlists", body: NewList(name: "Target two", symbols: ["TSLA"]))
+        let initial: [SharedWatchlist] = try await phone.get("/api/watchlists")
+        let reviewed = try #require(initial.first { $0.id == target.id })
+        let newer: SharedWatchlist = try await browser.post("/api/watchlists/\(target.id)/symbols", body: ["symbol": "GOOG", "action": "add"])
+        do {
+            let _: Acknowledgement = try await phone.put("/api/watchlists/\(target.id)", body: Replacement(name: reviewed.payload.name, symbols: source.watchlist, version: reviewed.version))
+            Issue.record("A stale import overwrote newer shared symbols")
+        } catch { status(error, 409) }
+        let conflicted: [SharedWatchlist] = try await browser.get("/api/watchlists")
+        #expect(conflicted.first { $0.id == target.id }?.payload.symbols == ["AAPL", "GOOG"])
+        let _: Acknowledgement = try await phone.put("/api/watchlists/\(target.id)", body: Replacement(name: newer.payload.name, symbols: source.watchlist, version: newer.version))
+        let imported: [SharedWatchlist] = try await browser.get("/api/watchlists")
+        let current = try #require(imported.first { $0.id == target.id })
+        #expect(current.payload.name == "Target one" && current.payload.symbols == source.watchlist)
+        #expect(imported.first { $0.id == other.id }?.payload.symbols == ["TSLA"])
+        let _: Acknowledgement = try await phone.put("/api/watchlists/\(target.id)", body: Replacement(name: current.payload.name, symbols: empty.watchlist, version: current.version))
+        let cleared: [SharedWatchlist] = try await phone.get("/api/watchlists")
+        let clearedTarget = try #require(cleared.first { $0.id == target.id })
+        #expect(clearedTarget.payload.symbols.isEmpty && cleared.first { $0.id == other.id }?.payload.symbols == ["TSLA"])
+        let untouchedHead: SyncHead = try await browser.get("/api/sync")
+        let untouched: SyncSnapshot = try await browser.get("/api/sync")
+        #expect(untouchedHead.version == savedHead.version && untouched.payload.workspace.workspaces == snapshot.payload.workspace.workspaces)
+        try await phone.delete("/api/watchlists/\(target.id)", query: ["version": String(clearedTarget.version)])
+        let otherRow = try #require(cleared.first { $0.id == other.id })
+        try await phone.delete("/api/watchlists/\(other.id)", query: ["version": String(otherRow.version)])
+        await phone.signOut(); await browser.signOut()
+    }
+
     @Test func nativePriceAlertCreationPauseAndDeletionMatchTheBackendContract() async throws {
         let (phone, _) = try await paired("Alert contract phone")
         let created: Created = try await phone.post("/api/alerts", body: AlertInput(symbol: "AAPL", condition: "PRICE_ABOVE", threshold: 1000, label: "原生提醒"))
@@ -282,3 +322,27 @@ private struct NoteUpdate: Encodable, Sendable {
     let version: String
 }
 private struct AlertEdit: Encodable, Sendable { let threshold: Double = 1200; let label = "Web changed" }
+private struct SyncHead: Decodable, Sendable { let version: String }
+private struct SyncUpload: Encodable, Sendable {
+    let baseVersion: String?
+    private enum CodingKeys: String, CodingKey { case payload, baseVersion }
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(PublishedPayload(), forKey: .payload)
+        if let baseVersion { try container.encode(baseVersion, forKey: .baseVersion) }
+        else { try container.encodeNil(forKey: .baseVersion) }
+    }
+}
+private struct PublishedPayload: Encodable, Sendable {
+    let format = "openterminal-device", version = 1
+    let workspace = PublishedWorkspace(), preferences = PublishedPreferences(), drawings: [String: String] = [:]
+}
+private struct PublishedWorkspace: Encodable, Sendable {
+    let activeWorkspaceId = "published-full"
+    let workspaces = [PublishedLayout(id: "published-full", name: "Published full", watchlist: ["MSFT", "SPY"]), PublishedLayout(id: "published-empty", name: "Published empty", watchlist: [])]
+}
+private struct PublishedLayout: Encodable, Sendable {
+    let id: String, name: String, watchlist: [String]
+    let activeSymbol = "MSFT", widgets: [String] = [], layout: [String] = []
+}
+private struct PublishedPreferences: Encodable, Sendable { let groups: [String] = [], screeners: [String] = [] }

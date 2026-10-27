@@ -4,6 +4,22 @@ import OpenTerminalCore
 
 enum TerminalTab: String, CaseIterable { case today, watchlist, holdings, alerts }
 
+struct WatchlistImportPlan {
+    let workspace: SharedWorkspace
+    let target: SharedWatchlist
+    let session: UUID
+    let symbols: [String]
+    init?(workspace: SharedWorkspace, target: SharedWatchlist, session: UUID) {
+        var symbols: [String] = [], seen = Set<String>()
+        for raw in workspace.watchlist {
+            guard let symbol = normalizedSymbol(raw) else { return nil }
+            if seen.insert(symbol).inserted { symbols.append(symbol) }
+        }
+        guard symbols.count <= 150, target.id > 0, target.version > 0, target.version < Int.max else { return nil }
+        self.workspace = workspace; self.target = target; self.session = session; self.symbols = symbols
+    }
+}
+
 @MainActor final class TerminalModel: ObservableObject, ResearchNotificationConsumer {
     @Published var serverText: String {
         didSet {
@@ -63,6 +79,12 @@ enum TerminalTab: String, CaseIterable { case today, watchlist, holdings, alerts
     @Published private(set) var alertEditor = AlertEditorState()
     @Published var briefing: Briefing?
     @Published var workspaces: [SharedWorkspace] = []
+    @Published private(set) var loadingWorkspaces = false
+    @Published private(set) var workspacesLoaded = false
+    @Published private(set) var workspaceLoadError: String?
+    @Published private(set) var importingWorkspace = false
+    @Published private(set) var workspaceImportError: String?
+    @Published private(set) var workspaceImportMessage: String?
     @Published var watchlist: [String] = []
     private(set) var api: TerminalAPI?
     private(set) var server: ServerConnection?
@@ -76,6 +98,8 @@ enum TerminalTab: String, CaseIterable { case today, watchlist, holdings, alerts
     private var alertRefresh: Task<Void, Never>?
     private var deviceRefresh: Task<Void, Never>?
     private var deviceListRequest: UUID?
+    private var workspaceLoadRequest: UUID?
+    private var workspaceImportRefresh: Task<Void, Never>?
     private var sectionRequests: [DataSection: UUID] = [:]
     private let defaults: UserDefaults
     private let credentials: any CredentialStorage
@@ -210,6 +234,9 @@ enum TerminalTab: String, CaseIterable { case today, watchlist, holdings, alerts
         researchDrafts = [:]; researchNoteStates = [:]; pendingResearch = nil; researchSymbol = nil
         alertEditor.clear(); alertEditor = AlertEditorState(); alertRefresh?.cancel(); alertRefresh = nil
         pendingAlertActions = []; alertActionErrors = [:]
+        workspaceImportRefresh?.cancel(); workspaceImportRefresh = nil; workspaceLoadRequest = nil
+        loadingWorkspaces = false; workspacesLoaded = false; workspaceLoadError = nil
+        importingWorkspace = false; workspaceImportError = nil; workspaceImportMessage = nil
         deviceRefresh?.cancel(); deviceRefresh = nil; deviceListRequest = nil
         loadingDevices = false; deviceListError = nil; pendingDeviceRevocations = []; deviceActionErrors = [:]
         selectionRefresh?.cancel(); selectionRefresh = nil; sectionRequests = [:]
@@ -266,7 +293,7 @@ enum TerminalTab: String, CaseIterable { case today, watchlist, holdings, alerts
             async let prices: Void = refreshQuotes()
             async let summary: Void = refreshBriefing()
             _ = await (prices, summary)
-        } catch { if current(.watchlist, request: pricesRequest, token: token) {
+        } catch { if revision == listRevision && current(.watchlist, request: pricesRequest, token: token) {
             await report(error, section: .watchlist)
             if current(.briefing, request: briefingRequest, token: token) && !(error is CancellationError) { sectionErrors[.briefing] = nativeText("Briefing could not refresh because the shared watchlist is unavailable.") }
         } }
@@ -414,15 +441,68 @@ enum TerminalTab: String, CaseIterable { case today, watchlist, holdings, alerts
             sharedLists = sharedLists.map { $0.id == id ? row : $0 }; setWatchlist(row.payload.symbols); await refreshQuotes()
         } catch { if token == generation { await report(error) } }
     }
-    func replaceWatchlist(_ symbols: [String]) async {
-        guard let api, let id = sharedListID, let row = sharedLists.first(where: { $0.id == id }) else { return }; let token = generation
-        do { let _: Acknowledgement = try await api.put("/api/watchlists/\(id)", body: ReplacementList(name: row.payload.name, symbols: symbols, version: row.version)); if token == generation { listRevision += 1; try await refreshLists(); await refreshQuotes() } }
-        catch { if token == generation { await report(error) } }
+    func prepareWorkspaceImport(_ workspace: SharedWorkspace) -> WatchlistImportPlan? {
+        guard signedIn, !loadingWorkspaces, !importingWorkspace, !managingLists else { return nil }
+        workspaceImportError = nil; workspaceImportMessage = nil
+        guard workspaces.contains(workspace) else { workspaceImportError = nativeText("The published layout changed. Load it again before importing."); return nil }
+        guard let row = sharedLists.first(where: { $0.id == sharedListID }) else {
+            workspaceImportError = nativeText("Choose a shared watchlist before importing a layout."); return nil
+        }
+        guard let plan = WatchlistImportPlan(workspace: workspace, target: row, session: generation) else {
+            workspaceImportError = nativeText("Choose a layout with up to 150 valid symbols."); return nil
+        }
+        return plan
     }
-    func loadWorkspaces() async {
-        guard let api else { return }; let token = generation
-        do { let result: SyncSnapshot? = try await api.get("/api/sync"); if token == generation { workspaces = result?.payload.workspace.workspaces ?? [] } }
-        catch { if token == generation { await report(error) } }
+    func importWorkspace(_ plan: WatchlistImportPlan) async {
+        guard signedIn, plan.session == generation, !Task.isCancelled, !importingWorkspace, !managingLists, let api else { return }
+        workspaceImportError = nil; workspaceImportMessage = nil
+        guard sharedListID == plan.target.id, sharedLists.first(where: { $0.id == plan.target.id }) == plan.target else {
+            workspaceImportError = nativeText("The selected watchlist changed. Review the import again."); return
+        }
+        guard workspaces.contains(plan.workspace) else {
+            workspaceImportError = nativeText("The published layout changed. Load it again before importing."); return
+        }
+        importingWorkspace = true; managingLists = true
+        defer { if plan.session == generation { importingWorkspace = false; managingLists = false } }
+        do {
+            let _: Acknowledgement = try await api.put("/api/watchlists/\(plan.target.id)", body: ReplacementList(name: plan.target.payload.name, symbols: plan.symbols, version: plan.target.version))
+            guard plan.session == generation else { return }
+            listRevision += 1
+            sharedLists = sharedLists.map { $0 == plan.target ? $0.replacingSymbols(plan.symbols, version: plan.target.version + 1) : $0 }
+            if let selected = sharedLists.first(where: { $0.id == sharedListID }) { setWatchlist(selected.payload.symbols) }
+            workspaceImportMessage = nativeText("Watchlist imported.")
+            refreshAfterWorkspaceImport(session: plan.session)
+        } catch {
+            guard plan.session == generation, !(error is CancellationError) else { return }
+            if error as? ConnectionError == .unauthorized { await report(error) }
+            else {
+                workspaceImportError = error.localizedDescription
+                if case .response(409, _) = error as? ConnectionError { listRevision += 1; refreshAfterWorkspaceImport(session: plan.session) }
+            }
+        }
+    }
+    private func refreshAfterWorkspaceImport(session: UUID) {
+        workspaceImportRefresh?.cancel()
+        workspaceImportRefresh = Task {
+            guard session == generation, !Task.isCancelled else { return }
+            let revision = listRevision
+            do { try await refreshLists(); if session == generation, revision == listRevision, !Task.isCancelled { refreshSelection() } }
+            catch { if session == generation, revision == listRevision, !Task.isCancelled { await report(error, section: .watchlist) } }
+        }
+    }
+    func loadWorkspaces(session: UUID) async {
+        guard signedIn, session == generation, !Task.isCancelled, let api else { return }
+        let request = UUID(); workspaceLoadRequest = request; loadingWorkspaces = true; workspaceLoadError = nil
+        defer { if session == generation, workspaceLoadRequest == request { loadingWorkspaces = false } }
+        func accepts() -> Bool { session == generation && workspaceLoadRequest == request && !Task.isCancelled }
+        do {
+            let result: SyncSnapshot? = try await api.get("/api/sync")
+            guard accepts() else { return }; workspaces = result?.payload.workspace.workspaces ?? []; workspacesLoaded = true
+        } catch {
+            guard accepts(), !(error is CancellationError) else { return }
+            if error as? ConnectionError == .unauthorized { await report(error) }
+            else { workspaceLoadError = error.localizedDescription }
+        }
     }
     func saveAlert(_ state: AlertEditorState, locale: Locale = .current) async {
         guard signedIn, let api, state === alertEditor, !state.saving, !Task.isCancelled else { return }

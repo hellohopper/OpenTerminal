@@ -282,7 +282,7 @@ private struct AlertEditor: View {
 private struct SettingsView: View {
     @EnvironmentObject private var model: TerminalModel
     @Environment(\.dismiss) private var dismiss
-    @ViewState<SharedWorkspace?> private var selected = nil
+    @ViewState<WatchlistImportPlan?> private var selected = nil
     @ViewState<(device: MobileDeviceInfo, session: UUID)?> private var revoking = nil
     var body: some View {
         NavigationStack {
@@ -300,8 +300,18 @@ private struct SettingsView: View {
                     }
                 }
                 Section("Saved web layouts") {
-                    Button("Load published layouts") { Task { await model.loadWorkspaces() } }
-                    ForEach(model.workspaces) { workspace in Button(workspace.name) { selected = workspace } }
+                    Button("Load published layouts") { let session = model.sessionID; Task { await model.loadWorkspaces(session: session) } }.disabled(model.loadingWorkspaces || model.importingWorkspace)
+                    if model.loadingWorkspaces { ProgressView("Loading published layouts…") }
+                    if let error = model.workspaceLoadError { Text(error).font(.callout).foregroundStyle(.red) }
+                    ForEach(model.workspaces) { workspace in
+                        Button(workspace.name) { selected = model.prepareWorkspaceImport(workspace) }
+                            .disabled(model.loadingWorkspaces || model.importingWorkspace || model.managingLists || model.sharedListID == nil)
+                    }
+                    if model.workspacesLoaded && model.workspaces.isEmpty && !model.loadingWorkspaces && model.workspaceLoadError == nil { Text("No published layouts yet.").foregroundStyle(.secondary) }
+                    if model.sharedListID == nil { Text("Choose a shared watchlist before importing a layout.").font(.caption).foregroundStyle(.secondary) }
+                    if model.importingWorkspace { ProgressView("Importing watchlist…") }
+                    if let error = model.workspaceImportError { Text(error).font(.callout).foregroundStyle(.red) }
+                    if let message = model.workspaceImportMessage { Text(message).font(.callout).foregroundStyle(.secondary) }
                     Text("Upload a reviewed snapshot from the web Sync panel first. Importing replaces the selected shared watchlist on the server; other web layouts are preserved.").font(.caption).foregroundStyle(.secondary)
                 }
                 Section("Native notifications") {
@@ -331,11 +341,13 @@ private struct SettingsView: View {
                 }
                 Section("Privacy") { Text("The owner password and account responses are never persisted. Remember this device stores only its revocable authorization token in this phone’s Keychain. Tokens expire after 30 days of inactivity and renew while the app is used.").font(.callout) }
             }.navigationTitle("Settings").toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
-                .confirmationDialog("Replace the selected shared watchlist on all devices?", isPresented: Binding(get: { selected != nil }, set: { if !$0 { selected = nil } }), titleVisibility: .visible) {
-                    Button("Import watchlist") { if let selected { Task { await model.replaceWatchlist(selected.watchlist) } }; selected = nil }
+                .confirmationDialog(LocalizedStringKey(selected?.symbols.isEmpty == true ? "Clear this shared watchlist?" : "Replace the selected shared watchlist on all devices?"), isPresented: Binding(get: { selected != nil }, set: { if !$0 { selected = nil } }), titleVisibility: .visible) {
+                    Button("Import watchlist") { if let selected { Task { await model.importWorkspace(selected) } }; selected = nil }
                     Button("Cancel", role: .cancel) { selected = nil }
+                } message: {
+                    if let plan = selected { Text("Import \(plan.symbols.count) symbols from “\(plan.workspace.name)” into “\(plan.target.payload.name)” on every connected device.") }
                 }
-                .onChange(of: model.sessionID) { _, _ in revoking = nil }
+                .onChange(of: model.sessionID) { _, _ in selected = nil; revoking = nil }
                 .alert("Revoke device access?", isPresented: Binding(get: { revoking != nil }, set: { if !$0 { revoking = nil } })) {
                     Button("Revoke", role: .destructive) {
                         if let target = revoking { Task { await model.revoke(target.device, session: target.session) } }
