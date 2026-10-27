@@ -260,6 +260,7 @@ import OpenTerminalCore
         #expect(ResearchModel(terminal: terminal, symbol: "AAPL").bodyText == "Newer edits")
         #expect(research.message?.contains("Newer edits") == true)
         #expect(reopened.bodyText == "Newer edits")
+        await eventually { research.updated[.notes] != nil && reopened.updated[.notes] != nil }
     }
     @Test func completedSaveClearsOnlySubmittedDraftAndSignOutClearsAllDrafts() async throws {
         ModelProtocol.handler = { request in
@@ -300,6 +301,7 @@ import OpenTerminalCore
         #expect(reopened.saving, "Reopened view should disable a second submission while the same draft saves")
         gate.release(201, #"{"id":1}"#); await save.value
         #expect(!reopened.hasDraft, "Successful unchanged draft should disappear from the reopened editor")
+        await eventually { original.updated[.notes] != nil && reopened.updated[.notes] != nil }
     }
     @Test func switchingListsFetchesTheNewSelectionWhileAnOldRefreshIsPending() async throws {
         let gate = ResponseGate()
@@ -457,6 +459,7 @@ import OpenTerminalCore
             }
         }
         research.title = "cash update"; await research.saveNote()
+        await eventually { research.notes.map(\.id) == [3, 2] }
         gate.release(200, #"{"entries":[{"id":1,"symbol":"AAPL","title":"Late page","body":"Old"}],"nextCursor":null}"#); await oldPage.value
         #expect(research.notes.map(\.id) == [3, 2] && research.nextNoteCursor == 2)
         #expect(research.notesQuery == "cash" && !research.hasDraft && !research.loadingMoreNotes)

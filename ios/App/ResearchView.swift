@@ -91,7 +91,6 @@ private struct ResearchContent: View {
             .refreshable { await research.refresh() }
             .task { await research.refreshOverview() }
             .task(id: research.range) { await research.load(.chart) }
-            .onChange(of: research.noteRevision) { _, _ in Task { await research.load(.notes) } }
             .interactiveDismissDisabled(research.hasDraft || research.saving)
             .terminalBackButtonHidden(research.hasDraft || research.saving)
             .toolbar {
@@ -103,7 +102,7 @@ private struct ResearchContent: View {
                 Button("Keep draft and leave") { dismiss() }
                 if !research.saving { Button("Discard draft and leave", role: .destructive) { research.discardDraft(); dismiss() } }
                 Button("Stay", role: .cancel) {}
-            } message: { Text(research.saving ? "Your note is still saving. Newer edits will remain in memory." : "Your draft will remain in memory. It is cleared on sign-out or when the app closes.") }
+            } message: { Text(LocalizedStringKey(research.saving ? "Your note is still saving. Newer edits will remain in memory." : "Your draft will remain in memory. It is cleared on sign-out or when the app closes.")) }
             .alert("Delete research note?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
                 Button("Delete note", role: .destructive) {
                     if let note = deleting { Task { await research.deleteNote(note) } }
