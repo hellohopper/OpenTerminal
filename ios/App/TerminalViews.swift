@@ -283,6 +283,7 @@ private struct SettingsView: View {
     @EnvironmentObject private var model: TerminalModel
     @Environment(\.dismiss) private var dismiss
     @ViewState<SharedWorkspace?> private var selected = nil
+    @ViewState<(device: MobileDeviceInfo, session: UUID)?> private var revoking = nil
     var body: some View {
         NavigationStack {
             Form {
@@ -308,12 +309,43 @@ private struct SettingsView: View {
                     if model.registeringPush { ProgressView().accessibilityLabel("Registering this phone…") }
                     if let message = model.pushMessage { Text(message).font(.callout) }
                 }
-                Section("Paired devices"){Button("Refresh devices"){Task{await model.loadDevices()}};ForEach(model.devices){device in HStack{Text(device.name);Spacer();Button(LocalizedStringKey(device.revoked_at == nil ? "Revoke" : "Revoked"),role:.destructive){Task{await model.revoke(device.id)}}.disabled(device.revoked_at != nil)}}}
+                Section("Paired devices") {
+                    Button("Refresh devices") { let session = model.sessionID; Task { await model.loadDevices(session: session) } }.disabled(model.loadingDevices)
+                    if model.loadingDevices { ProgressView("Loading devices…") }
+                    if let error = model.deviceListError { Text(error).font(.callout).foregroundStyle(.red) }
+                    ForEach(model.devices) { device in
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                VStack(alignment: .leading) {
+                                    Text(device.name)
+                                    if device.id == model.currentDeviceID { Text("This device").font(.caption).foregroundStyle(.secondary) }
+                                }
+                                Spacer()
+                                Button(LocalizedStringKey(device.revoked_at == nil ? "Revoke" : "Revoked"), role: .destructive) { revoking = (device, model.sessionID) }
+                                    .buttonStyle(.borderless).disabled(device.revoked_at != nil || model.pendingDeviceRevocations.contains(device.id))
+                            }
+                            if model.pendingDeviceRevocations.contains(device.id) { ProgressView("Revoking device…") }
+                            if let error = model.deviceActionErrors[device.id] { Text(error).font(.callout).foregroundStyle(.red) }
+                        }
+                    }
+                }
                 Section("Privacy") { Text("The owner password and account responses are never persisted. Remember this device stores only its revocable authorization token in this phone’s Keychain. Tokens expire after 30 days of inactivity and renew while the app is used.").font(.callout) }
             }.navigationTitle("Settings").toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
                 .confirmationDialog("Replace the selected shared watchlist on all devices?", isPresented: Binding(get: { selected != nil }, set: { if !$0 { selected = nil } }), titleVisibility: .visible) {
                     Button("Import watchlist") { if let selected { Task { await model.replaceWatchlist(selected.watchlist) } }; selected = nil }
                     Button("Cancel", role: .cancel) { selected = nil }
+                }
+                .onChange(of: model.sessionID) { _, _ in revoking = nil }
+                .alert("Revoke device access?", isPresented: Binding(get: { revoking != nil }, set: { if !$0 { revoking = nil } })) {
+                    Button("Revoke", role: .destructive) {
+                        if let target = revoking { Task { await model.revoke(target.device, session: target.session) } }
+                        revoking = nil
+                    }
+                    Button("Cancel", role: .cancel) { revoking = nil }
+                } message: {
+                    if let device = revoking?.device {
+                        Text("\(device.name)\n\n\(nativeText(device.id == model.currentDeviceID ? "Revoking this device signs you out. Pair it again with the OpenTerminal password to reconnect." : "This device will lose access to the Mac and stop receiving native notifications. Pair it again to reconnect."))")
+                    }
                 }
         }
     }

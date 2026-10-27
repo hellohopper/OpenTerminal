@@ -192,3 +192,9 @@
 "Update the Mac backend before changing saved alerts." = "请先更新 Mac 后端，再修改已保存的提醒。";
 "This alert changed on another device or was restored. Refresh alerts and review it before trying again." = "这条提醒已在另一台设备上更改，或已从备份恢复。请刷新提醒并检查后重试。";
 "Enter a price without thousands separators, for example %@." = "请输入不含千位分隔符的价格，例如 %@。";
+"Loading devices…" = "正在加载设备…";
+"This device" = "当前设备";
+"Revoking device…" = "正在撤销设备授权…";
+"Revoke device access?" = "要撤销这台设备的访问权限吗？";
+"Revoking this device signs you out. Pair it again with the OpenTerminal password to reconnect." = "撤销当前设备的授权会退出登录。重新连接时，需要使用 OpenTerminal 密码再次配对。";
+"This device will lose access to the Mac and stop receiving native notifications. Pair it again to reconnect." = "这台设备将失去对 Mac 的访问权限，并停止接收原生通知。重新连接时需要再次配对。";
