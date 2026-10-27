@@ -135,6 +135,23 @@ import Testing
         let api=TerminalAPI(server:try ServerConnection("https://terminal.example.com"),configuration:configuration)
         do{let _: [Portfolio]=try await api.get("/api/portfolios");fail("Expected offline status")}catch{expectEqual(error as? ConnectionError,.offline)}
     }
+    @Test func alertVersionsAreValidatedAndPreservedWhenApplyingAcknowledgedChanges() throws {
+        let fields: [String: Any] = ["id": 1, "symbol": "AAPL", "condition": "PRICE_ABOVE", "threshold": 100, "label": "Target", "armed": 1]
+        func decode(_ version: [String: Any]) throws -> AlertRule {
+            try JSONDecoder().decode(AlertRule.self, from: JSONSerialization.data(withJSONObject: fields.merging(version) { _, new in new }))
+        }
+        let row = try decode(["revision": 4, "generation": "restored-generation"])
+        #expect(row.mutationQuery == ["revision": "4", "generation": "restored-generation"])
+        let paused = row.settingArmed(false)
+        #expect(paused.armed == 0 && paused.revision == 5 && paused.generation == row.generation)
+        #expect(paused.symbol == row.symbol && paused.threshold == row.threshold && paused.label == row.label)
+        let invalidVersions: [[String: Any]] = [[:], ["revision": 1], ["generation": "g"], ["revision": -1, "generation": "g"], ["revision": 1, "generation": ""], ["revision": 1, "generation": String(repeating: "x", count: 101)], ["revision": 9_007_199_254_740_991, "generation": "g"]]
+        for invalid in invalidVersions {
+            #expect(try decode(invalid).mutationQuery == nil)
+        }
+        #expect(try decode(["revision": 0, "generation": "legacy"]).mutationQuery != nil)
+        #expect(try decode(["revision": Int.max, "generation": "g"]).settingArmed(false).revision == nil)
+    }
 }
 // Small throwing-assertion adapters keep protocol callback assertions in the same test.
 private func expectEqual<T: Equatable>(_ actual: T, _ expected: T) { #expect(actual == expected) }

@@ -17,8 +17,8 @@ import OpenTerminalCore
     private func populate(_ state: AlertEditorState) {
         state.draft = AlertDraft(symbol: " aapl ", threshold: " 200.5 ", label: " Price target ", condition: "PRICE_ABOVE")
     }
-    private func rule(id: Int = 1, armed: Int = 1) throws -> AlertRule {
-        try JSONDecoder().decode(AlertRule.self, from: Data("{\"id\":\(id),\"symbol\":\"AAPL\",\"condition\":\"PRICE_ABOVE\",\"threshold\":200,\"label\":\"Target\",\"armed\":\(armed)}".utf8))
+    private func rule(id: Int = 1, armed: Int = 1, revision: Int = 1, generation: String = "g1") throws -> AlertRule {
+        try JSONDecoder().decode(AlertRule.self, from: Data("{\"id\":\(id),\"symbol\":\"AAPL\",\"condition\":\"PRICE_ABOVE\",\"threshold\":200,\"label\":\"Target\",\"armed\":\(armed),\"revision\":\(revision),\"generation\":\"\(generation)\"}".utf8))
     }
     private func eventually(_ predicate: () -> Bool) async throws {
         for _ in 0..<200 { if predicate() { return }; try await Task.sleep(for: .milliseconds(5)) }
@@ -200,6 +200,8 @@ import OpenTerminalCore
         await model.setArmed(row, session: session); await model.deleteAlert(row, session: session)
         #expect(requests.all.count == 1)
         #expect(requests.all.first?.httpMethod == (deleting ? "DELETE" : "PUT"))
+        let parameters = URLComponents(url: try #require(requests.all.first?.url), resolvingAgainstBaseURL: false)?.queryItems ?? []
+        #expect(parameters.contains(URLQueryItem(name: "revision", value: "1")) && parameters.contains(URLQueryItem(name: "generation", value: "g1")))
         if !deleting {
             #expect(AlertProtocol.body(try #require(requests.all.first))?["armed"] as? Bool == (originalArmed == 0))
         }
@@ -323,6 +325,63 @@ import OpenTerminalCore
         #expect(model.alerts == [row] && model.pendingAlertActions.isEmpty && model.alertActionErrors.isEmpty)
         #expect(requests.all.count == 1)
         gate.release(204, "")
+    }
+
+    @Test(arguments: [false, true]) func missingAlertVersionsRequireABackendUpdateWithoutWriting(deleting: Bool) async throws {
+        let (model, requests) = try await fixture(); defer { AlertProtocol.handler = nil }
+        let legacy = try JSONDecoder().decode(AlertRule.self, from: Data(#"{"id":1,"symbol":"AAPL","condition":"PRICE_ABOVE","threshold":200,"label":"Old server","armed":1}"#.utf8))
+        model.alerts = [legacy]
+        if deleting { await model.deleteAlert(legacy, session: model.sessionID) } else { await model.setArmed(legacy, session: model.sessionID) }
+        #expect(model.alerts == [legacy] && model.alertActionErrors[legacy.id]?.contains("Update the Mac") == true)
+        #expect(requests.all.isEmpty && model.pendingAlertActions.isEmpty)
+    }
+
+    @Test(arguments: [false, true], [false, true]) func refreshedRevisionOrRestoredGenerationRejectsAnOlderControl(deleting: Bool, restored: Bool) async throws {
+        let (model, requests) = try await fixture(); defer { AlertProtocol.handler = nil }
+        let old = try rule(), fresh = try rule(revision: restored ? 1 : 2, generation: restored ? "restored" : "g1")
+        model.alerts = [fresh]
+        if deleting { await model.deleteAlert(old, session: model.sessionID) } else { await model.setArmed(old, session: model.sessionID) }
+        #expect(model.alerts == [fresh] && model.alertActionErrors[old.id] != nil && requests.all.isEmpty)
+    }
+
+    @Test(arguments: [false, true]) func conflictKeepsTheRuleUntilItIsRefreshedAndReviewed(deleting: Bool) async throws {
+        let (model, requests) = try await fixture(); defer { AlertProtocol.handler = nil }
+        let old = try rule(), fresh = try rule(revision: 2); model.alerts = [old]
+        AlertProtocol.handler = { request in requests.append(request.request); request.respond(409, #"{"error":"This alert changed on another device or was restored. Refresh alerts and review it before trying again."}"#) }
+        if deleting { await model.deleteAlert(old, session: model.sessionID) } else { await model.setArmed(old, session: model.sessionID) }
+        #expect(model.alerts == [old] && model.alertActionErrors[old.id] != nil && model.signedIn && !model.reconnecting)
+        AlertProtocol.handler = { request in
+            requests.append(request.request)
+            if request.request.httpMethod == "GET" { request.respond(200, #"{"alerts":[{"id":1,"symbol":"AAPL","condition":"PRICE_ABOVE","threshold":200,"label":"Target","armed":1,"revision":2,"generation":"g1"}]}"#) }
+            else { request.respond(204, "") }
+        }
+        await model.refreshAlerts(); #expect(model.alerts == [fresh])
+        let count = requests.all.count
+        if deleting { await model.deleteAlert(old, session: model.sessionID) } else { await model.setArmed(old, session: model.sessionID) }
+        #expect(requests.all.count == count)
+        if deleting { await model.deleteAlert(fresh, session: model.sessionID) } else { await model.setArmed(fresh, session: model.sessionID) }
+        let write = try #require(requests.all.last { $0.httpMethod != "GET" })
+        #expect(write.url?.query?.contains("revision=2") == true && model.alertActionErrors.isEmpty)
+        try await eventually { model.sectionUpdated[.alerts] != nil }
+    }
+
+    @Test(arguments: [false, true], [false, true]) func delayedAcknowledgementPreservesANewerVersionAlreadySeenByRefresh(deleting: Bool, restored: Bool) async throws {
+        let (model, requests) = try await fixture(); defer { AlertProtocol.handler = nil }
+        let original = try rule(), latest = try rule(revision: restored ? 1 : 2, generation: restored ? "restored" : "g1")
+        let write = AlertGate(), list = AlertGate(); model.alerts = [original]
+        AlertProtocol.handler = { request in
+            requests.append(request.request)
+            if request.request.httpMethod == "GET" { list.hold(request) } else { write.hold(request) }
+        }
+        let action = Task {
+            if deleting { await model.deleteAlert(original, session: model.sessionID) } else { await model.setArmed(original, session: model.sessionID) }
+        }
+        try await eventually { write.waiting }
+        model.alerts = [latest] // The periodic refresh observed a later edit/restore before the older acknowledgement arrived.
+        write.release(204, ""); await action.value
+        #expect(model.alerts == [latest] && model.pendingAlertActions.isEmpty && model.alertActionErrors.isEmpty)
+        try await eventually { list.waiting }
+        list.release(200, #"{"alerts":[]}"#); try await eventually { model.sectionUpdated[.alerts] != nil }
     }
 }
 

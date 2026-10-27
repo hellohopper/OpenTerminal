@@ -11,6 +11,14 @@ import {
   type AlertEvent,
 } from "../alerts.js";
 export const alertsRouter = Router();
+const versionSchema = z.object({
+  revision: z.string().max(16).regex(/^(0|[1-9]\d*)$/).transform(Number).refine(n => Number.isSafeInteger(n) && n < Number.MAX_SAFE_INTEGER),
+  generation: z.string().min(1).max(100),
+}).optional();
+function parseVersion(query: Record<string, unknown>) {
+  return versionSchema.safeParse(query.revision === undefined && query.generation === undefined ? undefined : query);
+}
+const changedAlert = "This alert changed on another device or was restored. Refresh alerts and review it before trying again.";
 const fields = z.object({
   metric: z.enum(["native", "volume"]).default("native"),
   repeat_seconds: z
@@ -178,6 +186,8 @@ alertsRouter.param("id", (_req, res, next, id) => {
 alertsRouter.put(
   "/:id",
   asyncRoute(async (req, res) => {
+    const version = parseVersion(req.query);
+    if (!version.success) return res.status(400).json({ error: "invalid alert version" });
     const patch = fields.partial().strict().safeParse(req.body);
     if (!patch.success || !Object.keys(patch.data).length)
       return res.status(400).json({ error: "provide valid alert fields" });
@@ -188,6 +198,8 @@ alertsRouter.put(
             .prepare("SELECT * FROM price_alerts WHERE id=?")
             .get(req.params.id)) as AlertRule | undefined;
           if (!current) return false;
+          if (version.data && (current.revision !== version.data.revision || current.generation !== version.data.generation))
+            throw new Error(changedAlert);
           const parsed = schema.safeParse({
             ...current,
             armed: !!current.armed,
@@ -196,9 +208,9 @@ alertsRouter.put(
           if (!parsed.success) throw new Error(parsed.error.issues[0].message);
           const r = parsed.data;
           await checkSymbolLimit(r.symbol, r.armed, current.id);
-          await db
+          const result = await db
             .prepare(
-              "UPDATE price_alerts SET symbol=?,condition=?,threshold=?,label=?,armed=?,revision=revision+1,last_checked_at=NULL,last_value=NULL,metric=?,repeat_seconds=? WHERE id=?",
+              "UPDATE price_alerts SET symbol=?,condition=?,threshold=?,label=?,armed=?,revision=revision+1,last_checked_at=NULL,last_value=NULL,metric=?,repeat_seconds=? WHERE id=? AND revision=? AND generation=?",
             )
             .run(
               r.symbol,
@@ -209,7 +221,10 @@ alertsRouter.put(
               r.metric,
               r.repeat_seconds,
               req.params.id,
+              current.revision,
+              current.generation,
             );
+          if (!result.changes) throw new Error(changedAlert);
           return true;
         })
         .immediate();
@@ -224,7 +239,16 @@ alertsRouter.put(
 alertsRouter.delete(
   "/:id",
   asyncRoute(async (req, res) => {
-    await db.prepare("DELETE FROM price_alerts WHERE id=?").run(req.params.id);
+    const version = parseVersion(req.query);
+    if (!version.success) return res.status(400).json({ error: "invalid alert version" });
+    if (version.data) {
+      const result = await db.prepare("DELETE FROM price_alerts WHERE id=? AND revision=? AND generation=?")
+        .run(req.params.id, version.data.revision, version.data.generation);
+      if (!result.changes && await db.prepare("SELECT id FROM price_alerts WHERE id=?").get(req.params.id))
+        return res.status(409).json({ error: changedAlert });
+    } else {
+      await db.prepare("DELETE FROM price_alerts WHERE id=?").run(req.params.id);
+    }
     res.status(204).end();
   }),
 );

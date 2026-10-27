@@ -222,7 +222,11 @@ private struct AlertsView: View {
                         Button("Delete", role: .destructive) { deleting = (rule, model.sessionID) }
                     }.buttonStyle(.borderless).disabled(model.pendingAlertActions.contains(rule.id))
                     if model.pendingAlertActions.contains(rule.id) { ProgressView("Updating alert…") }
-                    if let error = model.alertActionErrors[rule.id] { Text(error).font(.callout).foregroundStyle(.red) }
+                    if let error = model.alertActionErrors[rule.id] {
+                        Text(error).font(.callout).foregroundStyle(.red)
+                        Button("Refresh alerts") { Task { await model.refreshAlerts() } }.buttonStyle(.borderless)
+                            .disabled(model.loadingSections.contains(.alerts))
+                    }
                 }.padding(.vertical, 4)
             }
             if model.alerts.isEmpty && !model.loadingSections.contains(.alerts) && model.sectionErrors[.alerts] == nil { Text("No alerts yet.") }

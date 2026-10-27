@@ -466,14 +466,21 @@ enum TerminalTab: String, CaseIterable { case today, watchlist, holdings, alerts
         guard current == rule else {
             alertActionErrors[rule.id] = nativeText("This alert changed. Review it and try again."); return
         }
+        guard let query = rule.mutationQuery else {
+            alertActionErrors[rule.id] = nativeText("Update the Mac backend before changing saved alerts."); return
+        }
         pendingAlertActions.insert(rule.id); alertActionErrors[rule.id] = nil
         defer { if session == generation { pendingAlertActions.remove(rule.id) } }
         do {
-            if deleting { try await api.delete("/api/alerts/\(rule.id)") }
-            else { try await api.setAlertArmed(id: rule.id, armed: rule.armed == 0) }
+            if deleting { try await api.delete("/api/alerts/\(rule.id)", query: query) }
+            else { try await api.setAlertArmed(id: rule.id, armed: rule.armed == 0, query: query) }
             guard session == generation else { return }
-            if deleting { alerts.removeAll { $0.id == rule.id } }
-            else { alerts = alerts.map { $0.id == rule.id ? $0.settingArmed(rule.armed == 0) : $0 } }
+            // A refresh may already have observed a later edit or a restored rule while this acknowledgement was in flight.
+            func matchesSubmittedVersion(_ row: AlertRule) -> Bool {
+                row.id == rule.id && row.revision == rule.revision && row.generation == rule.generation
+            }
+            if deleting { alerts.removeAll(where: matchesSubmittedVersion) }
+            else { alerts = alerts.map { matchesSubmittedVersion($0) ? $0.settingArmed(rule.armed == 0) : $0 } }
             scheduleAlertRefresh(session: session)
         } catch {
             guard session == generation, !(error is CancellationError) else { return }
