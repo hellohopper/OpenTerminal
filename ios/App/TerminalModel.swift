@@ -29,6 +29,11 @@ enum TerminalTab: String, CaseIterable { case today, watchlist, holdings, alerts
     @Published var pushMessage: String?
     @Published private(set) var registeringPush = false
     @Published var devices: [MobileDeviceInfo] = []
+    @Published private(set) var loadingDevices = false
+    @Published private(set) var deviceListError: String?
+    @Published private(set) var pendingDeviceRevocations: Set<String> = []
+    @Published private(set) var deviceActionErrors: [String: String] = [:]
+    var currentDeviceID: String? { credential?.id }
     @Published var sharedLists: [SharedWatchlist] = []
     @Published var sharedListID: Int?
     @Published var managingLists = false
@@ -69,6 +74,8 @@ enum TerminalTab: String, CaseIterable { case today, watchlist, holdings, alerts
     private var selectionRefresh: Task<Void, Never>?
     private var portfolioRefresh: Task<Void, Never>?
     private var alertRefresh: Task<Void, Never>?
+    private var deviceRefresh: Task<Void, Never>?
+    private var deviceListRequest: UUID?
     private var sectionRequests: [DataSection: UUID] = [:]
     private let defaults: UserDefaults
     private let credentials: any CredentialStorage
@@ -203,6 +210,8 @@ enum TerminalTab: String, CaseIterable { case today, watchlist, holdings, alerts
         researchDrafts = [:]; researchNoteStates = [:]; pendingResearch = nil; researchSymbol = nil
         alertEditor.clear(); alertEditor = AlertEditorState(); alertRefresh?.cancel(); alertRefresh = nil
         pendingAlertActions = []; alertActionErrors = [:]
+        deviceRefresh?.cancel(); deviceRefresh = nil; deviceListRequest = nil
+        loadingDevices = false; deviceListError = nil; pendingDeviceRevocations = []; deviceActionErrors = [:]
         selectionRefresh?.cancel(); selectionRefresh = nil; sectionRequests = [:]
         portfolioRefresh?.cancel(); portfolioRefresh = nil; selectedTab = .today; preferredChartRange = "6M"
         quotes = []; portfolios = []; positions = []; holdingQuotes = []; alerts = []; briefing = nil; workspaces = []; portfolioID = nil; holdingsReady = false
@@ -487,10 +496,44 @@ enum TerminalTab: String, CaseIterable { case today, watchlist, holdings, alerts
             else { alertActionErrors[rule.id] = error.localizedDescription }
         }
     }
-    func loadDevices() async { guard let api else { return }; let token = generation; do { let rows:[MobileDeviceInfo] = try await api.get("/api/mobile/devices"); if token == generation { devices = rows } } catch { if token == generation { await report(error) } } }
-    func revoke(_ id: String) async {
-        guard let api else { return }; let token = generation
-        do { try await api.delete("/api/mobile/devices/\(id)"); guard token == generation else { return }; if id == credential?.id { await signOut() } else { await loadDevices() } } catch { if token == generation { await report(error) } }
+    func loadDevices(session: UUID) async {
+        guard signedIn, session == generation, !Task.isCancelled, let api else { return }
+        let request = UUID(); deviceListRequest = request; loadingDevices = true; deviceListError = nil
+        defer { if session == generation, deviceListRequest == request { loadingDevices = false } }
+        func accepts() -> Bool { session == generation && deviceListRequest == request && !Task.isCancelled }
+        do {
+            let rows: [MobileDeviceInfo] = try await api.get("/api/mobile/devices")
+            guard accepts() else { return }; devices = rows
+            let ids = Set(rows.map(\.id)); deviceActionErrors = deviceActionErrors.filter { ids.contains($0.key) }
+        } catch {
+            guard accepts(), !(error is CancellationError) else { return }
+            if error as? ConnectionError == .unauthorized { await report(error) }
+            else { deviceListError = error.localizedDescription }
+        }
+    }
+    func revoke(_ device: MobileDeviceInfo, session: UUID) async {
+        guard signedIn, session == generation, !Task.isCancelled, let api,
+              device.revoked_at == nil, !pendingDeviceRevocations.contains(device.id),
+              let current = devices.first(where: { $0.id == device.id }), current.revoked_at == nil else { return }
+        pendingDeviceRevocations.insert(device.id); deviceActionErrors[device.id] = nil
+        defer { if session == generation { pendingDeviceRevocations.remove(device.id) } }
+        do {
+            try await api.delete("/api/mobile/devices/\(device.id)")
+            guard session == generation else { return }
+            if device.id == currentDeviceID { await signOut(); return }
+            let now = ISO8601DateFormatter().string(from: .now)
+            devices = devices.map { $0.id == device.id ? $0.markingRevoked(at: now) : $0 }
+            // Reject snapshots started before the confirmed revocation, before the new task runs.
+            deviceListRequest = UUID(); loadingDevices = false; deviceRefresh?.cancel()
+            deviceRefresh = Task {
+                guard session == generation, !Task.isCancelled else { return }
+                await loadDevices(session: session)
+            }
+        } catch {
+            guard session == generation, !(error is CancellationError) else { return }
+            if error as? ConnectionError == .unauthorized { await report(error) }
+            else { deviceActionErrors[device.id] = error.localizedDescription }
+        }
     }
     func checkHealth() async {
         guard let api, !checkingHealth else { return }; let token = generation

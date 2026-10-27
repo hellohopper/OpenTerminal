@@ -93,7 +93,10 @@ public struct SharedWatchlist: Decodable, Identifiable, Sendable {
     public struct Payload: Decodable, Sendable { public let name: String; public let symbols: [String] }
     public let id: Int; public let version: Int; public let payload: Payload
 }
-public struct MobileDeviceInfo: Decodable, Identifiable, Sendable { public let id: String; public let name: String; public let expires_at: String; public let revoked_at: String? }
+public struct MobileDeviceInfo: Decodable, Identifiable, Equatable, Sendable {
+    public let id: String; public let name: String; public let expires_at: String; public let revoked_at: String?
+    public func markingRevoked(at date: String) -> Self { Self(id: id, name: name, expires_at: expires_at, revoked_at: revoked_at ?? date) }
+}
 public struct NativePushStatus: Decodable, Sendable { public let configured: Bool; public let environment: String?; public let topic: String? }
 public func normalizedSymbol(_ value: String) -> String? {
     let symbol = value.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()

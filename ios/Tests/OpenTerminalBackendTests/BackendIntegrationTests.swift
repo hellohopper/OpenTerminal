@@ -73,6 +73,39 @@ struct BackendIntegrationTests {
         await browser.signOut()
     }
 
+    @Test func deviceManagementRevokesOnlyTheChosenDeviceAndCanRevokeItself() async throws {
+        let (manager, owner) = try await paired("Device manager")
+        let (target, victim) = try await paired("Device to revoke")
+        let (other, untouched) = try await paired("Unaffected device")
+        let before: [MobileDeviceInfo] = try await manager.get("/api/mobile/devices")
+        #expect(before.contains { $0.id == owner.id && $0.revoked_at == nil })
+        #expect(before.contains { $0.id == victim.id && $0.revoked_at == nil })
+        try await manager.delete("/api/mobile/devices/\(victim.id)")
+        let after: [MobileDeviceInfo] = try await manager.get("/api/mobile/devices")
+        #expect(after.first { $0.id == victim.id }?.revoked_at != nil)
+        #expect(after.first { $0.id == owner.id }?.revoked_at == nil)
+        #expect(after.first { $0.id == untouched.id }?.revoked_at == nil)
+        do {
+            let _: [Portfolio] = try await target.get("/api/portfolios")
+            Issue.record("Revoked device retained access")
+        } catch { #expect(error as? ConnectionError == .unauthorized) }
+        do {
+            _ = try await target.renewDevice()
+            Issue.record("Revoked device renewed its authorization")
+        } catch { #expect(error as? ConnectionError == .unauthorized) }
+        let _: [Portfolio] = try await other.get("/api/portfolios")
+        _ = try await manager.renewDevice()
+        try await manager.delete("/api/mobile/devices/\(owner.id)")
+        do {
+            let _: [Portfolio] = try await manager.get("/api/portfolios")
+            Issue.record("Self-revoked device retained access")
+        } catch { #expect(error as? ConnectionError == .unauthorized) }
+        let remaining: [MobileDeviceInfo] = try await other.get("/api/mobile/devices")
+        #expect(remaining.first { $0.id == owner.id }?.revoked_at != nil)
+        #expect(remaining.first { $0.id == untouched.id }?.revoked_at == nil)
+        await manager.signOut(); await target.signOut(); await other.signOut()
+    }
+
     @Test func sharedWatchlistsRejectStaleWritesAndKeepExplicitDeletion() async throws {
         let (phone, _) = try await paired("Watchlist phone")
         let (server, password) = try connection(), browser = TerminalAPI(server: server)

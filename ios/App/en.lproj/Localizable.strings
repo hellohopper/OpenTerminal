@@ -192,3 +192,9 @@
 "Update the Mac backend before changing saved alerts." = "Update the Mac backend before changing saved alerts.";
 "This alert changed on another device or was restored. Refresh alerts and review it before trying again." = "This alert changed on another device or was restored. Refresh alerts and review it before trying again.";
 "Enter a price without thousands separators, for example %@." = "Enter a price without thousands separators, for example %@.";
+"Loading devices…" = "Loading devices…";
+"This device" = "This device";
+"Revoking device…" = "Revoking device…";
+"Revoke device access?" = "Revoke device access?";
+"Revoking this device signs you out. Pair it again with the OpenTerminal password to reconnect." = "Revoking this device signs you out. Pair it again with the OpenTerminal password to reconnect.";
+"This device will lose access to the Mac and stop receiving native notifications. Pair it again to reconnect." = "This device will lose access to the Mac and stop receiving native notifications. Pair it again to reconnect.";
