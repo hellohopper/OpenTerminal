@@ -315,10 +315,20 @@ struct BackendIntegrationTests {
         let (server, password) = try connection(), browser = TerminalAPI(server: server)
         try await browser.signIn(password: password)
         let created: Created = try await phone.post("/api/alerts", body: AlertInput(symbol: "AAPL", condition: "PRICE_ABOVE", threshold: 1000, label: "Original"))
+        let _: Acknowledgement = try await browser.put("/api/alerts/\(created.id)", body: PausedRepeatingAlert())
         let before: AlertList = try await phone.get("/api/alerts")
         let original = try #require(before.alerts.first { $0.id == created.id })
         let oldVersion = try #require(original.mutationQuery)
-        let _: Acknowledgement = try await browser.put("/api/alerts/\(created.id)", body: AlertEdit())
+        let edit = AlertEdit(threshold: 1100.125, label: "Native edited")
+        try await phone.editAlert(id: created.id, edit: edit, query: oldVersion)
+        let editedList: AlertList = try await browser.get("/api/alerts")
+        let edited = try #require(editedList.alerts.first { $0.id == created.id })
+        #expect(edited == original.updating(edit) && edited.armed == 0 && edited.repeat_seconds == 12345)
+        let _: Acknowledgement = try await browser.put("/api/alerts/\(created.id)", body: WebAlertEdit())
+        do {
+            try await phone.editAlert(id: created.id, edit: AlertEdit(threshold: 1300, label: "Stale phone"), query: oldVersion)
+            Issue.record("An old phone editor overwrote the browser's updated rule")
+        } catch { status(error, 409) }
         do {
             try await phone.setAlertArmed(id: created.id, armed: false, query: oldVersion)
             Issue.record("An old phone view paused the browser's updated alert")
@@ -432,7 +442,8 @@ private struct NoteUpdate: Encodable, Sendable {
     let symbol = "MSFT", title = "Updated note", body = "New evidence from another device", kind = "research"
     let version: String
 }
-private struct AlertEdit: Encodable, Sendable { let threshold: Double = 1200; let label = "Web changed" }
+private struct WebAlertEdit: Encodable, Sendable { let threshold: Double = 1200; let label = "Web changed"; let armed = true }
+private struct PausedRepeatingAlert: Encodable, Sendable { let armed = false; let repeat_seconds = 12345 }
 private struct SyncHead: Decodable, Sendable { let version: String }
 private struct SyncUpload: Encodable, Sendable {
     let baseVersion: String?

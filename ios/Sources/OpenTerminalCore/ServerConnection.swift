@@ -102,6 +102,9 @@ public actor TerminalAPI {
     public func setAlertArmed(id: Int, armed: Bool, query: [String: String] = [:]) async throws {
         _ = try await requestData("/api/alerts/\(id)", query: query, method: "PUT", body: JSONEncoder().encode(["armed": armed]))
     }
+    public func editAlert(id: Int, edit: AlertEdit, query: [String: String]) async throws {
+        _ = try await requestData("/api/alerts/\(id)", query: query, method: "PUT", body: JSONEncoder().encode(edit))
+    }
     private func send<T: Decodable & Sendable>(_ path: String, query: [String: String] = [:], method: String = "GET", body: Data? = nil) async throws -> T {
         let data = try await requestData(path, query: query, method: method, body: body)
         return try JSONDecoder().decode(T.self, from: data)

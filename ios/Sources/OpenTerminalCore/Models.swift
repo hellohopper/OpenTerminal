@@ -62,6 +62,17 @@ public struct AlertRule: Decodable, Identifiable, Equatable, Sendable {
     }
 }
 public struct AlertList: Decodable, Sendable { public let alerts: [AlertRule]; public let monitor: AlertMonitor? }
+public struct AlertEdit: Encodable, Sendable {
+    public let threshold: Double; public let label: String
+    public init(threshold: Double, label: String) { self.threshold = threshold; self.label = label }
+}
+extension AlertRule {
+    public func updating(_ edit: AlertEdit) -> Self {
+        Self(id: id, symbol: symbol, condition: condition, threshold: edit.threshold, label: edit.label, armed: armed,
+             revision: revision.flatMap { $0 < 9_007_199_254_740_991 ? $0 + 1 : nil }, generation: generation, metric: metric,
+             last_checked_at: nil, last_value: nil, last_triggered_at: last_triggered_at, repeat_seconds: repeat_seconds)
+    }
+}
 public struct AlertInput: Encodable, Sendable {
     public let symbol: String; public let condition: String; public let threshold: Double; public let label: String; public let armed: Bool
     public let metric: String

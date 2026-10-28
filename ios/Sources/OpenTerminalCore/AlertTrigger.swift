@@ -18,6 +18,26 @@ public enum AlertTrigger: String, CaseIterable, Sendable {
     }
     public var labelKey: String { alertConditionLabel(metric: metric, condition: condition) }
     public var allowsNegativeInput: Bool { self == .dailyFall }
+    /// Editable decimal text must round-trip exactly, including values normally printed with an exponent.
+    public func thresholdText(_ value: Double, locale: Locale = .current) -> String? {
+        guard value.isFinite else { return nil }
+        let source = value == 0 ? "0" : String(value)
+        let parts = source.lowercased().split(separator: "e")
+        var plain = source
+        if parts.count == 2, let exponent = Int(parts[1]) {
+            let negative = parts[0].hasPrefix("-")
+            let magnitude = negative ? String(parts[0].dropFirst()) : String(parts[0])
+            let digits = magnitude.replacingOccurrences(of: ".", with: "")
+            let position = (magnitude.firstIndex(of: ".").map { magnitude.distance(from: magnitude.startIndex, to: $0) } ?? magnitude.count) + exponent
+            if position <= 0 { plain = "0." + String(repeating: "0", count: -position) + digits }
+            else if position >= digits.count { plain = digits + String(repeating: "0", count: position - digits.count) }
+            else { let split = digits.index(digits.startIndex, offsetBy: position); plain = String(digits[..<split]) + "." + digits[split...] }
+            if negative { plain = "-" + plain }
+        }
+        plain = plain.replacingOccurrences(of: ".", with: locale.decimalSeparator ?? ".")
+        guard parseThreshold(plain, locale: locale) == value else { return nil }
+        return plain
+    }
     public var thresholdLabelKey: String {
         switch self {
         case .priceAbove, .priceBelow: "Price threshold"
