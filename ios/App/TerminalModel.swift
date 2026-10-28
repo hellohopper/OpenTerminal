@@ -508,17 +508,15 @@ struct WatchlistImportPlan {
         guard signedIn, let api, state === alertEditor, !state.saving, !Task.isCancelled else { return }
         let submitted = state.draft, revision = state.revision, session = generation
         state.message = nil; state.error = nil
-        guard let symbol = normalizedSymbol(submitted.symbol),
-              let threshold = PriceInput.parse(submitted.threshold, locale: locale),
-              ["PRICE_ABOVE", "PRICE_BELOW"].contains(submitted.condition) else {
-            state.error = nativeText("Enter a valid ticker and positive price."); return
-        }
+        guard let symbol = normalizedSymbol(submitted.symbol) else { state.error = nativeText("Enter a valid ticker."); return }
+        guard let trigger = submitted.trigger else { state.error = nativeText("Choose a supported alert type."); return }
+        guard let threshold = trigger.parseThreshold(submitted.threshold, locale: locale) else { state.error = nativeText(trigger.validationKey); return }
         let label = submitted.label.trimmingCharacters(in: .whitespacesAndNewlines)
         guard label.utf16.count <= 120 else { state.error = nativeText("Use a label of up to 120 characters."); return }
         state.saving = true
         defer { if session == generation, state === alertEditor { state.saving = false } }
         do {
-            let _: Acknowledgement = try await api.post("/api/alerts", body: AlertInput(symbol: symbol, condition: submitted.condition, threshold: threshold, label: label))
+            let _: Acknowledgement = try await api.post("/api/alerts", body: AlertInput(symbol: symbol, trigger: trigger, threshold: threshold, label: label))
             guard session == generation, state === alertEditor else { return }
             // Once acknowledged, record the write even if the presenting view was canceled.
             if state.revision == revision {

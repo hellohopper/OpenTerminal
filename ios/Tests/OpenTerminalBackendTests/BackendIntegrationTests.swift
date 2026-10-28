@@ -253,6 +253,33 @@ struct BackendIntegrationTests {
         await phone.signOut()
     }
 
+    @Test func nativeAlertTypesRoundTripWithoutChangingTheirUnits() async throws {
+        let (phone, _) = try await paired("All alert types")
+        let (server, password) = try connection(), browser = TerminalAPI(server: server)
+        try await browser.signIn(password: password)
+        // Non-triggering thresholds keep this contract independent of the monitor timer.
+        let cases: [(AlertTrigger, String, String, Double)] = [
+            (.priceAbove, "en_US", "2000.5", 2000.5), (.priceBelow, "fr_FR", "0,5", 0.5),
+            (.dailyRise, "ar_EG", "٩٩٫٥", 99.5), (.dailyFall, "de_DE", "-99,5", -99.5),
+            (.volumeAbove, "en_US", "1000000", 1000000), (.volumeBelow, "fr_FR", "1,5", 1.5)
+        ]
+        var createdRules: [(Int, AlertTrigger, Double)] = []
+        for (type, identifier, text, expected) in cases {
+            let value = try #require(type.parseThreshold(text, locale: Locale(identifier: identifier)))
+            let created: Created = try await phone.post("/api/alerts", body: AlertInput(symbol: "AAPL", trigger: type, threshold: value, label: "Native \(type.rawValue)"))
+            createdRules.append((created.id, type, expected))
+        }
+        let result: AlertList = try await phone.get("/api/alerts")
+        for (id, type, threshold) in createdRules {
+            let rule = try #require(result.alerts.first { $0.id == id })
+            #expect(rule.metric == type.metric && rule.condition == type.condition && rule.threshold == threshold && rule.armed == 1)
+            #expect(rule.conditionLabelKey == type.labelKey)
+            let version = try #require(rule.mutationQuery)
+            try await browser.delete("/api/alerts/\(id)", query: version)
+        }
+        await phone.signOut(); await browser.signOut()
+    }
+
     @Test func conditionalAlertActionsProtectRulesChangedOnAnotherDevice() async throws {
         let (phone, _) = try await paired("Versioned alert phone")
         let (server, password) = try connection(), browser = TerminalAPI(server: server)

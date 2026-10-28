@@ -227,3 +227,17 @@
 "Day change ≤" = "Day change ≤";
 "Volume ≥" = "Volume ≥";
 "Volume ≤" = "Volume ≤";
+"Create alert" = "Create alert";
+"Alert type" = "Alert type";
+"Price threshold" = "Price threshold";
+"Volume threshold" = "Volume threshold";
+"Percentage threshold" = "Percentage threshold";
+"Enter a positive volume without thousands separators, for example %@." = "Enter a positive volume without thousands separators, for example %@.";
+"Enter a daily rise percentage without %, for example %@." = "Enter a daily rise percentage without %, for example %@.";
+"Enter a daily fall percentage without %, for example %@." = "Enter a daily fall percentage without %, for example %@.";
+"Enter a valid positive price without thousands separators." = "Enter a valid positive price without thousands separators.";
+"Enter a valid positive volume without thousands separators." = "Enter a valid positive volume without thousands separators.";
+"Enter a percentage from 0 to 1000000 without a % sign." = "Enter a percentage from 0 to 1000000 without a % sign.";
+"Enter a percentage from -100 to 0 without a % sign." = "Enter a percentage from -100 to 0 without a % sign.";
+"Choose a supported alert type." = "Choose a supported alert type.";
+"Changing the alert type clears the threshold. Each alert fires once; rearm it to check again." = "Changing the alert type clears the threshold. Each alert fires once; rearm it to check again.";

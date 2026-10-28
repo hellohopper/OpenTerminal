@@ -54,9 +54,9 @@ private struct SignInView: View {
     }
 }
 extension View {
-    @ViewBuilder func terminalPriceInput() -> some View {
+    @ViewBuilder func terminalPriceInput(signed: Bool = false) -> some View {
         #if os(iOS)
-        keyboardType(.decimalPad)
+        keyboardType(signed ? .numbersAndPunctuation : .decimalPad).autocorrectionDisabled()
         #else
         self
         #endif

@@ -183,6 +183,80 @@ import OpenTerminalCore
         #expect(!state.hasDraft && state.error == nil && state.message == nil && requests.all.isEmpty)
     }
 
+    @Test(arguments: AlertTrigger.allCases) func allAlertTypesSubmitNumericThresholdsAndTheCorrectMetric(type: AlertTrigger) async throws {
+        let (model, requests) = try await fixture(); defer { AlertProtocol.handler = nil }
+        let state = model.alertEditor; populate(state); state.selectTrigger(type)
+        let value = type == .dailyFall ? -3.5 : type == .dailyRise ? 3.5 : type.metric == "volume" ? 100000.5 : 200.5
+        state.draft.threshold = type == .dailyFall ? "-3,5" : type == .dailyRise ? "3,5" : type.metric == "volume" ? "100000,5" : "200,5"
+        await model.saveAlert(state, locale: Locale(identifier: "de_DE"))
+        let post = try #require(requests.all.first { $0.httpMethod == "POST" }), body = try #require(AlertProtocol.body(post))
+        #expect(body["threshold"] as? Double == value && body["metric"] as? String == type.metric && body["condition"] as? String == type.condition)
+        #expect(body["symbol"] as? String == "AAPL" && body["label"] as? String == "Price target" && body["armed"] as? Bool == true)
+        #expect(!state.hasDraft && state.error == nil && state.savedRevision == 1 && !state.saving)
+        try await eventually { model.sectionUpdated[.alerts] != nil }
+    }
+
+    @Test(arguments: [(AlertTrigger.dailyFall, "3.5"), (.dailyFall, "-100.01"), (.dailyRise, "-3.5"), (.dailyRise, "1000000.01"), (.volumeAbove, "0"), (.volumeBelow, "-10"), (.dailyRise, "3.5%")])
+    func invalidThresholdForTheSelectedTypeKeepsTheDraftWithoutWriting(type: AlertTrigger, input: String) async throws {
+        let (model, requests) = try await fixture(); defer { AlertProtocol.handler = nil }
+        let state = model.alertEditor; populate(state); state.selectTrigger(type); state.draft.threshold = input
+        let draft = state.draft
+        await model.saveAlert(state, locale: Locale(identifier: "en_US"))
+        #expect(state.draft == draft && state.error == type.validationKey && !state.saving && state.savedRevision == 0 && requests.all.isEmpty)
+    }
+
+    @Test func unsupportedMetricAndConditionCannotCreateAPriceRuleByAccident() async throws {
+        let (model, requests) = try await fixture(); defer { AlertProtocol.handler = nil }
+        let state = model.alertEditor; populate(state); state.draft.metric = "future"
+        await model.saveAlert(state)
+        #expect(state.error == "Choose a supported alert type." && requests.all.isEmpty)
+        state.draft.metric = "volume"; state.draft.condition = "CHANGE_ABOVE"
+        await model.saveAlert(state)
+        #expect(state.error == "Choose a supported alert type." && requests.all.isEmpty && state.hasDraft)
+    }
+
+    @Test func choosingAnotherTypeClearsOnlyItsThresholdAndCountsAsAnUnsavedEdit() {
+        let state = AlertEditorState(); populate(state); state.error = "Previous failure"
+        let previous = state.revision
+        state.selectTrigger(.dailyFall)
+        #expect(state.draft.trigger == .dailyFall && state.draft.threshold.isEmpty && state.draft.symbol == " aapl " && state.draft.label == " Price target ")
+        #expect(state.revision == previous + 1 && state.hasDraft && state.error == nil)
+        state.draft.threshold = "-3.5"; let same = state.revision; state.selectTrigger(.dailyFall)
+        #expect(state.draft.threshold == "-3.5" && state.revision == same)
+        state.discard(); #expect(state.draft.trigger == .priceAbove && !state.hasDraft)
+        state.selectTrigger(.volumeAbove); #expect(state.hasDraft)
+        state.discard(); #expect(!state.hasDraft)
+    }
+
+    @Test(arguments: [false, true]) func aTypeChangeDuringSavePreservesNewerEditsAndTheSubmittedUnits(returnToOriginal: Bool) async throws {
+        let (model, requests) = try await fixture(); defer { AlertProtocol.handler = nil }
+        let state = model.alertEditor, write = AlertGate(); populate(state)
+        state.selectTrigger(.dailyFall); state.draft.threshold = "-3.5"
+        AlertProtocol.handler = { request in
+            requests.append(request.request)
+            if request.request.httpMethod == "POST" { write.hold(request) } else { request.fixture() }
+        }
+        let save = Task { await model.saveAlert(state, locale: Locale(identifier: "en_US")) }; try await eventually { write.waiting }
+        state.selectTrigger(.volumeAbove); state.draft.threshold = "100000"
+        if returnToOriginal { state.selectTrigger(.dailyFall); state.draft.threshold = "-3.5" }
+        let draft = state.draft
+        await model.saveAlert(state); #expect(requests.all.filter { $0.httpMethod == "POST" }.count == 1)
+        write.releaseFixture(); await save.value
+        let post = try #require(requests.all.first { $0.httpMethod == "POST" }), body = try #require(AlertProtocol.body(post))
+        #expect(body["threshold"] as? Double == -3.5 && body["condition"] as? String == "CHANGE_BELOW" && body["metric"] as? String == "native")
+        #expect(state.draft == draft && state.hasDraft && !state.saving && state.savedRevision == 1 && state.message == "Alert saved. Newer edits are kept as a draft.")
+        try await eventually { model.sectionUpdated[.alerts] != nil }
+    }
+
+    @Test(arguments: [AlertTrigger.dailyRise, .dailyFall]) func explicitZeroPercentThresholdIsValid(type: AlertTrigger) async throws {
+        let (model, requests) = try await fixture(); defer { AlertProtocol.handler = nil }
+        let state = model.alertEditor; populate(state); state.selectTrigger(type); state.draft.threshold = "0"
+        await model.saveAlert(state, locale: Locale(identifier: "en_US"))
+        let post = try #require(requests.all.first { $0.httpMethod == "POST" }), body = try #require(AlertProtocol.body(post))
+        #expect(body["threshold"] as? Double == 0 && state.error == nil && !state.hasDraft)
+        try await eventually { model.sectionUpdated[.alerts] != nil }
+    }
+
     @Test(arguments: ["en_US", "zh_CN", "fr_FR", "ar_EG"]) func localizedPricesAreSentAsNumbersAndClearOnlyTheSubmittedDraft(identifier: String) async throws {
         let (model, requests) = try await fixture(); defer { AlertProtocol.handler = nil }
         let state = model.alertEditor; populate(state)
