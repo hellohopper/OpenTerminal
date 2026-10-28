@@ -227,3 +227,17 @@
 "Day change ≤" = "日涨跌幅 ≤";
 "Volume ≥" = "成交量 ≥";
 "Volume ≤" = "成交量 ≤";
+"Create alert" = "创建提醒";
+"Alert type" = "提醒类型";
+"Price threshold" = "价格阈值";
+"Volume threshold" = "成交量阈值";
+"Percentage threshold" = "百分比阈值";
+"Enter a positive volume without thousands separators, for example %@." = "输入不含千位分隔符的正数成交量，例如 %@。";
+"Enter a daily rise percentage without %, for example %@." = "输入日涨幅百分比，不带 %，例如 %@。";
+"Enter a daily fall percentage without %, for example %@." = "输入日跌幅百分比，不带 %，例如 %@。";
+"Enter a valid positive price without thousands separators." = "请输入有效的正数价格，不含千位分隔符。";
+"Enter a valid positive volume without thousands separators." = "请输入有效的正数成交量，不含千位分隔符。";
+"Enter a percentage from 0 to 1000000 without a % sign." = "请输入 0 到 1000000 之间的百分比，不带 %。";
+"Enter a percentage from -100 to 0 without a % sign." = "请输入 -100 到 0 之间的百分比，不带 %。";
+"Choose a supported alert type." = "请选择支持的提醒类型。";
+"Changing the alert type clears the threshold. Each alert fires once; rearm it to check again." = "切换提醒类型会清空阈值。每条提醒仅触发一次，重新启用后可再次检查。";

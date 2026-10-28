@@ -61,8 +61,12 @@ public struct AlertRule: Decodable, Identifiable, Equatable, Sendable {
 public struct AlertList: Decodable, Sendable { public let alerts: [AlertRule] }
 public struct AlertInput: Encodable, Sendable {
     public let symbol: String; public let condition: String; public let threshold: Double; public let label: String; public let armed: Bool
+    public let metric: String
     public init(symbol: String, condition: String, threshold: Double, label: String) {
-        self.symbol = symbol; self.condition = condition; self.threshold = threshold; self.label = label; armed = true
+        self.symbol = symbol; self.condition = condition; self.threshold = threshold; self.label = label; armed = true; metric = "native"
+    }
+    public init(symbol: String, trigger: AlertTrigger, threshold: Double, label: String) {
+        self.symbol = symbol; condition = trigger.condition; self.threshold = threshold; self.label = label; armed = true; metric = trigger.metric
     }
 }
 public struct NewsItem: Decodable, Identifiable, Sendable {

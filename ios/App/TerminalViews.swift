@@ -208,7 +208,7 @@ private struct AlertsView: View {
         List {
             Section {
                 DataSectionStatus(section: .alerts)
-                Button("Create price alert") { create = true }
+                Button("Create alert") { create = true }
                 NavigationLink("Trigger history") { AlertHistoryView(terminal: model).id(model.sessionID) }
                 Text("Rules are checked by your running Mac. Enable native notifications in Settings after configuring APNs on the server.").font(.caption).foregroundStyle(.secondary)
             }
@@ -302,12 +302,16 @@ private struct AlertEditor: View {
     @ObservedObject var state: AlertEditorState
     @ViewState<Bool> private var leaving = false
     var body: some View {
+        let trigger = state.draft.trigger ?? .priceAbove
         NavigationStack {
             Form {
                 TextField("Ticker", text: $state.draft.symbol).terminalInput(ticker: true)
-                Picker("Condition", selection: $state.draft.condition) { Text("Price ≥").tag("PRICE_ABOVE"); Text("Price ≤").tag("PRICE_BELOW") }
-                TextField("Threshold", text: $state.draft.threshold).terminalPriceInput()
-                Text("Enter a price without thousands separators, for example \(PriceInput.example(locale: locale)).").font(.caption).foregroundStyle(.secondary)
+                Picker("Alert type", selection: Binding(get: { state.draft.trigger ?? .priceAbove }, set: { state.selectTrigger($0) })) {
+                    ForEach(AlertTrigger.allCases, id: \.self) { Text(LocalizedStringKey($0.labelKey)).tag($0) }
+                }
+                TextField(LocalizedStringKey(trigger.thresholdLabelKey), text: $state.draft.threshold).terminalPriceInput(signed: trigger.allowsNegativeInput)
+                Text(nativeText(trigger.hintKey).replacingOccurrences(of: "%@", with: trigger.example(locale: locale))).font(.caption).foregroundStyle(.secondary)
+                Text("Changing the alert type clears the threshold. Each alert fires once; rearm it to check again.").font(.caption).foregroundStyle(.secondary)
                 TextField("Label (optional)", text: $state.draft.label)
                 if let error = state.error { Text(error).foregroundStyle(.red) }
                 if let message = state.message { Text(message).foregroundStyle(.secondary) }
