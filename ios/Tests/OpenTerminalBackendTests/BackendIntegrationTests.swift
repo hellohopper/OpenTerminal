@@ -26,6 +26,60 @@ struct BackendIntegrationTests {
         else { Issue.record("Expected HTTP \(code), received \(error)") }
     }
 
+    @Test func triggerHistoryPaginatesSnapshotsAndSurvivesRuleDeletion() async throws {
+        let (phone, _) = try await paired("History reader")
+        let (server, password) = try connection(), browser = TerminalAPI(server: server)
+        try await browser.signIn(password: password)
+        struct Input: Encodable, Sendable {
+            let symbol = "AAPL", armed = true
+            let condition: String, threshold: Double, label: String, metric: String
+        }
+        struct Check: Decodable, Sendable { let triggered: Int; let deferred: Bool }
+        var ids = Set<Int>()
+        for index in 0..<55 {
+            let input = Input(condition: index == 53 ? "CHANGE_ABOVE" : "PRICE_ABOVE", threshold: index == 53 ? 0.5 : 1,
+                              label: "Native history \(index)", metric: index == 54 ? "volume" : "native")
+            // Populate through the browser session, as native history also includes web
+            // rules. Keep bulk setup/cleanup below the phone-verification rate budget.
+            let created: Created = try await browser.post("/api/alerts", body: input)
+            ids.insert(created.id)
+        }
+        // The background monitor may have checked partway through creation. Respect its
+        // cooldown and wait for all fixture rules rather than assuming a single check.
+        var rules: [AlertRule] = []
+        for _ in 0..<100 {
+            let _: Check = try await browser.post("/api/alerts/check", body: [String: String]())
+            let list: AlertList = try await browser.get("/api/alerts")
+            rules = list.alerts.filter { ids.contains($0.id) }
+            if rules.count == ids.count && rules.allSatisfy({ $0.armed == 0 }) { break }
+            try await Task.sleep(for: .milliseconds(250))
+        }
+        try #require(rules.count == 55 && rules.allSatisfy { $0.armed == 0 }, "Fixture triggers were not recorded")
+        let first: AlertHistoryPage = try await phone.get("/api/alerts/history")
+        #expect(first.events.count == 50)
+        let cursor = try #require(first.nextCursor)
+        #expect(cursor == first.events.last?.id)
+        let second: AlertHistoryPage = try await phone.get("/api/alerts/history", query: ["before": String(cursor)])
+        #expect(second.events.count == 5 && second.nextCursor == nil)
+        let events = first.events + second.events
+        #expect(Set(events.map(\.id)).count == 55 && events.map(\.id) == events.map(\.id).sorted(by: >))
+        #expect(Set(events.compactMap(\.alert_id)) == ids)
+        #expect(events.allSatisfy { $0.symbol == "AAPL" && $0.label.hasPrefix("Native history ") && $0.recordedAt != nil && !$0.source.isEmpty && $0.price > 0 && $0.currency == "USD" })
+        let volume = try #require(events.first { $0.metric == "volume" })
+        let change = try #require(events.first { $0.condition == "CHANGE_ABOVE" })
+        #expect(volume.valueKind == .volume && volume.value == 100000 && volume.price == 110)
+        #expect(change.valueKind == .dailyChange && change.value == 1 && change.price == 110 && change.threshold == 0.5)
+        #expect(events.filter { $0.valueKind == .price }.allSatisfy { $0.value == $0.price && $0.threshold == 1 })
+        let original = try #require(first.events.first), ruleID = try #require(original.alert_id)
+        let rule = try #require(rules.first { $0.id == ruleID }), version = try #require(rule.mutationQuery)
+        try await phone.delete("/api/alerts/\(ruleID)", query: version)
+        let after: AlertHistoryPage = try await phone.get("/api/alerts/history")
+        let retained = try #require(after.events.first { $0.id == original.id })
+        #expect(retained.alert_id == nil && retained.label == original.label && retained.threshold == original.threshold && retained.value == original.value && retained.created_at == original.created_at)
+        for row in rules where row.id != ruleID { try await browser.delete("/api/alerts/\(row.id)", query: try #require(row.mutationQuery)) }
+        await phone.signOut(); await browser.signOut()
+    }
+
     @Test func pairingRenewalRevocationAndOriginProtection() async throws {
         let (server, password) = try connection()
         let unauthenticated = TerminalAPI(server: server)

@@ -36,7 +36,7 @@ No signup. No credit card. No rate‑limited demo tier. Clone it, `npm install`,
 ## ✨ Features
 
 - **Simple and professional interfaces** — switch between a focused home/watchlist/holdings experience and the full terminal. Save named page layouts with sidebar and visibility choices, optionally including appearance. Install the mobile web app on your Home Screen with a public offline fallback. [UI and mobile guide](docs/ui-modes-mobile.md).
-- **Native iOS companion** — SwiftUI iPhone/iPad app with Keychain device login, shared watchlists, holdings, price alerts, charts, research notes and optional APNs delivery. [Xcode project and setup](ios/README.md).
+- **Native iOS companion** — SwiftUI iPhone/iPad app with Keychain device login, shared watchlists, holdings, price alerts and trigger history, charts, research notes and optional APNs delivery. [Xcode project and setup](ios/README.md).
 - **Mac Studio backend** — repo-local database/config/logs/backups, a double-click control menu, local-only access, optional login startup, and private HTTPS access from home or cellular through Tailscale. [Deployment guide](docs/mac-studio.md).
 
 - **Workflow recovery and coverage** — persistent research drafts, optional UI preference sync, scheduled backups and complete migration, broader TODAY coverage, combined account exposure and technical-signal catch-up. [Usage and limits](docs/workflow-reliability.md).
