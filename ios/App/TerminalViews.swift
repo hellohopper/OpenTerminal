@@ -203,8 +203,21 @@ private struct HoldingsView: View {
 private struct AlertsView: View {
     @EnvironmentObject private var model: TerminalModel
     @Environment(\.locale) private var locale
+    @Environment(\.dynamicTypeSize) private var textSize
     @ViewState<Bool> private var create = false
+    @ViewState<AlertEditState?> private var editing = nil
     @ViewState<(rule: AlertRule, session: UUID)?> private var deleting = nil
+    @ViewBuilder private func actions(for rule: AlertRule) -> some View {
+        Button("Edit alert") { editing = model.prepareAlertEdit(rule, locale: locale) }
+            .disabled(model.pendingAlertActions.contains(rule.id) && !model.isSavingAlertEdit(rule.id))
+        Group {
+            Button(LocalizedStringKey(rule.armed == 0 ? "Rearm" : "Pause")) {
+                let session = model.sessionID
+                Task { await model.setArmed(rule, session: session) }
+            }
+            Button("Delete", role: .destructive) { deleting = (rule, model.sessionID) }
+        }.disabled(model.pendingAlertActions.contains(rule.id))
+    }
     var body: some View {
         List {
             Section {
@@ -219,13 +232,10 @@ private struct AlertsView: View {
                     Text("\(rule.symbol) · \(nativeText(rule.conditionLabelKey)) · \(alertValueText(rule.threshold, kind: rule.valueKind, locale: locale))").font(.callout)
                     Text(alertRepeatText(rule, locale: locale)).font(.caption).foregroundStyle(.secondary)
                     AlertRuleStatus(rule: rule)
-                    HStack {
-                        Button(LocalizedStringKey(rule.armed == 0 ? "Rearm" : "Pause")) {
-                            let session = model.sessionID
-                            Task { await model.setArmed(rule, session: session) }
-                        }
-                        Button("Delete", role: .destructive) { deleting = (rule, model.sessionID) }
-                    }.buttonStyle(.borderless).disabled(model.pendingAlertActions.contains(rule.id))
+                    Group {
+                        if textSize.isAccessibilitySize { VStack(alignment: .leading, spacing: 8) { actions(for: rule) } }
+                        else { HStack { actions(for: rule) } }
+                    }.buttonStyle(.borderless)
                     if model.pendingAlertActions.contains(rule.id) { ProgressView("Updating alert…") }
                     if let error = model.alertActionErrors[rule.id] {
                         Text(error).font(.callout).foregroundStyle(.red)
@@ -236,7 +246,8 @@ private struct AlertsView: View {
             }
             if model.alerts.isEmpty && !model.loadingSections.contains(.alerts) && model.sectionErrors[.alerts] == nil { Text("No alerts yet.") }
         }.refreshable { await model.refreshAlerts() }.sheet(isPresented: $create) { AlertEditor(state: model.alertEditor) }
-            .onChange(of: model.sessionID) { _, _ in deleting = nil }
+            .sheet(item: $editing) { AlertEditView(state: $0) }
+            .onChange(of: model.sessionID) { _, _ in deleting = nil; editing = nil }
             .confirmationDialog("Delete alert?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible) {
                 Button("Delete alert", role: .destructive) {
                     if let target = deleting { Task { await model.deleteAlert(target.rule, session: target.session) } }
@@ -378,6 +389,58 @@ private struct AlertEditor: View {
                 } message: {
                     Text(LocalizedStringKey(state.saving ? "Your alert is still saving. Newer edits will remain in memory." : "Your draft will remain in memory. It is cleared on sign-out or when the app closes."))
                 }
+        }
+    }
+}
+private struct AlertEditView: View {
+    @EnvironmentObject private var model: TerminalModel
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var state: AlertEditState
+    @ViewState<Bool> private var leaving = false
+    @ViewState<Bool> private var reload = false
+    var body: some View {
+        NavigationStack {
+            Form {
+                if let original = state.original {
+                    Section("Saved rule") {
+                        Text(original.symbol).font(.headline)
+                        Text(LocalizedStringKey(original.conditionLabelKey))
+                        Text(alertRepeatText(original, locale: state.locale))
+                        LabeledContent("Rule status", value: nativeText(original.armed == 0 ? "Not armed" : "Armed"))
+                        Text("Editing keeps the symbol, alert type, repeat policy and armed state.").font(.caption).foregroundStyle(.secondary)
+                    }
+                    if let trigger = AlertTrigger(metric: original.metric ?? "native", condition: original.condition) {
+                        TextField(LocalizedStringKey(trigger.thresholdLabelKey), text: $state.threshold).terminalPriceInput(signed: trigger.allowsNegativeInput).disabled(state.reloading)
+                        Text(nativeText(trigger.hintKey).replacingOccurrences(of: "%@", with: trigger.example(locale: state.locale))).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                TextField("Label (optional)", text: $state.label).disabled(state.reloading)
+                if let error = state.error { Text(error).foregroundStyle(.red) }
+                if state.needsReview && state.error == nil { Text("Reload the latest rule before saving changes.").foregroundStyle(.orange) }
+                if let message = state.message { Text(message).foregroundStyle(.secondary) }
+                if state.saving { ProgressView("Saving…") }
+                if state.reloading { ProgressView("Reloading alert…") }
+                if state.hasDraft { Text("Draft kept in memory until sign-out or the app closes.").font(.caption).foregroundStyle(.secondary) }
+                Button("Save changes") { Task { await model.saveAlertEdit(state) } }
+                    .disabled(state.saving || state.reloading || !state.hasDraft || state.needsReview || model.pendingAlertActions.contains(state.ruleID))
+                Button("Reload latest rule") {
+                    if state.hasDraft { reload = true } else { Task { await model.reloadAlertEdit(state) } }
+                }.disabled(state.saving || state.reloading)
+            }.navigationTitle("Edit alert")
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { if state.hasDraft || state.saving || state.reloading { leaving = true } else { dismiss() } } } }
+                .interactiveDismissDisabled(state.hasDraft || state.saving || state.reloading)
+                .onChange(of: state.savedRevision) { _, _ in if model.isCurrentAlertEdit(state), !state.hasDraft { dismiss() } }
+                .confirmationDialog("Leave alert?", isPresented: $leaving, titleVisibility: .visible) {
+                    Button("Keep draft and leave") { dismiss() }
+                    if !state.saving && !state.reloading { Button("Discard draft and leave", role: .destructive) { state.discard(); dismiss() } }
+                    Button("Stay", role: .cancel) {}
+                } message: {
+                    Text(LocalizedStringKey(state.saving ? "Your alert is still saving. Newer edits will remain in memory." : "Your draft will remain in memory. It is cleared on sign-out or when the app closes."))
+                }
+                .confirmationDialog("Reload alert and discard edits?", isPresented: $reload, titleVisibility: .visible) {
+                    Button("Reload latest rule", role: .destructive) { Task { await model.reloadAlertEdit(state) } }
+                    Button("Cancel", role: .cancel) {}
+                } message: { Text("A successful reload replaces this draft with the latest saved rule. Failed reloads keep your edits.") }
         }
     }
 }

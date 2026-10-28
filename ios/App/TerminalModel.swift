@@ -79,6 +79,7 @@ struct WatchlistImportPlan {
     @Published private(set) var pendingAlertActions: Set<Int> = []
     @Published private(set) var alertActionErrors: [Int: String] = [:]
     @Published private(set) var alertEditor = AlertEditorState()
+    private var alertEdits: [Int: AlertEditState] = [:]
     @Published var briefing: Briefing?
     @Published var workspaces: [SharedWorkspace] = []
     @Published private(set) var loadingWorkspaces = false
@@ -235,6 +236,7 @@ struct WatchlistImportPlan {
         generation = UUID(); credential = nil; api = nil; server = nil; signedIn = false
         researchDrafts = [:]; researchNoteStates = [:]; pendingResearch = nil; researchSymbol = nil
         alertEditor.clear(); alertEditor = AlertEditorState(); alertRefresh?.cancel(); alertRefresh = nil
+        for state in alertEdits.values { state.clear() }; alertEdits = [:]
         pendingAlertActions = []; alertActionErrors = [:]
         workspaceImportRefresh?.cancel(); workspaceImportRefresh = nil; workspaceLoadRequest = nil
         loadingWorkspaces = false; workspacesLoaded = false; workspaceLoadError = nil
@@ -272,7 +274,7 @@ struct WatchlistImportPlan {
             }
             async let lists: Void = refreshWatchlistData()
             async let accounts: Void = refreshAccounts()
-            async let rules: Void = refreshAlerts()
+            async let rules: Bool = refreshAlerts()
             _ = await (lists, accounts, rules)
             if token == generation && !Task.isCancelled && self.error == nil && sectionErrors.isEmpty { lastUpdated = .now; reconnecting = false; retryDelay = 2 }
         } catch { if token == generation && !Task.isCancelled { await report(error) } }
@@ -309,16 +311,18 @@ struct WatchlistImportPlan {
             await refreshHoldings()
         } catch { if current(.holdings, request: request, token: token) { await report(error, section: .holdings) } }
     }
-    func refreshAlerts() async {
-        guard let api else { return }; let token = generation, request = begin(.alerts); defer { finish(.alerts, request: request, token: token) }
+    @discardableResult func refreshAlerts() async -> Bool {
+        guard let api else { return false }; let token = generation, request = begin(.alerts); defer { finish(.alerts, request: request, token: token) }
         do {
             let rules: AlertList = try await api.get("/api/alerts")
             if current(.alerts, request: request, token: token) {
                 let received = Date.now
                 alerts = rules.alerts; alertMonitor = rules.monitor; alertMonitorReceivedAt = rules.monitor == nil ? nil : received
                 sectionUpdated[.alerts] = received
+                return true
             }
         } catch { if current(.alerts, request: request, token: token) { await report(error, section: .alerts) } }
+        return false
     }
     func refreshQuotes() async {
         guard let api else { return }; let token = generation, symbols = watchlist
@@ -544,6 +548,85 @@ struct WatchlistImportPlan {
         alertRefresh = Task {
             guard session == generation, !Task.isCancelled else { return }
             await refreshAlerts()
+        }
+    }
+    func isCurrentAlertEdit(_ state: AlertEditState) -> Bool {
+        signedIn && state.session == generation && alertEdits[state.ruleID] === state
+    }
+    func isSavingAlertEdit(_ id: Int) -> Bool { alertEdits[id]?.saving == true }
+    private func editableThreshold(_ rule: AlertRule, locale: Locale) -> String? {
+        AlertTrigger(metric: rule.metric ?? "native", condition: rule.condition)?.thresholdText(rule.threshold, locale: locale)
+    }
+    func prepareAlertEdit(_ rule: AlertRule, locale: Locale = .current) -> AlertEditState? {
+        guard signedIn else { return nil }
+        if let existing = alertEdits[rule.id], existing.saving || existing.reloading { return existing }
+        guard !pendingAlertActions.contains(rule.id), let current = alerts.first(where: { $0.id == rule.id }), current.matchesDefinition(rule) else { return nil }
+        guard current.mutationQuery != nil else { alertActionErrors[rule.id] = nativeText("Update the Mac backend before changing saved alerts."); return nil }
+        if let existing = alertEdits[rule.id], existing.hasDraft || existing.needsReview {
+            if let original = existing.original, !current.matchesDefinition(original) {
+                existing.needsReview = true; existing.error = nativeText("This alert changed. Reload it and review your edits.")
+            }
+            return existing
+        }
+        if let existing = alertEdits[rule.id] {
+            guard let text = editableThreshold(current, locale: existing.locale) else {
+                alertActionErrors[rule.id] = nativeText("This alert type or threshold cannot be edited on this phone."); return nil
+            }
+            existing.reload(current, text: text); return existing
+        }
+        guard let text = editableThreshold(current, locale: locale) else {
+            alertActionErrors[rule.id] = nativeText("This alert type or threshold cannot be edited on this phone."); return nil
+        }
+        let state = AlertEditState(rule: current, text: text, session: generation, locale: locale)
+        alertEdits[rule.id] = state; return state
+    }
+    func reloadAlertEdit(_ state: AlertEditState) async {
+        guard isCurrentAlertEdit(state), !state.saving, !state.reloading, !Task.isCancelled else { return }
+        let revision = state.revision; state.reloading = true; state.error = nil; state.message = nil
+        defer { if isCurrentAlertEdit(state) { state.reloading = false } }
+        let loaded = await refreshAlerts()
+        guard isCurrentAlertEdit(state), !Task.isCancelled else { return }
+        guard state.revision == revision else { state.error = nativeText("Newer edits are kept. Reload again to discard them."); return }
+        guard loaded else { state.error = nativeText("Could not reload this alert. Your draft is kept."); return }
+        guard let rule = alerts.first(where: { $0.id == state.ruleID }) else {
+            state.needsReview = true; state.error = nativeText("This alert is no longer available. Your draft is kept."); return
+        }
+        guard rule.mutationQuery != nil, let text = editableThreshold(rule, locale: state.locale) else {
+            state.needsReview = true; state.error = nativeText("This alert type or threshold cannot be edited on this phone."); return
+        }
+        state.reload(rule, text: text)
+    }
+    func saveAlertEdit(_ state: AlertEditState) async {
+        guard isCurrentAlertEdit(state), let api, !state.saving, !state.reloading, state.hasDraft,
+              !pendingAlertActions.contains(state.ruleID), !Task.isCancelled, let original = state.original else { return }
+        state.error = nil; state.message = nil
+        guard !state.needsReview, let current = alerts.first(where: { $0.id == state.ruleID }), current.matchesDefinition(original) else {
+            state.needsReview = true; state.error = nativeText("This alert changed. Reload it and review your edits."); return
+        }
+        guard let query = original.mutationQuery, let trigger = AlertTrigger(metric: original.metric ?? "native", condition: original.condition) else {
+            state.error = nativeText("This alert type or threshold cannot be edited on this phone."); return
+        }
+        let text = state.threshold, label = state.label, revision = state.revision
+        guard let threshold = trigger.parseThreshold(text, locale: state.locale) else { state.error = nativeText(trigger.validationKey); return }
+        let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.utf16.count <= 120 else { state.error = nativeText("Use a label of up to 120 characters."); return }
+        let edit = AlertEdit(threshold: threshold, label: trimmed)
+        state.saving = true; pendingAlertActions.insert(original.id); alertActionErrors[original.id] = nil
+        defer { if isCurrentAlertEdit(state) { state.saving = false; pendingAlertActions.remove(original.id) } }
+        do {
+            try await api.editAlert(id: original.id, edit: edit, query: query)
+            guard isCurrentAlertEdit(state) else { return }
+            let acknowledged = original.updating(edit)
+            alerts = alerts.map { $0.id == original.id && $0.revision == original.revision && $0.generation == original.generation ? $0.updating(edit) : $0 }
+            state.acknowledge(acknowledged, text: text, label: label, submittedRevision: revision)
+            scheduleAlertRefresh(session: state.session)
+        } catch {
+            guard isCurrentAlertEdit(state), !(error is CancellationError) else { return }
+            if error as? ConnectionError == .unauthorized { await report(error) }
+            else if case .response(let code, _) = error as? ConnectionError, code == 409 || code == 404 {
+                state.needsReview = true; state.error = nativeText("This alert changed. Reload it and review your edits.")
+                scheduleAlertRefresh(session: state.session)
+            } else { state.error = error.localizedDescription }
         }
     }
     func setArmed(_ rule: AlertRule, session: UUID) async {
