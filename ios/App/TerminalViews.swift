@@ -201,6 +201,7 @@ private struct HoldingsView: View {
 }
 private struct AlertsView: View {
     @EnvironmentObject private var model: TerminalModel
+    @Environment(\.locale) private var locale
     @ViewState<Bool> private var create = false
     @ViewState<(rule: AlertRule, session: UUID)?> private var deleting = nil
     var body: some View {
@@ -208,12 +209,13 @@ private struct AlertsView: View {
             Section {
                 DataSectionStatus(section: .alerts)
                 Button("Create price alert") { create = true }
+                NavigationLink("Trigger history") { AlertHistoryView(terminal: model).id(model.sessionID) }
                 Text("Rules are checked by your running Mac. Enable native notifications in Settings after configuring APNs on the server.").font(.caption).foregroundStyle(.secondary)
             }
             ForEach(model.alerts) { rule in
                 VStack(alignment: .leading, spacing: 8) {
                     Text(rule.label.isEmpty ? rule.symbol : rule.label).font(.headline)
-                    Text("\(rule.symbol) · \(rule.condition) · \(number(rule.threshold))").font(.callout)
+                    Text("\(rule.symbol) · \(nativeText(rule.conditionLabelKey)) · \(alertValueText(rule.threshold, kind: rule.valueKind, locale: locale))").font(.callout)
                     HStack {
                         Button(LocalizedStringKey(rule.armed == 0 ? "Rearm" : "Pause")) {
                             let session = model.sessionID
@@ -240,9 +242,57 @@ private struct AlertsView: View {
                 Button("Cancel", role: .cancel) { deleting = nil }
             } message: {
                 if let rule = deleting?.rule {
-                    Text("\(rule.label.isEmpty ? rule.symbol : rule.label) · \(rule.symbol) · \(rule.condition) · \(number(rule.threshold))\n\n\(nativeText("This removes the shared alert from the Mac and every connected device."))")
+                    Text("\(rule.label.isEmpty ? rule.symbol : rule.label) · \(rule.symbol) · \(nativeText(rule.conditionLabelKey)) · \(alertValueText(rule.threshold, kind: rule.valueKind, locale: locale))\n\n\(nativeText("This removes the shared alert from the Mac and every connected device."))")
                 }
             }
+    }
+}
+private struct AlertHistoryView: View {
+    @StateObject private var history: AlertHistoryModel
+    @Environment(\.locale) private var locale
+    init(terminal: TerminalModel) { _history = StateObject(wrappedValue: AlertHistoryModel(terminal: terminal)) }
+    var body: some View {
+        List {
+            Section {
+                Button("Refresh history") { Task { await history.loadLatest() } }.disabled(history.loadingLatest)
+                if history.loadingLatest { ProgressView("Loading history…") }
+                if let error = history.error { Text(error).foregroundStyle(.red) }
+                if let updated = history.updated { Text("Updated \(updated.formatted(date: .omitted, time: .shortened))").font(.caption).foregroundStyle(.secondary) }
+            } footer: {
+                Text("History shows checks recorded by the Mac. Offline periods cannot be reconstructed.")
+            }
+            ForEach(history.events) { event in
+                Section {
+                    if let symbol = normalizedSymbol(event.symbol) {
+                        NavigationLink { ResearchView(symbol: symbol) } label: {
+                            Text(event.label.isEmpty ? event.symbol : event.label).font(.headline)
+                        }
+                    } else { Text(event.label.isEmpty ? event.symbol : event.label).font(.headline) }
+                    Text("\(event.symbol) · \(nativeText(event.conditionLabelKey)) \(alertValueText(event.threshold, kind: event.valueKind, currency: event.currency, locale: locale))").font(.callout)
+                    LabeledContent("Triggered value", value: alertValueText(event.value, kind: event.valueKind, currency: event.currency, locale: locale))
+                    if event.valueKind != .price {
+                        LabeledContent("Quote price", value: alertValueText(event.price, kind: .price, currency: event.currency, locale: locale))
+                    }
+                    if event.alert_id == nil { Text("Original rule deleted.").font(.caption).foregroundStyle(.secondary) }
+                    Group {
+                        if let date = event.recordedAt { Text("Recorded \(date.formatted(date: .abbreviated, time: .standard))") }
+                        else { Text("Recorded time unavailable.") }
+                        if let date = event.observedAt { Text("Quote observed \(date.formatted(date: .abbreviated, time: .standard))") }
+                        else { Text("Quote time unavailable.") }
+                        Text(event.source)
+                    }.font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            if history.hasLoaded && history.events.isEmpty && !history.loadingLatest && history.error == nil { Text("No recorded triggers yet.") }
+            if history.loadingMore { ProgressView("Loading older triggers…") }
+            if let error = history.pageError { Text(error).foregroundStyle(.red) }
+            if history.nextCursor != nil {
+                Button(LocalizedStringKey(history.pageError == nil ? "Load older triggers" : "Retry older triggers")) { Task { await history.loadMore() } }
+                    .disabled(history.loadingLatest || history.loadingMore)
+            }
+        }.navigationTitle("Trigger history")
+            .refreshable { await history.loadLatest() }
+            .task { if !history.hasLoaded { await history.loadLatest() } }
     }
 }
 private struct AlertEditor: View {
