@@ -68,11 +68,12 @@ private struct TodayView: View {
 private struct DataSectionStatus: View {
     @EnvironmentObject private var model: TerminalModel
     let section: DataSection
+    var showsUpdated = true
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             if model.loadingSections.contains(section) { ProgressView("Loading…") }
             if let error = model.sectionErrors[section] { Text("\(nativeText(section.rawValue)): \(error)").foregroundStyle(.orange).font(.callout) }
-            if let updated = model.sectionUpdated[section] { Text("\(nativeText(section.rawValue)) updated \(updated.formatted(date: .omitted, time: .shortened))").font(.caption).foregroundStyle(.secondary) }
+            if showsUpdated, let updated = model.sectionUpdated[section] { Text("\(nativeText(section.rawValue)) updated \(updated.formatted(date: .omitted, time: .shortened))").font(.caption).foregroundStyle(.secondary) }
         }
     }
 }
@@ -207,15 +208,16 @@ private struct AlertsView: View {
     var body: some View {
         List {
             Section {
-                DataSectionStatus(section: .alerts)
                 Button("Create alert") { create = true }
                 NavigationLink("Trigger history") { AlertHistoryView(terminal: model).id(model.sessionID) }
                 Text("Rules are checked by your running Mac. Enable native notifications in Settings after configuring APNs on the server.").font(.caption).foregroundStyle(.secondary)
             }
+            AlertMonitorSection()
             ForEach(model.alerts) { rule in
                 VStack(alignment: .leading, spacing: 8) {
                     Text(rule.label.isEmpty ? rule.symbol : rule.label).font(.headline)
                     Text("\(rule.symbol) · \(nativeText(rule.conditionLabelKey)) · \(alertValueText(rule.threshold, kind: rule.valueKind, locale: locale))").font(.callout)
+                    AlertRuleStatus(rule: rule)
                     HStack {
                         Button(LocalizedStringKey(rule.armed == 0 ? "Rearm" : "Pause")) {
                             let session = model.sessionID
@@ -245,6 +247,42 @@ private struct AlertsView: View {
                     Text("\(rule.label.isEmpty ? rule.symbol : rule.label) · \(rule.symbol) · \(nativeText(rule.conditionLabelKey)) · \(alertValueText(rule.threshold, kind: rule.valueKind, locale: locale))\n\n\(nativeText("This removes the shared alert from the Mac and every connected device."))")
                 }
             }
+    }
+}
+private struct AlertMonitorSection: View {
+    @EnvironmentObject private var model: TerminalModel
+    var body: some View {
+        Section {
+            DataSectionStatus(section: .alerts, showsUpdated: false)
+            Button("Refresh alerts") { Task { await model.refreshAlerts() } }.disabled(model.loadingSections.contains(.alerts))
+            if let monitor = model.alertMonitor {
+                LabeledContent("Status at last refresh", value: nativeText(monitor.stateLabelKey))
+                if let received = model.alertMonitorReceivedAt { Text("Status received \(received.formatted(date: .abbreviated, time: .standard))").font(.caption).foregroundStyle(.secondary) }
+                if model.sectionErrors[.alerts] != nil { Text("Showing the last received monitor status.").foregroundStyle(.orange) }
+                if monitor.running == false { Text("The Mac is not scheduling alert checks.").foregroundStyle(.orange) }
+                if let seconds = monitor.intervalSeconds { Text("Check interval: \(seconds.formatted()) seconds").font(.caption) }
+                if let date = monitor.lastAttempt { Text("Last check attempt \(date.formatted(date: .abbreviated, time: .standard))").font(.caption) }
+                else { Text("No check time available in this server run.").font(.caption).foregroundStyle(.secondary) }
+                if let error = monitor.lastError, !error.isEmpty { Text("Last reported check issue: \(error)").font(.callout).foregroundStyle(.orange) }
+                if let missing = monitor.missingSymbols, !missing.isEmpty { Text("Missing quotes at last check: \(missing.joined(separator: ", "))").font(.callout).foregroundStyle(.orange) }
+            } else if model.sectionUpdated[.alerts] != nil { Text("Monitor status unavailable.").foregroundStyle(.secondary) }
+        } header: { Text("Mac alert monitor") } footer: {
+            Text("This snapshot describes the Mac at the last refresh. Check times record attempts; successful rule evaluations appear below. Polling can miss moves between checks.")
+        }
+    }
+}
+private struct AlertRuleStatus: View {
+    let rule: AlertRule
+    @Environment(\.locale) private var locale
+    var body: some View {
+        DisclosureGroup("Check details") {
+            LabeledContent("Rule status", value: nativeText(rule.armed == 0 ? "Not armed" : "Armed"))
+            if let date = rule.lastEvaluation { Text("Last evaluated \(date.formatted(date: .abbreviated, time: .standard))") }
+            else { Text("No evaluation time available.").foregroundStyle(.secondary) }
+            LabeledContent("Last evaluated value", value: rule.last_value.map { alertValueText($0, kind: rule.valueKind, locale: locale) } ?? "—")
+            if let date = rule.lastTrigger { Text("Last trigger recorded \(date.formatted(date: .abbreviated, time: .standard))") }
+            else { Text("No trigger time available.").foregroundStyle(.secondary) }
+        }.font(.caption)
     }
 }
 private struct AlertHistoryView: View {
