@@ -5,9 +5,10 @@ Add **ALERTS** from the sidebar. Enter a symbol, choose a condition and threshol
 Supported conditions include equality:
 
 - **Price ≥ / Price ≤** compare the latest available price with your threshold, in the instrument's quote currency. Binance crypto quotes use USDT; no currency conversion is performed.
+- **Volume ≥ / Volume ≤** compare provider volume with a positive threshold. A missing volume value leaves the rule enabled for retry.
 - **Day change ≥ / Day change ≤** compare the provider's daily percentage change. Enter a negative percentage for a fall, such as `-5`.
 
-An enabled rule fires on the first successful check that meets its condition, including when the condition was already met when you created it. It then stops until you select **Rearm**. This is a threshold check, not a requirement to observe a crossing from the opposite side. **Pause**, **Edit** and **Delete** manage rules; deleting a rule retains its trigger history.
+An enabled rule fires on the first successful check that meets its condition, including when the condition was already met when you created it. The default one-shot policy (`repeat_seconds=0`) then stops until you select **Rearm**. Repeating rules stay enabled and can fire again after their per-rule cooldown has elapsed, if a successful check meets the condition. The web editor accepts an integer cooldown from 60 to 86400 seconds; the native app offers 1, 5 or 15 minutes, 1 hour or 1 day. The interval starts at the last trigger. A 1-day cooldown means at least 86400 elapsed seconds, with the next eligible check determining the trigger time. Pause/rearm retains that last trigger time and any remaining cooldown. This is a threshold check, not a requirement to observe a crossing from the opposite side. **Pause**, **Edit** and **Delete** manage rules; deleting a rule retains its trigger history.
 
 ## Monitoring and delivery
 
