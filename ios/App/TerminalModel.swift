@@ -522,7 +522,7 @@ struct WatchlistImportPlan {
         state.saving = true
         defer { if session == generation, state === alertEditor { state.saving = false } }
         do {
-            let _: Acknowledgement = try await api.post("/api/alerts", body: AlertInput(symbol: symbol, trigger: trigger, threshold: threshold, label: label))
+            let _: Acknowledgement = try await api.post("/api/alerts", body: AlertInput(symbol: symbol, trigger: trigger, threshold: threshold, label: label, repeatPolicy: submitted.repeatPolicy))
             guard session == generation, state === alertEditor else { return }
             // Once acknowledged, record the write even if the presenting view was canceled.
             if state.revision == revision {

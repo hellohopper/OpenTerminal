@@ -217,6 +217,7 @@ private struct AlertsView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(rule.label.isEmpty ? rule.symbol : rule.label).font(.headline)
                     Text("\(rule.symbol) · \(nativeText(rule.conditionLabelKey)) · \(alertValueText(rule.threshold, kind: rule.valueKind, locale: locale))").font(.callout)
+                    Text(alertRepeatText(rule, locale: locale)).font(.caption).foregroundStyle(.secondary)
                     AlertRuleStatus(rule: rule)
                     HStack {
                         Button(LocalizedStringKey(rule.armed == 0 ? "Rearm" : "Pause")) {
@@ -244,7 +245,7 @@ private struct AlertsView: View {
                 Button("Cancel", role: .cancel) { deleting = nil }
             } message: {
                 if let rule = deleting?.rule {
-                    Text("\(rule.label.isEmpty ? rule.symbol : rule.label) · \(rule.symbol) · \(nativeText(rule.conditionLabelKey)) · \(alertValueText(rule.threshold, kind: rule.valueKind, locale: locale))\n\n\(nativeText("This removes the shared alert from the Mac and every connected device."))")
+                    Text("\(rule.label.isEmpty ? rule.symbol : rule.label) · \(rule.symbol) · \(nativeText(rule.conditionLabelKey)) · \(alertValueText(rule.threshold, kind: rule.valueKind, locale: locale))\n\(alertRepeatText(rule, locale: locale))\n\n\(nativeText("This removes the shared alert from the Mac and every connected device."))")
                 }
             }
     }
@@ -349,7 +350,16 @@ private struct AlertEditor: View {
                 }
                 TextField(LocalizedStringKey(trigger.thresholdLabelKey), text: $state.draft.threshold).terminalPriceInput(signed: trigger.allowsNegativeInput)
                 Text(nativeText(trigger.hintKey).replacingOccurrences(of: "%@", with: trigger.example(locale: locale))).font(.caption).foregroundStyle(.secondary)
-                Text("Changing the alert type clears the threshold. Each alert fires once; rearm it to check again.").font(.caption).foregroundStyle(.secondary)
+                Text("Changing the alert type clears the threshold.").font(.caption).foregroundStyle(.secondary)
+                Picker("Repeat cooldown", selection: $state.draft.repeatPolicy) {
+                    ForEach(AlertRepeatPolicy.allCases, id: \.self) { Text(LocalizedStringKey($0.labelKey)).tag($0) }
+                }
+                if state.draft.repeatPolicy == .once {
+                    Text("This alert fires once. Rearm it to check again.").font(.caption).foregroundStyle(.secondary)
+                } else {
+                    Text("If the condition stays met, the Mac can trigger again after the cooldown. It stays armed until paused. Checks and provider data determine the timing.").font(.caption).foregroundStyle(.secondary)
+                    Text("Pause and rearm keep the last trigger time, so an existing cooldown still applies.").font(.caption).foregroundStyle(.secondary)
+                }
                 TextField("Label (optional)", text: $state.draft.label)
                 if let error = state.error { Text(error).foregroundStyle(.red) }
                 if let message = state.message { Text(message).foregroundStyle(.secondary) }

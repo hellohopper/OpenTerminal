@@ -267,3 +267,17 @@
 "Status received %@" = "Status received %@";
 "Last reported check issue: %@" = "Last reported check issue: %@";
 "Missing quotes at last check: %@" = "Missing quotes at last check: %@";
+"Once" = "Once";
+"1 minute" = "1 minute";
+"5 minutes" = "5 minutes";
+"15 minutes" = "15 minutes";
+"1 hour" = "1 hour";
+"1 day" = "1 day";
+"Repeat cooldown" = "Repeat cooldown";
+"One-shot alert" = "One-shot alert";
+"Repeat cooldown: %@ seconds" = "Repeat cooldown: %@ seconds";
+"Repeat policy unavailable." = "Repeat policy unavailable.";
+"Changing the alert type clears the threshold." = "Changing the alert type clears the threshold.";
+"This alert fires once. Rearm it to check again." = "This alert fires once. Rearm it to check again.";
+"If the condition stays met, the Mac can trigger again after the cooldown. It stays armed until paused. Checks and provider data determine the timing." = "If the condition stays met, the Mac can trigger again after the cooldown. It stays armed until paused. Checks and provider data determine the timing.";
+"Pause and rearm keep the last trigger time, so an existing cooldown still applies." = "Pause and rearm keep the last trigger time, so an existing cooldown still applies.";

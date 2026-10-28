@@ -37,6 +37,6 @@ extension AlertRule {
     /// An ordinary monitor tick must not invalidate a reviewed pause or deletion.
     public func matchesDefinition(_ other: Self) -> Bool {
         id == other.id && symbol == other.symbol && condition == other.condition && threshold == other.threshold
-            && label == other.label && armed == other.armed && revision == other.revision && generation == other.generation && metric == other.metric
+            && label == other.label && armed == other.armed && revision == other.revision && generation == other.generation && metric == other.metric && repeat_seconds == other.repeat_seconds
     }
 }

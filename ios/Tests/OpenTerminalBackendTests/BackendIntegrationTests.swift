@@ -33,12 +33,13 @@ struct BackendIntegrationTests {
         struct Input: Encodable, Sendable {
             let symbol = "AAPL", armed = true
             let condition: String, threshold: Double, label: String, metric: String
+            let repeat_seconds: Int
         }
         struct Check: Decodable, Sendable { let triggered: Int; let deferred: Bool }
         var ids = Set<Int>()
         for index in 0..<55 {
             let input = Input(condition: index == 53 ? "CHANGE_ABOVE" : "PRICE_ABOVE", threshold: index == 53 ? 0.5 : 1,
-                              label: "Native history \(index)", metric: index == 54 ? "volume" : "native")
+                              label: "Native history \(index)", metric: index == 54 ? "volume" : "native", repeat_seconds: index == 54 ? 60 : 0)
             // Populate through the browser session, as native history also includes web
             // rules. Keep bulk setup/cleanup below the phone-verification rate budget.
             let created: Created = try await browser.post("/api/alerts", body: input)
@@ -51,10 +52,15 @@ struct BackendIntegrationTests {
             let _: Check = try await browser.post("/api/alerts/check", body: [String: String]())
             let list: AlertList = try await browser.get("/api/alerts")
             rules = list.alerts.filter { ids.contains($0.id) }
-            if rules.count == ids.count && rules.allSatisfy({ $0.armed == 0 }) { break }
+            if rules.count == ids.count && rules.allSatisfy({ $0.last_triggered_at != nil }) { break }
             try await Task.sleep(for: .milliseconds(250))
         }
-        try #require(rules.count == 55 && rules.allSatisfy { $0.armed == 0 }, "Fixture triggers were not recorded")
+        try #require(rules.count == 55 && rules.allSatisfy { $0.last_triggered_at != nil }, "Fixture triggers were not recorded")
+        let repeating = try #require(rules.first { $0.metric == "volume" })
+        #expect(repeating.armed == 1 && repeating.repeat_seconds == 60)
+        #expect(rules.filter { $0.id != repeating.id }.allSatisfy { $0.armed == 0 && $0.repeat_seconds == 0 })
+        let duringCooldown: Check = try await browser.post("/api/alerts/check", body: [String: String]())
+        #expect(duringCooldown.triggered == 0)
         let status: AlertList = try await phone.get("/api/alerts")
         let monitor = try #require(status.monitor)
         #expect(monitor.running == true && monitor.intervalSeconds == 15 && monitor.lastAttempt != nil && monitor.lastError == nil && monitor.missingSymbols == [])
@@ -274,18 +280,31 @@ struct BackendIntegrationTests {
             (.dailyRise, "ar_EG", "٩٩٫٥", 99.5), (.dailyFall, "de_DE", "-99,5", -99.5),
             (.volumeAbove, "en_US", "1000000", 1000000), (.volumeBelow, "fr_FR", "1,5", 1.5)
         ]
-        var createdRules: [(Int, AlertTrigger, Double)] = []
-        for (type, identifier, text, expected) in cases {
+        var createdRules: [(Int, AlertTrigger, Double, AlertRepeatPolicy)] = []
+        for ((type, identifier, text, expected), policy) in zip(cases, AlertRepeatPolicy.allCases) {
             let value = try #require(type.parseThreshold(text, locale: Locale(identifier: identifier)))
-            let created: Created = try await phone.post("/api/alerts", body: AlertInput(symbol: "AAPL", trigger: type, threshold: value, label: "Native \(type.rawValue)"))
-            createdRules.append((created.id, type, expected))
+            let created: Created = try await phone.post("/api/alerts", body: AlertInput(symbol: "AAPL", trigger: type, threshold: value, label: "Native \(type.rawValue)", repeatPolicy: policy))
+            createdRules.append((created.id, type, expected, policy))
         }
         let result: AlertList = try await phone.get("/api/alerts")
-        for (id, type, threshold) in createdRules {
+        for (id, type, threshold, policy) in createdRules {
             let rule = try #require(result.alerts.first { $0.id == id })
-            #expect(rule.metric == type.metric && rule.condition == type.condition && rule.threshold == threshold && rule.armed == 1)
+            #expect(rule.metric == type.metric && rule.condition == type.condition && rule.threshold == threshold && rule.armed == 1 && rule.repeat_seconds == policy.rawValue)
             #expect(rule.conditionLabelKey == type.labelKey)
-            let version = try #require(rule.mutationQuery)
+            var current = rule
+            if policy == .oneDay {
+                let version = try #require(current.mutationQuery)
+                try await phone.setAlertArmed(id: id, armed: false, query: version)
+                let paused: AlertList = try await browser.get("/api/alerts")
+                current = try #require(paused.alerts.first { $0.id == id })
+                #expect(current.armed == 0 && current.repeat_seconds == 86400)
+                let pausedVersion = try #require(current.mutationQuery)
+                try await phone.setAlertArmed(id: id, armed: true, query: pausedVersion)
+                let rearmed: AlertList = try await browser.get("/api/alerts")
+                current = try #require(rearmed.alerts.first { $0.id == id })
+                #expect(current.armed == 1 && current.repeat_seconds == 86400)
+            }
+            let version = try #require(current.mutationQuery)
             try await browser.delete("/api/alerts/\(id)", query: version)
         }
         await phone.signOut(); await browser.signOut()

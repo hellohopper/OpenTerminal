@@ -8,8 +8,17 @@ struct AlertDraft: Equatable {
     var label = ""
     var condition = "PRICE_ABOVE"
     var metric = "native"
+    var repeatPolicy: AlertRepeatPolicy = .once
     var trigger: AlertTrigger? { AlertTrigger(metric: metric, condition: condition) }
-    var isEmpty: Bool { symbol.isEmpty && threshold.isEmpty && label.isEmpty && condition == "PRICE_ABOVE" && metric == "native" }
+    var isEmpty: Bool { symbol.isEmpty && threshold.isEmpty && label.isEmpty && condition == "PRICE_ABOVE" && metric == "native" && repeatPolicy == .once }
+}
+
+func alertRepeatText(_ rule: AlertRule, locale: Locale = .current) -> String {
+    switch rule.repeatBehavior {
+    case .once: nativeText("One-shot alert")
+    case .cooldown(let seconds): nativeText("Repeat cooldown: %@ seconds").replacingOccurrences(of: "%@", with: seconds.formatted(.number.locale(locale)))
+    case .unavailable: nativeText("Repeat policy unavailable.")
+    }
 }
 
 @MainActor final class AlertEditorState: ObservableObject {

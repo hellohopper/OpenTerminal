@@ -267,3 +267,17 @@
 "Status received %@" = "状态接收时间 %@";
 "Last reported check issue: %@" = "上次报告的检查问题：%@";
 "Missing quotes at last check: %@" = "上次检查缺少行情的代码：%@";
+"Once" = "仅一次";
+"1 minute" = "1 分钟";
+"5 minutes" = "5 分钟";
+"15 minutes" = "15 分钟";
+"1 hour" = "1 小时";
+"1 day" = "1 天";
+"Repeat cooldown" = "重复提醒冷却间隔";
+"One-shot alert" = "单次提醒";
+"Repeat cooldown: %@ seconds" = "重复提醒冷却间隔：%@ 秒";
+"Repeat policy unavailable." = "重复策略不可用。";
+"Changing the alert type clears the threshold." = "切换提醒类型会清空阈值。";
+"This alert fires once. Rearm it to check again." = "此提醒仅触发一次，重新启用后可再次检查。";
+"If the condition stays met, the Mac can trigger again after the cooldown. It stays armed until paused. Checks and provider data determine the timing." = "条件持续满足时，Mac 可在冷却间隔后再次触发。提醒会保持启用，直到手动暂停。具体时间取决于检查和行情数据。";
+"Pause and rearm keep the last trigger time, so an existing cooldown still applies." = "暂停和重新启用会保留上次触发时间，尚未结束的冷却间隔仍然有效。";

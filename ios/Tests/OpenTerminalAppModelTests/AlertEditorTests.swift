@@ -95,7 +95,7 @@ import OpenTerminalCore
 
     @Test(arguments: [201, 401]) func oldSaveCannotDismissClearOrSignOutANewerSession(status: Int) async throws {
         let (model, requests) = try await fixture(); defer { AlertProtocol.handler = nil }
-        let oldState = model.alertEditor, post = AlertGate(), logout = AlertGate(), newPost = AlertGate(); populate(oldState)
+        let oldState = model.alertEditor, post = AlertGate(), logout = AlertGate(), newPost = AlertGate(); populate(oldState); oldState.draft.repeatPolicy = .oneDay
         AlertProtocol.handler = { request in
             requests.append(request.request)
             if request.request.url?.host == "first.example.com" {
@@ -107,13 +107,13 @@ import OpenTerminalCore
         }
         let oldSave = Task { await model.saveAlert(oldState, locale: Locale(identifier: "en_US_POSIX")) }; try await eventually { post.waiting }
         let signOut = Task { await model.signOut() }; try await eventually { logout.waiting }
-        #expect(oldState.draft.isEmpty && !oldState.saving)
+        #expect(oldState.draft.isEmpty && oldState.draft.repeatPolicy == .once && !oldState.saving)
         model.serverText = "https://second.example.com"; await model.restoreSession(force: true)
-        let current = model.alertEditor; populate(current); current.draft.label = "Second server target"
+        let current = model.alertEditor; populate(current); current.draft.label = "Second server target"; current.draft.repeatPolicy = .oneHour
         let save = Task { await model.saveAlert(current, locale: Locale(identifier: "en_US_POSIX")) }; try await eventually { newPost.waiting }
         post.release(status, #"{"id":1}"#); await oldSave.value
         #expect(model.signedIn && model.server?.origin.host == "second.example.com" && model.error == nil)
-        #expect(current.saving && current.draft.label == "Second server target" && current.savedRevision == 0)
+        #expect(current.saving && current.draft.label == "Second server target" && current.draft.repeatPolicy == .oneHour && current.savedRevision == 0)
         #expect(oldState.message == nil && oldState.error == nil && oldState.savedRevision == 0)
         #expect(!requests.all.contains { $0.url?.host == "first.example.com" && $0.httpMethod == "GET" && $0.url?.path == "/api/alerts" })
         logout.releaseFixture(); await signOut.value
@@ -267,6 +267,86 @@ import OpenTerminalCore
         let body = try #require(AlertProtocol.body(post))
         #expect(body["threshold"] as? Double == 200.5)
         try await eventually { model.sectionUpdated[.alerts] != nil }
+    }
+
+    @Test(arguments: AlertRepeatPolicy.allCases) func selectedRepeatPolicyIsSubmittedAndAcknowledged(policy: AlertRepeatPolicy) async throws {
+        let (model, requests) = try await fixture(); defer { AlertProtocol.handler = nil }
+        let state = model.alertEditor; populate(state); state.draft.repeatPolicy = policy
+        await model.saveAlert(state, locale: Locale(identifier: "en_US"))
+        let request = try #require(requests.all.first { $0.httpMethod == "POST" }), body = try #require(AlertProtocol.body(request))
+        #expect(body["repeat_seconds"] as? Int == policy.rawValue && body["threshold"] as? Double == 200.5)
+        #expect(!state.hasDraft && state.draft.repeatPolicy == .once && state.savedRevision == 1 && state.error == nil)
+        try await eventually { model.sectionUpdated[.alerts] != nil }
+    }
+
+    @Test func changingRepeatPolicyKeepsThresholdAndIsAnUnsavedDraft() {
+        let state = AlertEditorState(); state.draft.repeatPolicy = .fiveMinutes
+        #expect(state.hasDraft)
+        state.discard(); #expect(!state.hasDraft && state.draft.repeatPolicy == .once)
+        populate(state); let old = state.draft; state.error = "Previous failure"; let revision = state.revision
+        state.draft.repeatPolicy = .oneHour
+        #expect(state.draft.threshold == old.threshold && state.draft.symbol == old.symbol && state.draft.label == old.label)
+        #expect(state.revision == revision + 1 && state.error == nil)
+        state.selectTrigger(.volumeAbove)
+        #expect(state.draft.repeatPolicy == .oneHour && state.draft.threshold.isEmpty)
+        state.discard(); #expect(!state.hasDraft && state.draft.repeatPolicy == .once)
+    }
+
+    @Test(arguments: [false, true]) func changingRepeatPolicyDuringSaveKeepsTheNewerDraft(returnToOriginal: Bool) async throws {
+        let (model, requests) = try await fixture(); defer { AlertProtocol.handler = nil }
+        let state = model.alertEditor, write = AlertGate(); populate(state); state.draft.repeatPolicy = .oneMinute
+        AlertProtocol.handler = { request in
+            requests.append(request.request)
+            if request.request.httpMethod == "POST" { write.hold(request) } else { request.fixture() }
+        }
+        let save = Task { await model.saveAlert(state, locale: Locale(identifier: "en_US")) }; try await eventually { write.waiting }
+        let reopened = model.alertEditor; reopened.draft.repeatPolicy = .oneHour
+        if returnToOriginal { reopened.draft.repeatPolicy = .oneMinute }
+        let edited = reopened.draft
+        reopened.discard(); await model.saveAlert(reopened)
+        #expect(reopened.draft == edited && requests.all.filter { $0.httpMethod == "POST" }.count == 1)
+        write.releaseFixture(); await save.value
+        let request = try #require(requests.all.first { $0.httpMethod == "POST" }), body = try #require(AlertProtocol.body(request))
+        #expect(body["repeat_seconds"] as? Int == 60)
+        #expect(reopened.draft == edited && reopened.hasDraft && !reopened.saving && reopened.savedRevision == 1 && reopened.message == "Alert saved. Newer edits are kept as a draft.")
+        try await eventually { model.sectionUpdated[.alerts] != nil }
+    }
+
+    @Test func failedRepeatingSaveKeepsItsPolicyForAnExplicitRetry() async throws {
+        let (model, requests) = try await fixture(); defer { AlertProtocol.handler = nil }
+        let state = model.alertEditor; populate(state); state.draft.repeatPolicy = .oneDay; let draft = state.draft
+        AlertProtocol.handler = { request in requests.append(request.request); request.respond(503, "") }
+        await model.saveAlert(state, locale: Locale(identifier: "en_US"))
+        #expect(state.draft == draft && state.error != nil && !state.saving)
+        AlertProtocol.handler = { request in requests.append(request.request); request.fixture() }
+        await model.saveAlert(state, locale: Locale(identifier: "en_US"))
+        let posts = requests.all.filter { $0.httpMethod == "POST" }
+        #expect(posts.count == 2 && posts.allSatisfy { AlertProtocol.body($0)?["repeat_seconds"] as? Int == 86400 })
+        #expect(!state.hasDraft && state.savedRevision == 1)
+        try await eventually { model.sectionUpdated[.alerts] != nil }
+    }
+
+    @Test(arguments: [false, true]) func changedRepeatPolicyRequiresAnotherReviewEvenAtTheSameVersion(deleting: Bool) async throws {
+        let (model, requests) = try await fixture(); defer { AlertProtocol.handler = nil }
+        func row(_ seconds: Int) throws -> AlertRule {
+            try JSONDecoder().decode(AlertRule.self, from: Data("{\"id\":1,\"symbol\":\"AAPL\",\"condition\":\"PRICE_ABOVE\",\"threshold\":200,\"label\":\"Target\",\"armed\":1,\"revision\":1,\"generation\":\"g1\",\"repeat_seconds\":\(seconds)}".utf8))
+        }
+        let reviewed = try row(60), changed = try row(300); model.alerts = [changed]
+        if deleting { await model.deleteAlert(reviewed, session: model.sessionID) } else { await model.setArmed(reviewed, session: model.sessionID) }
+        #expect(model.alertActionErrors[reviewed.id] != nil && model.alerts == [changed] && requests.all.isEmpty)
+    }
+
+    @Test func repeatTextDistinguishesUnknownOneShotAndCustomWebIntervals() throws {
+        func row(_ seconds: Int?) throws -> AlertRule {
+            var json: [String: Any] = ["id": 1, "symbol": "AAPL", "condition": "PRICE_ABOVE", "threshold": 200, "label": "Target", "armed": 1]
+            json["repeat_seconds"] = seconds
+            return try JSONDecoder().decode(AlertRule.self, from: JSONSerialization.data(withJSONObject: json))
+        }
+        let once = try row(0), custom = try row(12345), unknown = try row(nil), invalid = try row(1)
+        #expect(alertRepeatText(once) == "One-shot alert")
+        #expect(alertRepeatText(custom, locale: Locale(identifier: "en_US")) == "Repeat cooldown: 12,345 seconds")
+        #expect(alertRepeatText(custom, locale: Locale(identifier: "de_DE")) == "Repeat cooldown: 12.345 seconds")
+        #expect(alertRepeatText(unknown) == "Repeat policy unavailable." && alertRepeatText(invalid) == "Repeat policy unavailable.")
     }
 
     @Test(arguments: ["1.234", "1.234,5", "200,5 EUR", "200.5"]) func groupedOrWrongLocalePricesKeepTheDraftWithoutWriting(input: String) async throws {
