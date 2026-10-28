@@ -409,6 +409,40 @@ import OpenTerminalCore
         #expect(requests.all.isEmpty && model.pendingAlertActions.isEmpty)
     }
 
+    @Test(arguments: [false, true]) func aMonitorTickDoesNotInvalidateAReviewedRuleAction(deleting: Bool) async throws {
+        let (model, requests) = try await fixture(); defer { AlertProtocol.handler = nil }
+        let reviewed = try rule(), checked = try JSONDecoder().decode(AlertRule.self, from: Data(#"{"id":1,"symbol":"AAPL","condition":"PRICE_ABOVE","threshold":200,"label":"Target","armed":1,"revision":1,"generation":"g1","last_checked_at":"2026-10-28T01:00:00Z","last_value":110,"last_triggered_at":"2026-10-27T12:00:00Z"}"#.utf8))
+        model.alerts = [checked]; let write = AlertGate(), list = AlertGate()
+        AlertProtocol.handler = { request in
+            requests.append(request.request)
+            if request.request.httpMethod == "GET" { list.hold(request) } else { write.hold(request) }
+        }
+        let action = Task {
+            if deleting { await model.deleteAlert(reviewed, session: model.sessionID) } else { await model.setArmed(reviewed, session: model.sessionID) }
+        }
+        try await eventually { write.waiting }
+        #expect(model.alertActionErrors.isEmpty && model.pendingAlertActions == [reviewed.id])
+        let request = try #require(requests.all.first)
+        let query = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        #expect(query.contains(URLQueryItem(name: "revision", value: "1")) && query.contains(URLQueryItem(name: "generation", value: "g1")))
+        write.release(deleting ? 204 : 200, deleting ? "" : #"{"id":1}"#); await action.value
+        if deleting { #expect(model.alerts.isEmpty) }
+        else {
+            let paused = try #require(model.alerts.first)
+            #expect(paused.armed == 0 && paused.last_checked_at == nil && paused.last_value == nil && paused.last_triggered_at == checked.last_triggered_at)
+        }
+        #expect(model.pendingAlertActions.isEmpty && model.alertActionErrors.isEmpty)
+        try await eventually { list.waiting }; list.releaseFixture(); try await eventually { model.sectionUpdated[.alerts] != nil }
+    }
+
+    @Test(arguments: [false, true]) func changedRuleFieldsStillNeedReviewEvenWithTheSameVersion(deleting: Bool) async throws {
+        let (model, requests) = try await fixture(); defer { AlertProtocol.handler = nil }
+        let reviewed = try rule(), changed = try JSONDecoder().decode(AlertRule.self, from: Data(#"{"id":1,"symbol":"AAPL","condition":"PRICE_ABOVE","threshold":300,"label":"Target","armed":1,"revision":1,"generation":"g1","last_checked_at":"2026-10-28T01:00:00Z","last_value":110}"#.utf8))
+        model.alerts = [changed]
+        if deleting { await model.deleteAlert(reviewed, session: model.sessionID) } else { await model.setArmed(reviewed, session: model.sessionID) }
+        #expect(model.alertActionErrors[reviewed.id] != nil && model.alerts == [changed] && requests.all.isEmpty)
+    }
+
     @Test func cancelingAPendingRuleWriteClearsProgressWithoutAnErrorOrRetry() async throws {
         let (model, requests) = try await fixture(); defer { AlertProtocol.handler = nil }
         let row = try rule(), gate = AlertGate(); model.alerts = [row]

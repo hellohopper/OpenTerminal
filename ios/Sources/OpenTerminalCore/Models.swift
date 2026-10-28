@@ -46,6 +46,7 @@ public struct AlertRule: Decodable, Identifiable, Equatable, Sendable {
     public let threshold: Double; public let label: String; public let armed: Int
     public let revision: Int?; public let generation: String?
     public let metric: String?
+    public let last_checked_at: String?; public let last_value: Double?; public let last_triggered_at: String?
     public var valueKind: AlertValueKind { alertValueKind(metric: metric, condition: condition) }
     public var conditionLabelKey: String { alertConditionLabel(metric: metric, condition: condition) }
     public var mutationQuery: [String: String]? {
@@ -55,10 +56,11 @@ public struct AlertRule: Decodable, Identifiable, Equatable, Sendable {
     }
     public func settingArmed(_ value: Bool) -> Self {
         Self(id: id, symbol: symbol, condition: condition, threshold: threshold, label: label, armed: value ? 1 : 0,
-             revision: revision.flatMap { $0 < 9_007_199_254_740_991 ? $0 + 1 : nil }, generation: generation, metric: metric)
+             revision: revision.flatMap { $0 < 9_007_199_254_740_991 ? $0 + 1 : nil }, generation: generation, metric: metric,
+             last_checked_at: nil, last_value: nil, last_triggered_at: last_triggered_at)
     }
 }
-public struct AlertList: Decodable, Sendable { public let alerts: [AlertRule] }
+public struct AlertList: Decodable, Sendable { public let alerts: [AlertRule]; public let monitor: AlertMonitor? }
 public struct AlertInput: Encodable, Sendable {
     public let symbol: String; public let condition: String; public let threshold: Double; public let label: String; public let armed: Bool
     public let metric: String

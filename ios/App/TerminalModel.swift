@@ -74,6 +74,8 @@ struct WatchlistImportPlan {
     @Published var holdingQuotes: [Quote] = []
     @Published var holdingsReady = false
     @Published var alerts: [AlertRule] = []
+    @Published private(set) var alertMonitor: AlertMonitor?
+    @Published private(set) var alertMonitorReceivedAt: Date?
     @Published private(set) var pendingAlertActions: Set<Int> = []
     @Published private(set) var alertActionErrors: [Int: String] = [:]
     @Published private(set) var alertEditor = AlertEditorState()
@@ -241,7 +243,7 @@ struct WatchlistImportPlan {
         loadingDevices = false; deviceListError = nil; pendingDeviceRevocations = []; deviceActionErrors = [:]
         selectionRefresh?.cancel(); selectionRefresh = nil; sectionRequests = [:]
         portfolioRefresh?.cancel(); portfolioRefresh = nil; selectedTab = .today; preferredChartRange = "6M"
-        quotes = []; portfolios = []; positions = []; holdingQuotes = []; alerts = []; briefing = nil; workspaces = []; portfolioID = nil; holdingsReady = false
+        quotes = []; portfolios = []; positions = []; holdingQuotes = []; alerts = []; alertMonitor = nil; alertMonitorReceivedAt = nil; briefing = nil; workspaces = []; portfolioID = nil; holdingsReady = false
         sharedLists = []; sharedListID = nil; devices = []; watchlist = []; lastUpdated = nil; reconnecting = false; error = nil
         managingLists = false; listManagementError = nil
         pushOperation = nil; registeringPush = false; pushMessage = nil
@@ -311,7 +313,11 @@ struct WatchlistImportPlan {
         guard let api else { return }; let token = generation, request = begin(.alerts); defer { finish(.alerts, request: request, token: token) }
         do {
             let rules: AlertList = try await api.get("/api/alerts")
-            if current(.alerts, request: request, token: token) { alerts = rules.alerts; sectionUpdated[.alerts] = .now }
+            if current(.alerts, request: request, token: token) {
+                let received = Date.now
+                alerts = rules.alerts; alertMonitor = rules.monitor; alertMonitorReceivedAt = rules.monitor == nil ? nil : received
+                sectionUpdated[.alerts] = received
+            }
         } catch { if current(.alerts, request: request, token: token) { await report(error, section: .alerts) } }
     }
     func refreshQuotes() async {
@@ -549,7 +555,7 @@ struct WatchlistImportPlan {
     private func changeAlert(_ rule: AlertRule, session: UUID, deleting: Bool) async {
         guard signedIn, session == generation, let api, !Task.isCancelled, !pendingAlertActions.contains(rule.id),
               let current = alerts.first(where: { $0.id == rule.id }) else { return }
-        guard current == rule else {
+        guard current.matchesDefinition(rule) else {
             alertActionErrors[rule.id] = nativeText("This alert changed. Review it and try again."); return
         }
         guard let query = rule.mutationQuery else {
