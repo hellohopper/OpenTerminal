@@ -197,7 +197,14 @@ struct BackendIntegrationTests {
         let merged = try #require(saved.first { $0.id == created.id }), untouched = try #require(saved.first { $0.id == other.id })
         #expect(Set(merged.payload.symbols) == Set(["AAPL", "MSFT", "SPY", "GOOG"]) && merged.version >= max(updated.version, concurrent.version))
         #expect(untouched.payload.symbols == ["TSLA"])
-        try await phone.delete("/api/watchlists/\(created.id)", query: ["version": String(merged.version)])
+        let renamed: SharedWatchlist = try await browser.post("/api/watchlists/\(created.id)/rename", body: ListRename(name: "Renamed 中文", version: merged.version))
+        #expect(renamed.payload.name == "Renamed 中文" && renamed.payload.symbols == merged.payload.symbols && renamed.version == merged.version + 1)
+        let symbols = Array(renamed.payload.symbols.reversed())
+        let reordered: SharedWatchlist = try await browser.post("/api/watchlists/\(created.id)/reorder-symbols", body: ListSymbolOrder(symbols: symbols, version: renamed.version))
+        #expect(reordered.payload.symbols == symbols && reordered.version == renamed.version + 1)
+        let moved: [SharedWatchlist] = try await browser.post("/api/watchlists/\(created.id)/move", body: ["direction": "down"])
+        #expect(moved.map(\.id) == [other.id, created.id] && moved.last == reordered)
+        try await phone.delete("/api/watchlists/\(created.id)", query: ["version": String(reordered.version)])
         try await browser.delete("/api/watchlists/\(other.id)", query: ["version": String(untouched.version)])
         let _: Acknowledgement = try await phone.post("/api/watchlists/default", body: NewList(name: "Must stay empty", symbols: ["AAPL"]))
         let empty: [SharedWatchlist] = try await browser.get("/api/watchlists")
@@ -442,6 +449,8 @@ struct BackendIntegrationTests {
 }
 private struct Created: Decodable, Sendable { let id: Int }
 private struct NewList: Encodable, Sendable { let name: String; let symbols: [String] }
+private struct ListRename: Encodable, Sendable { let name: String; let version: Int }
+private struct ListSymbolOrder: Encodable, Sendable { let symbols: [String]; let version: Int }
 private struct Replacement: Encodable, Sendable { let name: String; let symbols: [String]; let version: Int }
 private struct NoteUpdate: Encodable, Sendable {
     let symbol = "MSFT", title = "Updated note", body = "New evidence from another device", kind = "research"

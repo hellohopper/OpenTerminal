@@ -247,6 +247,7 @@ import OpenTerminalCore
         await model.moveSymbol("MSFT", direction: 1, in: row, session: session)
         await model.moveSymbol("MSFT", direction: Int.max, in: row, session: session)
         #expect(requests.writes.count == count && model.listManagementError != nil)
+        await model.signOut()
     }
     @Test func aMissingListIsRefreshedWithoutRecreatingItOrDroppingTheInput() async throws {
         let (model, server, _) = try await fixture(); defer { SymbolProtocol.handler = nil }

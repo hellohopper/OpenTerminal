@@ -4,6 +4,31 @@ import OpenTerminalCore
 
 enum TerminalTab: String, CaseIterable { case today, watchlist, holdings, alerts }
 
+struct WatchlistCreationPlan: Sendable {
+    let name: String; let symbols: [String]; let session: UUID; let selection: UUID
+}
+@MainActor final class WatchlistNameDraft: ObservableObject {
+    @Published var text = "" { didSet { if text != oldValue { revision += 1 } } }
+    @Published private(set) var creating = false
+    private(set) var revision = 0
+    private var acknowledgedRevision = -1
+    func begin(_ revision: Int) -> Bool {
+        guard !creating, revision > acknowledgedRevision else { return false }; creating = true; return true
+    }
+    func finish(_ revision: Int, acknowledged: Bool) {
+        if acknowledged {
+            acknowledgedRevision = max(acknowledgedRevision, revision)
+            if self.revision == revision { text = "" }
+        }
+        creating = false
+    }
+    func clear() { text = ""; creating = false; acknowledgedRevision = -1 }
+}
+private enum WatchlistMutation: Sendable {
+    case created(SharedWatchlist, selection: UUID), updated(SharedWatchlist), removed(SharedWatchlist)
+    case ordered([SharedWatchlist], baseline: [SharedWatchlist], observation: UUID)
+}
+
 enum WatchlistSymbolAction: String { case add, remove }
 struct WatchlistSymbolKey: Hashable { let listID: Int; let symbol: String }
 struct WatchlistSymbolFailure { let action: WatchlistSymbolAction; let message: String }
@@ -65,14 +90,23 @@ struct WatchlistImportPlan {
     @Published private(set) var deviceActionErrors: [String: String] = [:]
     var currentDeviceID: String? { credential?.id }
     @Published var sharedLists: [SharedWatchlist] = []
-    @Published var sharedListID: Int?
+    @Published var sharedListID: Int? { didSet { if sharedListID != oldValue { listSelection = UUID() } } }
+    private(set) var listSelection = UUID()
     @Published var managingLists = false
+    @Published private(set) var loadingSharedLists = false
+    @Published private(set) var sharedListReadError: String?
+    @Published private(set) var listManagementMessage: String?
+    @Published private(set) var listNameDraft = WatchlistNameDraft()
+    private var listReadRequest: UUID?
+    private var listObservation = UUID()
+    private var removedSharedListIDs: Set<Int> = []
+    private var listManagementRefresh: Task<Void, Never>?
     @Published private(set) var pendingSymbolChanges: Set<WatchlistSymbolKey> = []
     @Published private(set) var symbolChangeErrors: [WatchlistSymbolKey: WatchlistSymbolFailure] = [:]
     var listWritesBusy: Bool { managingLists || !pendingSymbolChanges.isEmpty }
     private var symbolEntries: [Int: WatchlistSymbolEntry] = [:]
     private var symbolReconcile: Task<Void, Never>?
-    @Published var listManagementError: String?
+    @Published var listManagementError: String? { didSet { if listManagementError != nil { listManagementMessage = nil } } }
     @Published var researchSymbol: String?
     @Published var quotes: [Quote] = []
     @Published var portfolios: [Portfolio] = []
@@ -267,6 +301,9 @@ struct WatchlistImportPlan {
         quotes = []; portfolios = []; positions = []; holdingQuotes = []; alerts = []; alertMonitor = nil; alertMonitorReceivedAt = nil; briefing = nil; workspaces = []; portfolioID = nil; holdingsReady = false
         sharedLists = []; sharedListID = nil; devices = []; watchlist = []; lastUpdated = nil; reconnecting = false; error = nil
         managingLists = false; listManagementError = nil
+        listNameDraft.clear(); listNameDraft = WatchlistNameDraft(); listManagementMessage = nil
+        loadingSharedLists = false; sharedListReadError = nil; listReadRequest = nil; listObservation = UUID(); removedSharedListIDs = []
+        listManagementRefresh?.cancel(); listManagementRefresh = nil
         for entry in symbolEntries.values { entry.clear() }; symbolEntries = [:]
         pendingSymbolChanges = []; symbolChangeErrors = [:]; symbolReconcile?.cancel(); symbolReconcile = nil
         pushOperation = nil; registeringPush = false; pushMessage = nil
@@ -311,14 +348,16 @@ struct WatchlistImportPlan {
         if token == generation && sectionRequests[section] == request { loadingSections.remove(section) }
     }
     private func refreshWatchlistData() async {
+        guard signedIn, api != nil, !Task.isCancelled else { return }
         let token = generation, revision = listRevision, pricesRequest = begin(.watchlist), briefingRequest = begin(.briefing)
+        let listRequest = beginListRead()
         defer { finish(.watchlist, request: pricesRequest, token: token); finish(.briefing, request: briefingRequest, token: token) }
         do {
-            try await refreshLists(); guard token == generation, revision == listRevision, !Task.isCancelled else { return }
+            let loaded = try await readSharedLists(listRequest); guard loaded, token == generation, revision == listRevision, listReadRequest == listRequest, !Task.isCancelled else { return }
             async let prices: Void = refreshQuotes()
             async let summary: Void = refreshBriefing()
             _ = await (prices, summary)
-        } catch { if revision == listRevision && current(.watchlist, request: pricesRequest, token: token) {
+        } catch { if listReadRequest == listRequest && revision == listRevision && current(.watchlist, request: pricesRequest, token: token) {
             await report(error, section: .watchlist)
             if current(.briefing, request: briefingRequest, token: token) && !(error is CancellationError) { sectionErrors[.briefing] = nativeText("Briefing could not refresh because the shared watchlist is unavailable.") }
         } }
@@ -373,20 +412,55 @@ struct WatchlistImportPlan {
             for section in [DataSection.watchlist, .briefing] { sectionRequests[section] = UUID(); loadingSections.remove(section); sectionUpdated[section] = nil; sectionErrors[section] = nil }
         }
     }
-    func refreshLists() async throws {
-        guard let api else { return }; let token = generation, revision = listRevision
-        var lists: [SharedWatchlist] = try await api.get("/api/watchlists")
-        guard token == generation, revision == listRevision else { return }
-        if lists.isEmpty {
-            let legacy = server.flatMap { defaults.stringArray(forKey: "watchlist:\($0.origin.absoluteString)") } ?? ["AAPL", "MSFT", "NVDA", "SPY"]
-            let _: Acknowledgement = try await api.post("/api/watchlists/default", body: NewList(name: "My watchlist", symbols: legacy.compactMap(normalizedSymbol)))
-            lists = try await api.get("/api/watchlists")
+    @discardableResult func refreshLists() async throws -> Bool {
+        guard signedIn, api != nil, !Task.isCancelled else { return false }
+        return try await readSharedLists(beginListRead())
+    }
+    private func beginListRead() -> UUID {
+        let request = UUID()
+        listReadRequest = request; loadingSharedLists = true; sharedListReadError = nil
+        return request
+    }
+    private func readSharedLists(_ request: UUID) async throws -> Bool {
+        let token = generation
+        defer { if token == generation, listReadRequest == request { loadingSharedLists = false } }
+        guard signedIn, let api, !Task.isCancelled, listReadRequest == request else { return false }
+        let revision = listRevision
+        func accepts() -> Bool { token == generation && revision == listRevision && listReadRequest == request && !Task.isCancelled }
+        do {
+            var lists: [SharedWatchlist] = try await api.get("/api/watchlists")
+            guard accepts() else { return false }
+            if lists.isEmpty {
+                let legacy = server.flatMap { defaults.stringArray(forKey: "watchlist:\($0.origin.absoluteString)") } ?? ["AAPL", "MSFT", "NVDA", "SPY"]
+                let _: Acknowledgement = try await api.post("/api/watchlists/default", body: NewList(name: "My watchlist", symbols: legacy.compactMap(normalizedSymbol)))
+                guard accepts() else { return false }
+                lists = try await api.get("/api/watchlists")
+            }
+            guard accepts() else { return false }
+            let ids = Set(lists.map(\.id))
+            removedSharedListIDs.formUnion(Set(sharedLists.map(\.id)).subtracting(ids)); removedSharedListIDs.subtract(ids)
+            sharedLists = lists; listObservation = UUID()
+            let saved = server.map { defaults.integer(forKey: "shared-list:\($0.origin.absoluteString)") }
+            synchronizeListSelection(preferred: sharedListID ?? saved)
+            return true
+        } catch {
+            guard accepts(), !(error is CancellationError) else { return false }
+            sharedListReadError = error.localizedDescription; throw error
         }
-        guard token == generation, revision == listRevision else { return }; sharedLists = lists
-        let saved = server.map { defaults.integer(forKey: "shared-list:\($0.origin.absoluteString)") }
-        let selected = lists.first { $0.id == (sharedListID ?? saved) } ?? lists.first
-        if let selected { sharedListID = selected.id; setWatchlist(selected.payload.symbols) }
-        else { sharedListID = nil; setWatchlist([]) }
+    }
+    private func synchronizeListSelection(preferred: Int?) {
+        let selected = sharedLists.first { $0.id == preferred } ?? sharedLists.first
+        if sharedListID != selected?.id {
+            sharedListID = selected?.id
+            if let server { defaults.set(selected?.id ?? 0, forKey: "shared-list:\(server.origin.absoluteString)") }
+        }
+        setWatchlist(selected?.payload.symbols ?? [])
+    }
+    func reloadSharedLists(session: UUID) async {
+        guard signedIn, session == generation, !Task.isCancelled else { return }
+        let request = beginListRead()
+        do { if try await readSharedLists(request), session == generation, listReadRequest == request, !Task.isCancelled { refreshSelection() } }
+        catch { if session == generation, listReadRequest == request, !Task.isCancelled, error as? ConnectionError == .unauthorized { await report(error) } }
     }
     func chooseList(_ id: Int) {
         guard sharedLists.contains(where: { $0.id == id }) else { return }
@@ -406,26 +480,55 @@ struct WatchlistImportPlan {
         }
     }
     @discardableResult func createList(name: String, copyCurrent: Bool = false) async -> Bool {
-        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty, name.count <= 64 else { listManagementError = nativeText("Use a name of 1–64 characters."); return false }
-        let symbols = copyCurrent ? watchlist : []
-        return await manageLists { api in
-            let result: CreatedList = try await api.post("/api/watchlists", body: NewList(name: name, symbols: symbols)); return result.id
+        let source = sharedLists.first { $0.id == sharedListID }
+        guard !copyCurrent || source != nil, let plan = prepareListCreation(name: name, copying: copyCurrent ? source : nil, session: generation, selection: listSelection) else { return false }
+        return await createList(plan)
+    }
+    func prepareListCreation(name: String, copying source: SharedWatchlist?, session: UUID, selection: UUID) -> WatchlistCreationPlan? {
+        guard signedIn, session == generation, !listWritesBusy else { return nil }
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines), symbols = source?.payload.symbols ?? []
+        guard !name.isEmpty, name.utf16.count <= 64 else { listManagementError = nativeText("Use a name of 1–64 characters."); return nil }
+        guard symbols.count <= 150, symbols.allSatisfy({ normalizedSymbol($0) == $0 }) else {
+            listManagementError = nativeText("This watchlist cannot be copied. Refresh and try again."); return nil
+        }
+        return WatchlistCreationPlan(name: name, symbols: symbols, session: session, selection: selection)
+    }
+    @discardableResult func createList(_ plan: WatchlistCreationPlan) async -> Bool {
+        await manageLists(session: plan.session, message: "Watchlist created.") { api in
+            let result: CreatedList = try await api.post("/api/watchlists", body: NewList(name: plan.name, symbols: plan.symbols))
+            return .created(SharedWatchlist(id: result.id, version: 1, name: plan.name, symbols: plan.symbols), selection: plan.selection)
         }
     }
-    @discardableResult func renameList(_ row: SharedWatchlist, name: String) async -> Bool {
+    @discardableResult func submitListCreation(_ plan: WatchlistCreationPlan, draft: WatchlistNameDraft, revision: Int) async -> Bool {
+        guard signedIn, plan.session == generation, draft === listNameDraft, draft.begin(revision) else { return false }
+        let acknowledged = await createList(plan)
+        guard plan.session == generation, draft === listNameDraft else { return false }
+        draft.finish(revision, acknowledged: acknowledged)
+        return acknowledged
+    }
+    @discardableResult func renameList(_ row: SharedWatchlist, name: String, session: UUID? = nil) async -> Bool {
+        let session = session ?? generation
+        guard signedIn, session == generation, !Task.isCancelled else { return false }
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty, name.count <= 64 else { listManagementError = nativeText("Use a name of 1–64 characters."); return false }
-        return await manageLists { api in
-            let _: Acknowledgement = try await api.post("/api/watchlists/\(row.id)/rename", body: RenamedList(name: name, version: row.version)); return nil
+        guard !name.isEmpty, name.utf16.count <= 64 else { listManagementError = nativeText("Use a name of 1–64 characters."); return false }
+        guard reviewedList(row) else { return false }
+        return await manageLists(session: session, message: "Watchlist renamed.") { api in
+            let updated: SharedWatchlist = try await api.post("/api/watchlists/\(row.id)/rename", body: RenamedList(name: name, version: row.version))
+            guard updated.id == row.id else { throw ConnectionError.response(502, nativeText("The watchlist response was unexpected. Refresh and try again.")) }
+            return .updated(updated)
         }
     }
-    @discardableResult func deleteList(_ row: SharedWatchlist) async -> Bool {
-        await manageLists { api in try await api.delete("/api/watchlists/\(row.id)", query: ["version": String(row.version)]); return nil }
+    @discardableResult func deleteList(_ row: SharedWatchlist, session: UUID? = nil) async -> Bool {
+        let session = session ?? generation
+        guard signedIn, session == generation, !Task.isCancelled, reviewedList(row) else { return false }
+        return await manageLists(session: session, message: "Watchlist deleted.") { api in try await api.delete("/api/watchlists/\(row.id)", query: ["version": String(row.version)]); return .removed(row) }
     }
-    func moveList(_ row: SharedWatchlist, direction: String) async {
-        await manageLists { api in
-            let _: [SharedWatchlist] = try await api.post("/api/watchlists/\(row.id)/move", body: ["direction": direction]); return nil
+    func moveList(_ row: SharedWatchlist, direction: String, session: UUID? = nil) async {
+        let session = session ?? generation
+        guard signedIn, session == generation, !Task.isCancelled, ["up", "down"].contains(direction), reviewedList(row) else { return }
+        let baseline = sharedLists, observation = listObservation
+        await manageLists(session: session, message: "Watchlists reordered.") { api in
+            let rows: [SharedWatchlist] = try await api.post("/api/watchlists/\(row.id)/move", body: ["direction": direction]); return .ordered(rows, baseline: baseline, observation: observation)
         }
     }
     func moveSymbol(_ symbol: String, direction: Int, in row: SharedWatchlist, session: UUID) async {
@@ -436,34 +539,70 @@ struct WatchlistImportPlan {
         }
         var symbols = row.payload.symbols; let next = index + direction
         guard symbols.indices.contains(next) else { return }; symbols.swapAt(index, next)
-        await manageLists { api in
-            let _: Acknowledgement = try await api.post("/api/watchlists/\(row.id)/reorder-symbols", body: OrderedSymbols(symbols: symbols, version: row.version)); return nil
+        await manageLists(session: session, message: "Symbols reordered.") { api in
+            let updated: SharedWatchlist = try await api.post("/api/watchlists/\(row.id)/reorder-symbols", body: OrderedSymbols(symbols: symbols, version: row.version))
+            guard updated.id == row.id else { throw ConnectionError.response(502, nativeText("The watchlist response was unexpected. Refresh and try again.")) }
+            return .updated(updated)
         }
     }
-    @discardableResult private func manageLists(_ operation: (TerminalAPI) async throws -> Int?) async -> Bool {
-        guard signedIn, let api, !listWritesBusy, !Task.isCancelled else { return false }; let token = generation
-        managingLists = true; listManagementError = nil; listRevision += 1
+    private func reviewedList(_ row: SharedWatchlist) -> Bool {
+        guard sharedLists.first(where: { $0.id == row.id }) == row else { listManagementError = nativeText("This watchlist changed. Refresh and try again."); return false }
+        return true
+    }
+    @discardableResult private func manageLists(session token: UUID, message: String, _ operation: (TerminalAPI) async throws -> WatchlistMutation) async -> Bool {
+        guard signedIn, token == generation, let api, !listWritesBusy, !Task.isCancelled else { return false }
+        listManagementRefresh?.cancel(); listReadRequest = nil; loadingSharedLists = false; sharedListReadError = nil
+        managingLists = true; listManagementError = nil; listManagementMessage = nil; listRevision += 1
         defer { if token == generation { managingLists = false } }
         do {
-            let selected = try await operation(api); guard token == generation else { return false }
+            let result = try await operation(api); guard token == generation else { return false }
             listRevision += 1
-            if let selected {
-                sharedListID = selected
-                if let server { defaults.set(selected, forKey: "shared-list:\(server.origin.absoluteString)") }
-            }
-            try await refreshLists(); guard token == generation else { return false }
-            // Updating quotes must not keep the management controls waiting on a market provider.
-            refreshSelection(); return true
+            applyListMutation(result); listManagementMessage = nativeText(message)
+            refreshSelection(); refreshAfterListMutation(session: token); return true
         } catch {
-            guard token == generation else { return false }
+            guard token == generation, !Task.isCancelled, !(error is CancellationError) else { return false }
             if error as? ConnectionError == .unauthorized { await report(error) }
             else {
-                listManagementError = error.localizedDescription
-                listRevision += 1
-                do { try await refreshLists() }
-                catch { if token == generation && error as? ConnectionError == .unauthorized { await report(error) } }
+                listManagementError = error.localizedDescription; listRevision += 1
+                refreshAfterListMutation(session: token)
             }
             return false
+        }
+    }
+    private func applyListMutation(_ result: WatchlistMutation) {
+        var preferred = sharedListID
+        switch result {
+        case .created(let row, let selection):
+            if !removedSharedListIDs.contains(row.id) {
+                if !sharedLists.contains(where: { $0.id == row.id }) { sharedLists.append(row) }
+                if listSelection == selection { preferred = row.id }
+            }
+        case .updated(let row):
+            sharedLists = sharedLists.map { $0.id == row.id && $0.version <= row.version ? row : $0 }
+        case .removed(let row):
+            sharedLists.removeAll { $0 == row }
+            if !sharedLists.contains(where: { $0.id == row.id }) { removedSharedListIDs.insert(row.id) }
+        case .ordered(let rows, let baseline, let observation):
+            let previous = sharedLists, ids = Set(rows.map(\.id))
+            if observation != listObservation {
+                // The order endpoint has no order version. A read accepted during the
+                // write may be newer than its reply; keep that order until reconciliation.
+                sharedLists = previous.map { current in rows.first { $0.id == current.id && $0.version > current.version } ?? current }
+                sharedLists += rows.filter { row in !removedSharedListIDs.contains(row.id) && !previous.contains { $0.id == row.id } }
+            } else {
+                sharedLists = rows.filter { !removedSharedListIDs.contains($0.id) }.map { row in previous.first { $0.id == row.id && $0.version > row.version } ?? row }
+                sharedLists += previous.filter { current in !ids.contains(current.id) && (baseline.first { $0.id == current.id }.map { current.version > $0.version } ?? true) }
+            }
+        }
+        synchronizeListSelection(preferred: preferred)
+    }
+    private func refreshAfterListMutation(session: UUID) {
+        listManagementRefresh?.cancel()
+        let request = beginListRead(), revision = listRevision
+        listManagementRefresh = Task {
+            guard session == generation, listReadRequest == request, !Task.isCancelled else { return }
+            do { if try await readSharedLists(request), session == generation, listReadRequest == request, revision == listRevision, !Task.isCancelled { refreshSelection() } }
+            catch { if session == generation, listReadRequest == request, revision == listRevision, !Task.isCancelled, error as? ConnectionError == .unauthorized { await report(error) } }
         }
     }
     func symbolEntry(for listID: Int) -> WatchlistSymbolEntry? {
@@ -524,11 +663,11 @@ struct WatchlistImportPlan {
     }
     private func reconcileSymbolFailure(session: UUID) {
         symbolReconcile?.cancel()
+        let request = beginListRead(), revision = listRevision
         symbolReconcile = Task {
-            let revision = listRevision
-            guard session == generation, !Task.isCancelled else { return }
-            do { try await refreshLists(); if session == generation, revision == listRevision, !Task.isCancelled { refreshSelection() } }
-            catch { if session == generation, revision == listRevision, !Task.isCancelled, error as? ConnectionError == .unauthorized { await report(error) } }
+            guard session == generation, listReadRequest == request, !Task.isCancelled else { return }
+            do { if try await readSharedLists(request), session == generation, listReadRequest == request, revision == listRevision, !Task.isCancelled { refreshSelection() } }
+            catch { if session == generation, listReadRequest == request, revision == listRevision, !Task.isCancelled, error as? ConnectionError == .unauthorized { await report(error) } }
         }
     }
     func prepareWorkspaceImport(_ workspace: SharedWorkspace) -> WatchlistImportPlan? {
@@ -573,11 +712,11 @@ struct WatchlistImportPlan {
     }
     private func refreshAfterWorkspaceImport(session: UUID) {
         workspaceImportRefresh?.cancel()
+        let request = beginListRead(), revision = listRevision
         workspaceImportRefresh = Task {
-            guard session == generation, !Task.isCancelled else { return }
-            let revision = listRevision
-            do { try await refreshLists(); if session == generation, revision == listRevision, !Task.isCancelled { refreshSelection() } }
-            catch { if session == generation, revision == listRevision, !Task.isCancelled { await report(error, section: .watchlist) } }
+            guard session == generation, listReadRequest == request, !Task.isCancelled else { return }
+            do { if try await readSharedLists(request), session == generation, listReadRequest == request, revision == listRevision, !Task.isCancelled { refreshSelection() } }
+            catch { if session == generation, listReadRequest == request, revision == listRevision, !Task.isCancelled { await report(error, section: .watchlist) } }
         }
     }
     func loadWorkspaces(session: UUID) async {
