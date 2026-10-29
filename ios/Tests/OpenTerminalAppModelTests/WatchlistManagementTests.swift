@@ -55,6 +55,16 @@ import OpenTerminalCore
         #expect(model.sharedListReadError == nil && requests.posts.count == 1 && model.sharedLists.count == 3)
         await model.signOut()
     }
+    @Test func emptyListReconciliationAndRetryNeverPostADefaultList() async throws {
+        let (model, server, requests) = try await fixture(); defer { ListsProtocol.handler = nil }
+        server.remove(2); try await model.refreshLists(); requests.clear()
+        let row = try #require(model.sharedLists.first), saved = await model.deleteList(row)
+        try await eventually { !model.loadingSharedLists }
+        await model.reloadSharedLists(session: model.sessionID)
+        #expect(saved && model.sharedLists.isEmpty && model.sharedListID == nil && requests.posts.isEmpty)
+        #expect(requests.writes.map { $0.url?.path } == ["/api/watchlists/1"])
+        await model.signOut()
+    }
     @Test(arguments: [false, true]) func newNameInputSurvivesAndAnAcknowledgedDraftCannotSubmitAgain(returnToOriginal: Bool) async throws {
         let (model, server, requests) = try await fixture(); defer { ListsProtocol.handler = nil }
         let draft = model.listNameDraft, gate = ListsGate(); draft.text = "Original"

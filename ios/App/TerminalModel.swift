@@ -421,7 +421,7 @@ struct WatchlistImportPlan {
         listReadRequest = request; loadingSharedLists = true; sharedListReadError = nil
         return request
     }
-    private func readSharedLists(_ request: UUID) async throws -> Bool {
+    private func readSharedLists(_ request: UUID, initialize: Bool = true) async throws -> Bool {
         let token = generation
         defer { if token == generation, listReadRequest == request { loadingSharedLists = false } }
         guard signedIn, let api, !Task.isCancelled, listReadRequest == request else { return false }
@@ -430,7 +430,7 @@ struct WatchlistImportPlan {
         do {
             var lists: [SharedWatchlist] = try await api.get("/api/watchlists")
             guard accepts() else { return false }
-            if lists.isEmpty {
+            if lists.isEmpty && initialize {
                 let legacy = server.flatMap { defaults.stringArray(forKey: "watchlist:\($0.origin.absoluteString)") } ?? ["AAPL", "MSFT", "NVDA", "SPY"]
                 let _: Acknowledgement = try await api.post("/api/watchlists/default", body: NewList(name: "My watchlist", symbols: legacy.compactMap(normalizedSymbol)))
                 guard accepts() else { return false }
@@ -459,7 +459,7 @@ struct WatchlistImportPlan {
     func reloadSharedLists(session: UUID) async {
         guard signedIn, session == generation, !Task.isCancelled else { return }
         let request = beginListRead()
-        do { if try await readSharedLists(request), session == generation, listReadRequest == request, !Task.isCancelled { refreshSelection() } }
+        do { if try await readSharedLists(request, initialize: false), session == generation, listReadRequest == request, !Task.isCancelled { refreshSelection() } }
         catch { if session == generation, listReadRequest == request, !Task.isCancelled, error as? ConnectionError == .unauthorized { await report(error) } }
     }
     func chooseList(_ id: Int) {
@@ -601,7 +601,7 @@ struct WatchlistImportPlan {
         let request = beginListRead(), revision = listRevision
         listManagementRefresh = Task {
             guard session == generation, listReadRequest == request, !Task.isCancelled else { return }
-            do { if try await readSharedLists(request), session == generation, listReadRequest == request, revision == listRevision, !Task.isCancelled { refreshSelection() } }
+            do { if try await readSharedLists(request, initialize: false), session == generation, listReadRequest == request, revision == listRevision, !Task.isCancelled { refreshSelection() } }
             catch { if session == generation, listReadRequest == request, revision == listRevision, !Task.isCancelled, error as? ConnectionError == .unauthorized { await report(error) } }
         }
     }
@@ -666,7 +666,7 @@ struct WatchlistImportPlan {
         let request = beginListRead(), revision = listRevision
         symbolReconcile = Task {
             guard session == generation, listReadRequest == request, !Task.isCancelled else { return }
-            do { if try await readSharedLists(request), session == generation, listReadRequest == request, revision == listRevision, !Task.isCancelled { refreshSelection() } }
+            do { if try await readSharedLists(request, initialize: false), session == generation, listReadRequest == request, revision == listRevision, !Task.isCancelled { refreshSelection() } }
             catch { if session == generation, listReadRequest == request, revision == listRevision, !Task.isCancelled, error as? ConnectionError == .unauthorized { await report(error) } }
         }
     }
@@ -715,7 +715,7 @@ struct WatchlistImportPlan {
         let request = beginListRead(), revision = listRevision
         workspaceImportRefresh = Task {
             guard session == generation, listReadRequest == request, !Task.isCancelled else { return }
-            do { if try await readSharedLists(request), session == generation, listReadRequest == request, revision == listRevision, !Task.isCancelled { refreshSelection() } }
+            do { if try await readSharedLists(request, initialize: false), session == generation, listReadRequest == request, revision == listRevision, !Task.isCancelled { refreshSelection() } }
             catch { if session == generation, listReadRequest == request, revision == listRevision, !Task.isCancelled { await report(error, section: .watchlist) } }
         }
     }
