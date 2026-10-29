@@ -297,3 +297,14 @@
 "Alert updated. Newer edits are kept as a draft." = "Alert updated. Newer edits are kept as a draft.";
 "Alert updated." = "Alert updated.";
 "Reload the latest rule before saving changes." = "Reload the latest rule before saving changes.";
+"Symbol added." = "Symbol added.";
+"Symbol added. Newer input is kept." = "Symbol added. Newer input is kept.";
+"Wait for the current watchlist update to finish." = "Wait for the current watchlist update to finish.";
+"Choose a shared watchlist before adding symbols." = "Choose a shared watchlist before adding symbols.";
+"Updating symbol…" = "Updating symbol…";
+"Adding symbol…" = "Adding symbol…";
+"Retry removal" = "Retry removal";
+"Remove symbol" = "Remove symbol";
+"This watchlist changed. Refresh and try again." = "This watchlist changed. Refresh and try again.";
+"The watchlist response was unexpected. Refresh and try again." = "The watchlist response was unexpected. Refresh and try again.";
+"Could not add %@. Your current input is kept." = "Could not add %@. Your current input is kept.";

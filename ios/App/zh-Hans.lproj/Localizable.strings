@@ -297,3 +297,14 @@
 "Alert updated. Newer edits are kept as a draft." = "提醒已更新，较新的编辑已保留为草稿。";
 "Alert updated." = "提醒已更新。";
 "Reload the latest rule before saving changes." = "保存更改前，请先重新加载最新规则。";
+"Symbol added." = "代码已添加。";
+"Symbol added. Newer input is kept." = "代码已添加，已保留较新的输入。";
+"Wait for the current watchlist update to finish." = "请等待当前自选列表更新完成。";
+"Choose a shared watchlist before adding symbols." = "请先选择共享自选列表，再添加证券代码。";
+"Updating symbol…" = "正在更新代码…";
+"Adding symbol…" = "正在添加代码…";
+"Retry removal" = "重试移除";
+"Remove symbol" = "移除代码";
+"This watchlist changed. Refresh and try again." = "此自选列表已发生变化，请刷新后重试。";
+"The watchlist response was unexpected. Refresh and try again." = "自选列表返回的数据异常，请刷新后重试。";
+"Could not add %@. Your current input is kept." = "无法添加 %@，已保留当前输入。";

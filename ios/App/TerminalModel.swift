@@ -4,6 +4,20 @@ import OpenTerminalCore
 
 enum TerminalTab: String, CaseIterable { case today, watchlist, holdings, alerts }
 
+enum WatchlistSymbolAction: String { case add, remove }
+struct WatchlistSymbolKey: Hashable { let listID: Int; let symbol: String }
+struct WatchlistSymbolFailure { let action: WatchlistSymbolAction; let message: String }
+@MainActor final class WatchlistSymbolEntry: ObservableObject {
+    let listID: Int; let session: UUID
+    @Published var text = "" { didSet { if text != oldValue { revision += 1; error = nil; message = nil } } }
+    @Published var saving = false
+    @Published var error: String?
+    @Published var message: String?
+    private(set) var revision = 0
+    init(listID: Int, session: UUID) { self.listID = listID; self.session = session }
+    func clear() { text = ""; saving = false; error = nil; message = nil }
+}
+
 struct WatchlistImportPlan {
     let workspace: SharedWorkspace
     let target: SharedWatchlist
@@ -53,6 +67,11 @@ struct WatchlistImportPlan {
     @Published var sharedLists: [SharedWatchlist] = []
     @Published var sharedListID: Int?
     @Published var managingLists = false
+    @Published private(set) var pendingSymbolChanges: Set<WatchlistSymbolKey> = []
+    @Published private(set) var symbolChangeErrors: [WatchlistSymbolKey: WatchlistSymbolFailure] = [:]
+    var listWritesBusy: Bool { managingLists || !pendingSymbolChanges.isEmpty }
+    private var symbolEntries: [Int: WatchlistSymbolEntry] = [:]
+    private var symbolReconcile: Task<Void, Never>?
     @Published var listManagementError: String?
     @Published var researchSymbol: String?
     @Published var quotes: [Quote] = []
@@ -248,6 +267,8 @@ struct WatchlistImportPlan {
         quotes = []; portfolios = []; positions = []; holdingQuotes = []; alerts = []; alertMonitor = nil; alertMonitorReceivedAt = nil; briefing = nil; workspaces = []; portfolioID = nil; holdingsReady = false
         sharedLists = []; sharedListID = nil; devices = []; watchlist = []; lastUpdated = nil; reconnecting = false; error = nil
         managingLists = false; listManagementError = nil
+        for entry in symbolEntries.values { entry.clear() }; symbolEntries = [:]
+        pendingSymbolChanges = []; symbolChangeErrors = [:]; symbolReconcile?.cancel(); symbolReconcile = nil
         pushOperation = nil; registeringPush = false; pushMessage = nil
         refreshID = nil; sectionErrors = [:]; sectionUpdated = [:]; loadingSections = []; health = [:]; checkingHealth = false
         await old?.signOut()
@@ -407,8 +428,12 @@ struct WatchlistImportPlan {
             let _: [SharedWatchlist] = try await api.post("/api/watchlists/\(row.id)/move", body: ["direction": direction]); return nil
         }
     }
-    func moveSymbol(_ symbol: String, direction: Int) async {
-        guard let row = sharedLists.first(where: { $0.id == sharedListID }), let index = row.payload.symbols.firstIndex(of: symbol) else { return }
+    func moveSymbol(_ symbol: String, direction: Int, in row: SharedWatchlist, session: UUID) async {
+        guard signedIn, session == generation, !Task.isCancelled, !listWritesBusy, [-1, 1].contains(direction),
+              let index = row.payload.symbols.firstIndex(of: symbol) else { return }
+        guard sharedLists.first(where: { $0.id == row.id }) == row else {
+            listManagementError = nativeText("This watchlist changed. Refresh and try again."); return
+        }
         var symbols = row.payload.symbols; let next = index + direction
         guard symbols.indices.contains(next) else { return }; symbols.swapAt(index, next)
         await manageLists { api in
@@ -416,7 +441,7 @@ struct WatchlistImportPlan {
         }
     }
     @discardableResult private func manageLists(_ operation: (TerminalAPI) async throws -> Int?) async -> Bool {
-        guard let api, !managingLists else { return false }; let token = generation
+        guard signedIn, let api, !listWritesBusy, !Task.isCancelled else { return false }; let token = generation
         managingLists = true; listManagementError = nil; listRevision += 1
         defer { if token == generation { managingLists = false } }
         do {
@@ -441,18 +466,73 @@ struct WatchlistImportPlan {
             return false
         }
     }
-    func changeSymbol(_ symbol: String, action: String) async {
-        guard let value = normalizedSymbol(symbol), let api, let id = sharedListID else { return }; let token = generation
+    func symbolEntry(for listID: Int) -> WatchlistSymbolEntry? {
+        guard signedIn, sharedLists.contains(where: { $0.id == listID }) else { return nil }
+        if let entry = symbolEntries[listID] { return entry }
+        let entry = WatchlistSymbolEntry(listID: listID, session: generation); symbolEntries[listID] = entry; return entry
+    }
+    private func currentEntry(_ entry: WatchlistSymbolEntry) -> Bool {
+        signedIn && entry.session == generation && symbolEntries[entry.listID] === entry
+    }
+    func addSymbol(_ entry: WatchlistSymbolEntry) async {
+        guard currentEntry(entry), !entry.saving, !Task.isCancelled else { return }
+        guard let symbol = normalizedSymbol(entry.text) else { entry.error = nativeText("Enter a valid ticker."); return }
+        let revision = entry.revision; entry.saving = true; entry.error = nil; entry.message = nil
+        defer { if currentEntry(entry) { entry.saving = false } }
+        let saved = await changeSymbol(symbol, action: .add, listID: entry.listID, session: entry.session)
+        guard currentEntry(entry) else { return }
+        if saved {
+            if entry.revision == revision { entry.text = ""; entry.message = nativeText("Symbol added.") }
+            else { entry.message = nativeText("Symbol added. Newer input is kept.") }
+        } else if !Task.isCancelled {
+            if entry.revision == revision {
+                let key = WatchlistSymbolKey(listID: entry.listID, symbol: symbol)
+                entry.error = symbolChangeErrors[key]?.message ?? nativeText("Wait for the current watchlist update to finish.")
+            } else {
+                entry.message = nativeText("Could not add %@. Your current input is kept.").replacingOccurrences(of: "%@", with: symbol)
+            }
+        }
+    }
+    @discardableResult func changeSymbol(_ symbol: String, action: WatchlistSymbolAction, listID: Int, session: UUID) async -> Bool {
+        guard signedIn, session == generation, !Task.isCancelled, !managingLists, let value = normalizedSymbol(symbol), let api,
+              sharedLists.contains(where: { $0.id == listID }) else { return false }
+        let key = WatchlistSymbolKey(listID: listID, symbol: value)
+        guard !pendingSymbolChanges.contains(key) else { return false }
+        pendingSymbolChanges.insert(key); symbolChangeErrors[key] = nil; listRevision += 1
+        defer { if session == generation { pendingSymbolChanges.remove(key) } }
         do {
-            let row: SharedWatchlist = try await api.post("/api/watchlists/\(id)/symbols", body: ["symbol": value, "action": action])
-            guard token == generation, id == sharedListID else { return }
-            if let current = sharedLists.first(where: { $0.id == id }), current.version > row.version { return }
+            let row: SharedWatchlist = try await api.post("/api/watchlists/\(listID)/symbols", body: ["symbol": value, "action": action.rawValue])
+            guard session == generation else { return false }
+            guard row.id == listID else { throw ConnectionError.response(502, nativeText("The watchlist response was unexpected. Refresh and try again.")) }
             listRevision += 1
-            sharedLists = sharedLists.map { $0.id == id ? row : $0 }; setWatchlist(row.payload.symbols); await refreshQuotes()
-        } catch { if token == generation { await report(error) } }
+            if let current = sharedLists.first(where: { $0.id == listID }), current.version <= row.version {
+                sharedLists = sharedLists.map { $0.id == listID ? row : $0 }
+                if sharedListID == listID { setWatchlist(row.payload.symbols); refreshSelection() }
+            }
+            return true
+        } catch {
+            guard session == generation, !Task.isCancelled, !(error is CancellationError) else { return false }
+            if error as? ConnectionError == .unauthorized { await report(error) }
+            else {
+                symbolChangeErrors[key] = WatchlistSymbolFailure(action: action, message: error.localizedDescription)
+                if case .response(let code, _) = error as? ConnectionError, code == 404 || code == 409 {
+                    listRevision += 1; reconcileSymbolFailure(session: session)
+                }
+            }
+            return false
+        }
+    }
+    private func reconcileSymbolFailure(session: UUID) {
+        symbolReconcile?.cancel()
+        symbolReconcile = Task {
+            let revision = listRevision
+            guard session == generation, !Task.isCancelled else { return }
+            do { try await refreshLists(); if session == generation, revision == listRevision, !Task.isCancelled { refreshSelection() } }
+            catch { if session == generation, revision == listRevision, !Task.isCancelled, error as? ConnectionError == .unauthorized { await report(error) } }
+        }
     }
     func prepareWorkspaceImport(_ workspace: SharedWorkspace) -> WatchlistImportPlan? {
-        guard signedIn, !loadingWorkspaces, !importingWorkspace, !managingLists else { return nil }
+        guard signedIn, !loadingWorkspaces, !importingWorkspace, !listWritesBusy else { return nil }
         workspaceImportError = nil; workspaceImportMessage = nil
         guard workspaces.contains(workspace) else { workspaceImportError = nativeText("The published layout changed. Load it again before importing."); return nil }
         guard let row = sharedLists.first(where: { $0.id == sharedListID }) else {
@@ -464,7 +544,7 @@ struct WatchlistImportPlan {
         return plan
     }
     func importWorkspace(_ plan: WatchlistImportPlan) async {
-        guard signedIn, plan.session == generation, !Task.isCancelled, !importingWorkspace, !managingLists, let api else { return }
+        guard signedIn, plan.session == generation, !Task.isCancelled, !importingWorkspace, !listWritesBusy, let api else { return }
         workspaceImportError = nil; workspaceImportMessage = nil
         guard sharedListID == plan.target.id, sharedLists.first(where: { $0.id == plan.target.id }) == plan.target else {
             workspaceImportError = nativeText("The selected watchlist changed. Review the import again."); return

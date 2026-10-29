@@ -93,10 +93,10 @@ struct QuoteRow: View {
 }
 private struct WatchlistView: View {
     @EnvironmentObject private var model: TerminalModel
-    @ViewState<String> private var symbol = ""
-    @ViewState<Bool> private var invalid = false
     @ViewState<Bool> private var manage = false
     var body: some View {
+        let listID = model.sharedListID, session = model.sessionID, symbols = model.watchlist
+        let selected = model.sharedLists.first { $0.id == listID }
         List {
             Section {
                 DataSectionStatus(section: .watchlist)
@@ -105,28 +105,51 @@ private struct WatchlistView: View {
                 }
                 Button("Manage shared lists") { manage = true }
                 if let error = model.listManagementError { Text(error).foregroundStyle(.orange) }
-                HStack {
-                    TextField("Ticker", text: $symbol).terminalInput(ticker: true).onSubmit(add)
-                    Button("Add", action: add).disabled(model.watchlist.count >= 150 || model.sharedListID == nil)
-                }
-                if invalid { Text("Enter a valid ticker.").foregroundStyle(.red) }
+                if let listID, let entry = model.symbolEntry(for: listID) { WatchlistSymbolInput(entry: entry) }
+                else { Text("Choose a shared watchlist before adding symbols.").font(.caption).foregroundStyle(.secondary) }
             }
-            ForEach(model.watchlist, id: \.self) { symbol in
-                NavigationLink { ResearchView(symbol: symbol) } label: {
-                    if let quote = model.quotes.first(where: { $0.symbol == symbol }) { QuoteRow(quote: quote) }
-                    else { HStack { Text(symbol); Spacer(); Text("—").foregroundStyle(.secondary) } }
+            ForEach(symbols, id: \.self) { symbol in
+                let key = WatchlistSymbolKey(listID: listID ?? 0, symbol: symbol)
+                VStack(alignment: .leading, spacing: 6) {
+                    NavigationLink { ResearchView(symbol: symbol) } label: {
+                        if let quote = model.quotes.first(where: { $0.symbol == symbol }) { QuoteRow(quote: quote) }
+                        else { HStack { Text(symbol); Spacer(); Text("—").foregroundStyle(.secondary) } }
+                    }
+                    if model.pendingSymbolChanges.contains(key) { ProgressView("Updating symbol…") }
+                    if let failure = model.symbolChangeErrors[key], failure.action == .remove {
+                        Text(failure.message).font(.callout).foregroundStyle(.red)
+                        if let listID {
+                            Button("Retry removal") { Task { await model.changeSymbol(symbol, action: .remove, listID: listID, session: session) } }
+                                .buttonStyle(.borderless).disabled(model.managingLists || model.pendingSymbolChanges.contains(key))
+                        }
+                    }
                 }.contextMenu {
-                    Button("Move up") { Task { await model.moveSymbol(symbol, direction: -1) } }.disabled(model.managingLists || model.watchlist.first == symbol)
-                    Button("Move down") { Task { await model.moveSymbol(symbol, direction: 1) } }.disabled(model.managingLists || model.watchlist.last == symbol)
+                    Button("Move up") { if let selected { Task { await model.moveSymbol(symbol, direction: -1, in: selected, session: session) } } }.disabled(model.listWritesBusy || symbols.first == symbol)
+                    Button("Move down") { if let selected { Task { await model.moveSymbol(symbol, direction: 1, in: selected, session: session) } } }.disabled(model.listWritesBusy || symbols.last == symbol)
+                    Button("Remove symbol", role: .destructive) { if let listID { Task { await model.changeSymbol(symbol, action: .remove, listID: listID, session: session) } } }
+                        .disabled(model.managingLists || model.pendingSymbolChanges.contains(key))
                 }
-            }.onDelete { offsets in let symbols=offsets.map{model.watchlist[$0]};Task{for symbol in symbols{await model.changeSymbol(symbol,action:"remove")}} }
+            }.onDelete { offsets in
+                guard let listID else { return }
+                let removed = offsets.filter { symbols.indices.contains($0) }.map { symbols[$0] }
+                Task { for symbol in removed { await model.changeSymbol(symbol, action: .remove, listID: listID, session: session) } }
+            }
             if model.watchlist.isEmpty && !model.loadingSections.contains(.watchlist) && model.sectionErrors[.watchlist] == nil { Text("Your watchlist is empty.").foregroundStyle(.secondary) }
         }.refreshable { await model.refresh() }.sheet(isPresented: $manage) { SharedListsView() }
     }
-    private func add() {
-        guard let value = normalizedSymbol(symbol) else { invalid = true; return }
-        symbol = ""; invalid = false
-        Task { await model.changeSymbol(value,action:"add") }
+}
+private struct WatchlistSymbolInput: View {
+    @EnvironmentObject private var model: TerminalModel
+    @ObservedObject var entry: WatchlistSymbolEntry
+    var body: some View {
+        HStack {
+            TextField("Ticker", text: $entry.text).terminalInput(ticker: true).onSubmit { Task { await model.addSymbol(entry) } }
+            Button("Add") { Task { await model.addSymbol(entry) } }
+                .disabled(entry.saving || model.managingLists || (model.sharedLists.first { $0.id == entry.listID }?.payload.symbols.count ?? 150) >= 150)
+        }
+        if entry.saving { ProgressView("Adding symbol…") }
+        if let error = entry.error { Text(error).font(.callout).foregroundStyle(.red) }
+        if let message = entry.message { Text(message).font(.caption).foregroundStyle(.secondary) }
     }
 }
 private struct SharedListsView: View {
@@ -143,10 +166,11 @@ private struct SharedListsView: View {
             Form {
                 Section("New shared list") {
                     TextField("List name", text: $name)
-                    Button("Create empty list") { Task { if await model.createList(name: name) { name = "" } } }.disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.managingLists)
-                    Button("Copy current list") { Task { if await model.createList(name: name, copyCurrent: true) { name = "" } } }.disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.managingLists || model.sharedListID == nil)
+                    Button("Create empty list") { Task { if await model.createList(name: name) { name = "" } } }.disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.listWritesBusy)
+                    Button("Copy current list") { Task { if await model.createList(name: name, copyCurrent: true) { name = "" } } }.disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.listWritesBusy || model.sharedListID == nil)
                 }
                 if let error = model.listManagementError { Section { Text(error).foregroundStyle(.orange) } }
+                if !model.pendingSymbolChanges.isEmpty { Section { ProgressView("Updating symbol…") } }
                 Section("Shared on all devices") {
                     ForEach(model.sharedLists) { row in
                         VStack(alignment: .leading, spacing: 8) {
@@ -157,7 +181,7 @@ private struct SharedListsView: View {
                                 Button { Task { await model.moveList(row, direction: "down") } } label: { Image(systemName: "arrow.down") }.accessibilityLabel("Move down \(row.payload.name)").disabled(model.sharedLists.last?.id == row.id)
                                 Button("Rename") { renamed = row.payload.name; renaming = row }
                                 Button("Delete", role: .destructive) { deleting = row }
-                            }.buttonStyle(.borderless).disabled(model.managingLists)
+                            }.buttonStyle(.borderless).disabled(model.listWritesBusy)
                         }
                     }
                     Text("Order syncs to the web terminal. Long-press a symbol in Watchlist to move it up or down.").font(.caption).foregroundStyle(.secondary)
@@ -470,7 +494,7 @@ private struct SettingsView: View {
                     if let error = model.workspaceLoadError { Text(error).font(.callout).foregroundStyle(.red) }
                     ForEach(model.workspaces) { workspace in
                         Button(workspace.name) { selected = model.prepareWorkspaceImport(workspace) }
-                            .disabled(model.loadingWorkspaces || model.importingWorkspace || model.managingLists || model.sharedListID == nil)
+                            .disabled(model.loadingWorkspaces || model.importingWorkspace || model.listWritesBusy || model.sharedListID == nil)
                     }
                     if model.workspacesLoaded && model.workspaces.isEmpty && !model.loadingWorkspaces && model.workspaceLoadError == nil { Text("No published layouts yet.").foregroundStyle(.secondary) }
                     if model.sharedListID == nil { Text("Choose a shared watchlist before importing a layout.").font(.caption).foregroundStyle(.secondary) }
