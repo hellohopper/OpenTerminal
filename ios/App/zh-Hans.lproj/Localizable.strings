@@ -18,6 +18,7 @@
 "Cannot reach the Mac. Check Tailscale, the server address and whether the Mac is awake." = "无法连接 Mac，请检查 Tailscale、服务器地址和 Mac 是否处于唤醒状态。";
 "Check server health" = "检查服务器状态";
 "Checking…" = "检查中…";
+"Refresh failed. Showing the last received status." = "刷新失败，显示上次收到的状态。";
 "Close" = "关闭";
 "Condition" = "触发条件";
 "Configure APNs keys on the Mac first." = "请先在 Mac 上配置 APNs 密钥。";

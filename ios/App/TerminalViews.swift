@@ -509,10 +509,18 @@ private struct SettingsView: View {
                     Button("Sign out", role: .destructive) { dismiss(); Task { await model.signOut() } }
                 }
                 Section("Server health") {
-                    Button("Check server health") { Task { await model.checkHealth() } }.disabled(model.checkingHealth)
+                    Button("Check server health") { let session = model.sessionID; Task { await model.checkHealth(session: session) } }.disabled(model.checkingHealth)
                     if model.checkingHealth { ProgressView("Checking…") }
                     ForEach(["Connection", "Backups", "Native push"], id: \.self) { name in
-                        if let message = model.health[name] { VStack(alignment: .leading) { Text(LocalizedStringKey(name)).font(.headline); Text(message).font(.callout) } }
+                        if model.health[name] != nil || model.healthErrors[name] != nil {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(LocalizedStringKey(name)).font(.headline)
+                                if let message = model.health[name] { Text(message).font(.callout) }
+                                if let received = model.healthReceivedAt[name] { Text("Status received \(received.formatted(date: .abbreviated, time: .standard))").font(.caption).foregroundStyle(.secondary) }
+                                if let error = model.healthErrors[name] { Text(error).font(.callout).foregroundStyle(.red) }
+                                if model.health[name] != nil && model.healthErrors[name] != nil { Text("Refresh failed. Showing the last received status.").font(.caption).foregroundStyle(.secondary) }
+                            }
+                        }
                     }
                 }
                 Section("Saved web layouts") {

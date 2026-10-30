@@ -120,10 +120,10 @@ import OpenTerminalCore
             }
         }
         defer { ModelProtocol.handler = nil }
-        let (model, _) = try fixture(); await model.restoreSession(); await model.checkHealth()
+        let (model, _) = try fixture(); await model.restoreSession(); await model.checkHealth(session: model.sessionID)
         #expect(model.health["Connection"]?.contains("Connected") == true)
         #expect(model.health["Backups"]?.contains("failed") == true)
-        #expect(model.health["Native push"]?.contains("unavailable") == true)
+        #expect(model.health["Native push"] == nil && model.healthErrors["Native push"]?.contains("unavailable") == true)
         #expect(model.signedIn); #expect(!model.checkingHealth)
     }
     @Test func expiredAuthorizationClearsAllConcurrentSectionState() async throws {
