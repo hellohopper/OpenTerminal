@@ -308,3 +308,14 @@
 "This watchlist changed. Refresh and try again." = "This watchlist changed. Refresh and try again.";
 "The watchlist response was unexpected. Refresh and try again." = "The watchlist response was unexpected. Refresh and try again.";
 "Could not add %@. Your current input is kept." = "Could not add %@. Your current input is kept.";
+"Watchlist created." = "Watchlist created.";
+"Watchlist renamed." = "Watchlist renamed.";
+"Watchlist deleted." = "Watchlist deleted.";
+"Watchlists reordered." = "Watchlists reordered.";
+"Symbols reordered." = "Symbols reordered.";
+"Shared list refresh" = "Shared list refresh";
+"Refresh shared lists" = "Refresh shared lists";
+"Updating shared lists…" = "Updating shared lists…";
+"Refreshing shared lists…" = "Refreshing shared lists…";
+"The list change was confirmed. Refresh to load the latest server state." = "The list change was confirmed. Refresh to load the latest server state.";
+"This watchlist cannot be copied. Refresh and try again." = "This watchlist cannot be copied. Refresh and try again.";

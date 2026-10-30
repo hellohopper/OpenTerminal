@@ -156,20 +156,28 @@ private struct SharedListsView: View {
     @EnvironmentObject private var model: TerminalModel
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var typeSize
-    @ViewState<String> private var name = ""
-    @ViewState<SharedWatchlist?> private var renaming = nil
-    @ViewState<SharedWatchlist?> private var deleting = nil
+    @ViewState<(row: SharedWatchlist, session: UUID)?> private var renaming = nil
+    @ViewState<(row: SharedWatchlist, session: UUID)?> private var deleting = nil
     @ViewState<String> private var renamed = ""
     private var actionLayout: AnyLayout { typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12)) : AnyLayout(HStackLayout()) }
     var body: some View {
+        let session = model.sessionID
         NavigationStack {
             Form {
                 Section("New shared list") {
-                    TextField("List name", text: $name)
-                    Button("Create empty list") { Task { if await model.createList(name: name) { name = "" } } }.disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.listWritesBusy)
-                    Button("Copy current list") { Task { if await model.createList(name: name, copyCurrent: true) { name = "" } } }.disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.listWritesBusy || model.sharedListID == nil)
+                    SharedListCreationFields(draft: model.listNameDraft)
                 }
                 if let error = model.listManagementError { Section { Text(error).foregroundStyle(.orange) } }
+                if let message = model.listManagementMessage { Section { Text(message).foregroundStyle(.secondary) } }
+                Section("Shared list refresh") {
+                    Button("Refresh shared lists") { Task { await model.reloadSharedLists(session: session) } }.disabled(model.loadingSharedLists || model.managingLists)
+                    if model.managingLists { ProgressView("Updating shared lists…") }
+                    if model.loadingSharedLists { ProgressView("Refreshing shared lists…") }
+                    if let error = model.sharedListReadError {
+                        Text(error).font(.callout).foregroundStyle(.orange)
+                        if model.listManagementMessage != nil { Text("The list change was confirmed. Refresh to load the latest server state.").font(.caption).foregroundStyle(.secondary) }
+                    }
+                }
                 if !model.pendingSymbolChanges.isEmpty { Section { ProgressView("Updating symbol…") } }
                 Section("Shared on all devices") {
                     ForEach(model.sharedLists) { row in
@@ -177,10 +185,10 @@ private struct SharedListsView: View {
                             Text(row.payload.name).font(.headline)
                             Text("\(row.payload.symbols.count) symbols").font(.caption).foregroundStyle(.secondary)
                             actionLayout {
-                                Button { Task { await model.moveList(row, direction: "up") } } label: { Image(systemName: "arrow.up") }.accessibilityLabel("Move up \(row.payload.name)").disabled(model.sharedLists.first?.id == row.id)
-                                Button { Task { await model.moveList(row, direction: "down") } } label: { Image(systemName: "arrow.down") }.accessibilityLabel("Move down \(row.payload.name)").disabled(model.sharedLists.last?.id == row.id)
-                                Button("Rename") { renamed = row.payload.name; renaming = row }
-                                Button("Delete", role: .destructive) { deleting = row }
+                                Button { Task { await model.moveList(row, direction: "up", session: session) } } label: { Image(systemName: "arrow.up") }.accessibilityLabel("Move up \(row.payload.name)").disabled(model.sharedLists.first?.id == row.id)
+                                Button { Task { await model.moveList(row, direction: "down", session: session) } } label: { Image(systemName: "arrow.down") }.accessibilityLabel("Move down \(row.payload.name)").disabled(model.sharedLists.last?.id == row.id)
+                                Button("Rename") { renamed = row.payload.name; renaming = (row, session) }
+                                Button("Delete", role: .destructive) { deleting = (row, session) }
                             }.buttonStyle(.borderless).disabled(model.listWritesBusy)
                         }
                     }
@@ -190,14 +198,33 @@ private struct SharedListsView: View {
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
                 .alert("Rename shared list", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
                     TextField("New list name", text: $renamed)
-                    Button("Save") { if let row = renaming { let value = renamed; Task { await model.renameList(row, name: value) } }; renaming = nil }
+                    Button("Save") { if let target = renaming { let value = renamed; Task { await model.renameList(target.row, name: value, session: target.session) } }; renaming = nil }
                     Button("Cancel", role: .cancel) { renaming = nil }
                 }
-                .confirmationDialog("Delete \(deleting?.payload.name ?? "shared list") from every device?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible) {
-                    Button("Delete shared list", role: .destructive) { if let row = deleting { Task { await model.deleteList(row) } }; deleting = nil }
+                .confirmationDialog("Delete \(deleting?.row.payload.name ?? "shared list") from every device?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible) {
+                    Button("Delete shared list", role: .destructive) { if let target = deleting { Task { await model.deleteList(target.row, session: target.session) } }; deleting = nil }
                     Button("Cancel", role: .cancel) { deleting = nil }
                 } message: { Text("Local web workspace lists are preserved.") }
+                .onChange(of: model.sessionID) { _, _ in renaming = nil; deleting = nil; renamed = "" }
         }
+    }
+}
+private struct SharedListCreationFields: View {
+    @EnvironmentObject private var model: TerminalModel
+    @ObservedObject var draft: WatchlistNameDraft
+    private func submit(copying source: SharedWatchlist?, session: UUID, selection: UUID) {
+        guard let plan = model.prepareListCreation(name: draft.text, copying: source, session: session, selection: selection) else { return }
+        let revision = draft.revision
+        Task { await model.submitListCreation(plan, draft: draft, revision: revision) }
+    }
+    var body: some View {
+        let session = model.sessionID, selection = model.listSelection
+        let source = model.sharedLists.first { $0.id == model.sharedListID }
+        TextField("List name", text: $draft.text)
+        Button("Create empty list") { submit(copying: nil, session: session, selection: selection) }
+            .disabled(draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || draft.creating || model.listWritesBusy)
+        Button("Copy current list") { if let source { submit(copying: source, session: session, selection: selection) } }
+            .disabled(draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || draft.creating || model.listWritesBusy || source == nil)
     }
 }
 private struct HoldingsView: View {

@@ -166,11 +166,14 @@ import OpenTerminalCore
             switch request.request.url?.path {
             case "/api/watchlists/1/rename": request.respond(409, #"{"error":"This watchlist changed. Refresh and try again."}"#)
             case "/api/watchlists": request.respond(200, #"[{"id":1,"version":2,"payload":{"name":"Latest","symbols":["MSFT"]}}]"#)
+            case "/api/quotes": request.respond(200, "[]")
+            case "/api/briefings/current": request.respond(200, #"{"date":"2026-10-29","summary":"Ready","indexes":[],"headlines":[],"warnings":[]}"#)
             default: request.respondFixture()
             }
         }
         let success = await model.renameList(row, name: "Stale rename")
         #expect(!success); #expect(model.listManagementError?.contains("changed") == true)
+        await eventually { model.sharedLists.first?.payload.name == "Latest" && !model.loadingSharedLists }
         #expect(model.sharedLists.first?.payload.name == "Latest"); #expect(model.watchlist == ["MSFT"])
         #expect(!model.reconnecting); #expect(!model.managingLists); #expect(model.signedIn)
         await model.signOut()

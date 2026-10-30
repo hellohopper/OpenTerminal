@@ -308,3 +308,14 @@
 "This watchlist changed. Refresh and try again." = "此自选列表已发生变化，请刷新后重试。";
 "The watchlist response was unexpected. Refresh and try again." = "自选列表返回的数据异常，请刷新后重试。";
 "Could not add %@. Your current input is kept." = "无法添加 %@，已保留当前输入。";
+"Watchlist created." = "自选列表已创建。";
+"Watchlist renamed." = "自选列表已重命名。";
+"Watchlist deleted." = "自选列表已删除。";
+"Watchlists reordered." = "自选列表顺序已更新。";
+"Symbols reordered." = "代码顺序已更新。";
+"Shared list refresh" = "共享列表刷新";
+"Refresh shared lists" = "刷新共享列表";
+"Updating shared lists…" = "正在更新共享列表…";
+"Refreshing shared lists…" = "正在刷新共享列表…";
+"The list change was confirmed. Refresh to load the latest server state." = "列表更改已确认。请刷新以加载服务器的最新状态。";
+"This watchlist cannot be copied. Refresh and try again." = "无法复制此自选列表，请刷新后重试。";

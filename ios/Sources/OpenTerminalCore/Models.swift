@@ -114,8 +114,11 @@ public struct MobileAuthorization: Decodable, Sendable { public let id: String; 
 public struct SharedWatchlist: Decodable, Identifiable, Equatable, Sendable {
     public struct Payload: Decodable, Equatable, Sendable { public let name: String; public let symbols: [String] }
     public let id: Int; public let version: Int; public let payload: Payload
+    public init(id: Int, version: Int, name: String, symbols: [String]) {
+        self.id = id; self.version = version; payload = Payload(name: name, symbols: symbols)
+    }
     public func replacingSymbols(_ symbols: [String], version: Int) -> Self {
-        Self(id: id, version: version, payload: Payload(name: payload.name, symbols: symbols))
+        Self(id: id, version: version, name: payload.name, symbols: symbols)
     }
 }
 public struct MobileDeviceInfo: Decodable, Identifiable, Equatable, Sendable {
