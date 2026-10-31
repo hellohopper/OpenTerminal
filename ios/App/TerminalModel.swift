@@ -290,6 +290,7 @@ struct WatchlistImportPlan {
         if let server { credentials.remove(server.origin.absoluteString) }
         if let pendingServer { credentials.remove(pendingServer) }
         generation = UUID(); credential = nil; api = nil; server = nil; signedIn = false
+        for state in researchNoteStates.values { state.clear() }
         researchDrafts = [:]; researchNoteStates = [:]; pendingResearch = nil; researchSymbol = nil
         alertEditor.clear(); alertEditor = AlertEditorState(); alertRefresh?.cancel(); alertRefresh = nil
         for state in alertEdits.values { state.clear() }; alertEdits = [:]
