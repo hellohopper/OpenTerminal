@@ -78,8 +78,11 @@ struct WatchlistImportPlan {
     @Published var sectionErrors: [DataSection: String] = [:]
     @Published var sectionUpdated: [DataSection: Date] = [:]
     @Published var loadingSections: Set<DataSection> = []
-    @Published var health: [String: String] = [:]
-    @Published var checkingHealth = false
+    @Published private(set) var health: [String: String] = [:]
+    @Published private(set) var healthReceivedAt: [String: Date] = [:]
+    @Published private(set) var healthErrors: [String: String] = [:]
+    @Published private(set) var checkingHealth = false
+    private var healthRequest: UUID?
     @Published var reconnecting = false
     @Published var pushMessage: String?
     @Published private(set) var registeringPush = false
@@ -307,7 +310,8 @@ struct WatchlistImportPlan {
         for entry in symbolEntries.values { entry.clear() }; symbolEntries = [:]
         pendingSymbolChanges = []; symbolChangeErrors = [:]; symbolReconcile?.cancel(); symbolReconcile = nil
         pushOperation = nil; registeringPush = false; pushMessage = nil
-        refreshID = nil; sectionErrors = [:]; sectionUpdated = [:]; loadingSections = []; health = [:]; checkingHealth = false
+        refreshID = nil; sectionErrors = [:]; sectionUpdated = [:]; loadingSections = []
+        health = [:]; healthReceivedAt = [:]; healthErrors = [:]; healthRequest = nil; checkingHealth = false
         await old?.signOut()
     }
     func report(_ error: Error, section: DataSection? = nil) async {
@@ -921,27 +925,46 @@ struct WatchlistImportPlan {
             else { deviceActionErrors[device.id] = error.localizedDescription }
         }
     }
-    func checkHealth() async {
-        guard let api, !checkingHealth else { return }; let token = generation
-        checkingHealth = true; health = [:]; defer { if token == generation { checkingHealth = false } }
-        async let connection: Void = healthCheck("Connection", token: token) {
-            let status: BackendStatus = try await api.get("/api/status")
-            guard status.ok else { throw ConnectionError.response(503, "The backend is not ready.") }
-            return nativeText("Connected to the Mac") + " · \(status.database)"
+    func checkHealth(session: UUID) async {
+        guard signedIn, session == generation, let api, !checkingHealth, !Task.isCancelled else { return }
+        let request = UUID(); healthRequest = request; checkingHealth = true; healthErrors = [:]
+        defer { finishHealthCheck(request, session: session) }
+        await withTaskCancellationHandler {
+            async let connection: Void = healthCheck("Connection", session: session, request: request) {
+                let status: BackendStatus = try await api.get("/api/status")
+                guard status.ok else { throw ConnectionError.response(503, "The backend is not ready.") }
+                return nativeText("Connected to the Mac") + " · \(status.database)"
+            }
+            async let backup: Void = healthCheck("Backups", session: session, request: request) {
+                let schedule: BackupStatus = try await api.get("/api/data/schedule")
+                return schedule.summary
+            }
+            async let push: Void = healthCheck("Native push", session: session, request: request) {
+                let status: NativePushStatus = try await api.get("/api/mobile/push")
+                return status.configured ? nativeText("Configured; device delivery not verified.") + " (\(status.environment ?? "unknown"))" : nativeText("Optional native push is not configured.")
+            }
+            _ = await (connection, backup, push)
+        } onCancel: {
+            // Release only this check, even if its transport completes after a retry starts.
+            Task { @MainActor in self.finishHealthCheck(request, session: session) }
         }
-        async let backup: Void = healthCheck("Backups", token: token) {
-            let schedule: BackupStatus = try await api.get("/api/data/schedule")
-            return schedule.summary
-        }
-        async let push: Void = healthCheck("Native push", token: token) {
-            let status: NativePushStatus = try await api.get("/api/mobile/push")
-            return status.configured ? nativeText("Configured; device delivery not verified.") + " (\(status.environment ?? "unknown"))" : nativeText("Optional native push is not configured.")
-        }
-        _ = await (connection, backup, push)
     }
-    private func healthCheck(_ name: String, token: UUID, read: () async throws -> String) async {
-        do { let message = try await read(); if token == generation { health[name] = message } }
-        catch { if token == generation && !Task.isCancelled { if error as? ConnectionError == .unauthorized { await report(error) } else { health[name] = error.localizedDescription } } }
+    private func finishHealthCheck(_ request: UUID, session: UUID) {
+        guard session == generation, healthRequest == request else { return }
+        healthRequest = nil; checkingHealth = false
+    }
+    private func healthCheck(_ name: String, session: UUID, request: UUID, read: () async throws -> String) async {
+        func accepts() -> Bool { signedIn && session == generation && healthRequest == request && !Task.isCancelled }
+        guard accepts() else { return }
+        do {
+            let message = try await read()
+            guard accepts() else { return }
+            health[name] = message; healthReceivedAt[name] = .now; healthErrors[name] = nil
+        } catch {
+            guard accepts(), !(error is CancellationError) else { return }
+            if error as? ConnectionError == .unauthorized { await report(error) }
+            else { healthErrors[name] = error.localizedDescription }
+        }
     }
     func enableNotifications() async { await registerPush(enableDelivery: true) }
     func registerExistingPush() async { await registerPush(enableDelivery: false) }

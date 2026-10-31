@@ -18,6 +18,7 @@
 "Cannot reach the Mac. Check Tailscale, the server address and whether the Mac is awake." = "Cannot reach the Mac. Check Tailscale, the server address and whether the Mac is awake.";
 "Check server health" = "Check server health";
 "Checking…" = "Checking…";
+"Refresh failed. Showing the last received status." = "Refresh failed. Showing the last received status.";
 "Close" = "Close";
 "Condition" = "Condition";
 "Configure APNs keys on the Mac first." = "Configure APNs keys on the Mac first.";
