@@ -18,6 +18,10 @@ struct ResearchDraft: Equatable { var title = ""; var body = ""; var isEmpty: Bo
     private(set) var draftRevision = 0
     init(_ draft: ResearchDraft) { title = draft.title; body = draft.body }
     private func edited() { draftRevision += 1; message = nil; error = nil }
+    func clear() {
+        title = ""; body = ""; saving = false; message = nil; error = nil
+        savedRevision = 0; draftRevision = 0; deleting = []; deleteErrors = [:]; deletedIDs = []
+    }
 }
 
 @MainActor final class ResearchModel: ObservableObject {
@@ -25,18 +29,20 @@ struct ResearchDraft: Equatable { var title = ""; var body = ""; var isEmpty: Bo
     @Published var candles: [Candle] = []
     @Published var news: [NewsItem] = []
     @Published var notes: [JournalEntry] = []
-    @Published var noteSearch = "" { didSet { noteSearchError = nil } }
+    @Published private var searchText = ""
+    var noteSearch: String { get { searchText } set { guard current else { return }; searchText = newValue; noteSearchError = nil } }
     @Published private(set) var notesQuery = ""
     @Published private(set) var nextNoteCursor: Int?
     @Published private(set) var loadingMoreNotes = false
     @Published private(set) var notePageError: String?
     @Published private(set) var noteSearchError: String?
-    @Published var range = "6M" { didSet { if current { terminal.rememberChartRange(range) } } }
+    @Published private var selectedRange = "6M"
+    var range: String { get { selectedRange } set { guard current else { return }; selectedRange = newValue; terminal.rememberChartRange(newValue) } }
     @Published var loading: Set<ResearchSection> = []
     @Published var errors: [ResearchSection: String] = [:]
     @Published var updated: [ResearchSection: Date] = [:]
-    var title: String { get { noteState.title } set { noteState.title = newValue; keepDraft() } }
-    var bodyText: String { get { noteState.body } set { noteState.body = newValue; keepDraft() } }
+    var title: String { get { noteState.title } set { guard current else { return }; noteState.title = newValue; keepDraft() } }
+    var bodyText: String { get { noteState.body } set { guard current else { return }; noteState.body = newValue; keepDraft() } }
     var saving: Bool { get { noteState.saving } set { noteState.saving = newValue } }
     var message: String? { get { noteState.message } set { noteState.message = newValue } }
     var saveError: String? { get { noteState.error } set { noteState.error = newValue } }
@@ -51,6 +57,7 @@ struct ResearchDraft: Equatable { var title = ""; var body = ""; var isEmpty: Bo
     private var noteUpdates: AnyCancellable?
     private var noteDeletions: AnyCancellable?
     private var noteSaves: AnyCancellable?
+    private var authorization: AnyCancellable?
     private var notesRefresh: Task<Void, Never>?
     private var requests: [ResearchSection: UUID] = [:]
     var hasDraft: Bool { !draft.isEmpty }
@@ -59,14 +66,21 @@ struct ResearchDraft: Equatable { var title = ""; var body = ""; var isEmpty: Bo
     init(terminal: TerminalModel, symbol: String) {
         self.terminal = terminal; self.symbol = symbol; session = terminal.sessionID
         draftKey = "\(terminal.server?.origin.absoluteString ?? "")|\(symbol)"
-        let state = terminal.researchNoteStates[draftKey] ?? ResearchNoteState(terminal.researchDrafts[draftKey] ?? ResearchDraft())
-        terminal.researchNoteStates[draftKey] = state; noteState = state
-        range = terminal.preferredChartRange
+        let state = terminal.signedIn ? (terminal.researchNoteStates[draftKey] ?? ResearchNoteState(terminal.researchDrafts[draftKey] ?? ResearchDraft())) : ResearchNoteState(ResearchDraft())
+        if terminal.signedIn { terminal.researchNoteStates[draftKey] = state }; noteState = state
+        selectedRange = terminal.signedIn ? terminal.preferredChartRange : "6M"
         noteUpdates = state.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
         noteDeletions = state.$deletedIDs.sink { [weak self] ids in self?.notes.removeAll { ids.contains($0.id) } }
         noteSaves = state.$savedRevision.dropFirst().sink { [weak self] _ in self?.scheduleNotesRefresh() }
+        authorization = terminal.$signedIn.sink { [weak self] signedIn in if !signedIn { self?.clear() } }
     }
     private var current: Bool { terminal.sessionID == session && terminal.signedIn }
+    private func clear() {
+        requests = [:]; notesRefresh?.cancel(); notesRefresh = nil
+        quote = nil; candles = []; news = []; notes = []; searchText = ""; notesQuery = ""; nextNoteCursor = nil
+        loading = []; loadingMoreNotes = false; errors = [:]; updated = [:]; notePageError = nil; noteSearchError = nil
+        loadedRange = nil; selectedRange = "6M"
+    }
     private func keepDraft() { if current { terminal.researchDrafts[draftKey] = draft.isEmpty ? nil : draft } }
     func discardDraft() { guard current, !saving else { return }; title = ""; bodyText = ""; message = nil; saveError = nil }
     func refreshOverview() async {
@@ -82,7 +96,7 @@ struct ResearchDraft: Equatable { var title = ""; var body = ""; var isEmpty: Bo
     }
     func load(_ section: ResearchSection) async {
         if section == .notes { await loadNotes(); return }
-        guard current, let api = terminal.api else { return }
+        guard current, !Task.isCancelled, let api = terminal.api else { return }
         let request = UUID(), selectedRange = range
         requests[section] = request; loading.insert(section); errors[section] = nil
         if section == .chart && loadedRange != selectedRange { candles = []; updated[.chart] = nil }
@@ -109,11 +123,11 @@ struct ResearchDraft: Equatable { var title = ""; var body = ""; var isEmpty: Bo
         }
     }
     func searchNotes() async {
+        guard current, !Task.isCancelled else { return }
         let query = noteSearch.trimmingCharacters(in: .whitespacesAndNewlines)
         guard query.utf16.count <= 200, query.split(whereSeparator: { $0.isWhitespace }).count <= 8 else {
             noteSearchError = nativeText("Use up to 200 characters and eight search keywords."); return
         }
-        guard current else { return }
         noteSearchError = nil
         if query != notesQuery { notes = []; nextNoteCursor = nil; updated[.notes] = nil }
         notesQuery = query
@@ -125,7 +139,7 @@ struct ResearchDraft: Equatable { var title = ""; var body = ""; var isEmpty: Bo
         await loadNotes(before: cursor)
     }
     private func loadNotes(before: Int? = nil) async {
-        guard current, let api = terminal.api else { return }
+        guard current, !Task.isCancelled, let api = terminal.api else { return }
         let request = UUID(), query = notesQuery
         requests[.notes] = request
         if before == nil { loading.insert(.notes); errors[.notes] = nil; loadingMoreNotes = false }
