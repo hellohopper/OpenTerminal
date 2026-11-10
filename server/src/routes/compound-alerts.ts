@@ -1,0 +1,13 @@
+import { Router } from "express";
+import { z } from "zod";
+import { asyncRoute } from "../async-route.js";
+import { db } from "../db.js";
+import { records, addRecord, updateRecord } from "../records.js";
+import { compoundSchema, compoundMonitor } from "../compound-alerts.js";
+export const compoundAlertsRouter=Router();
+compoundAlertsRouter.get("/",asyncRoute(async(_req,res)=>res.json({rules:await records("compound-rule")})));
+compoundAlertsRouter.get("/:id/history",asyncRoute(async(req,res)=>res.json({observations:await records(`compound-observation:${Number(req.params.id)}`)})));
+compoundAlertsRouter.post("/check",asyncRoute(async(_req,res)=>res.json(await compoundMonitor.check())));
+compoundAlertsRouter.post("/",asyncRoute(async(req,res)=>{const p=compoundSchema.safeParse(req.body);if(!p.success)return res.status(400).json({error:p.error.issues[0].message});if(p.data.trigger==="close"&&!p.data.conditions.some(c=>["price","breakout20","relativeVolume20"].includes(c.metric)))return res.status(400).json({error:"Close confirmation requires a daily price or volume condition."});try{const id=await db.transaction(async()=>{if((await records("compound-rule")).length>=30)throw new Error("Up to 30 compound rules.");return addRecord("compound-rule",p.data);})();res.status(201).json({id});}catch(e){res.status(409).json({error:(e as Error).message});}}));
+compoundAlertsRouter.put("/:id",asyncRoute(async(req,res)=>{const p=z.object({version:z.number().int().positive(),enabled:z.boolean()}).safeParse(req.body);if(!p.success)return res.status(400).json({error:"Review the latest rule first."});try{await db.transaction(async()=>{const row=(await records<any>("compound-rule")).find(r=>r.id===Number(req.params.id));if(!row)throw new Error("Rule no longer exists.");await updateRecord("compound-rule",row.id,p.data.version,{...row.payload,enabled:p.data.enabled,metSince:undefined,lastResult:undefined});})();res.json({ok:true});}catch(e){res.status(409).json({error:(e as Error).message});}}));
+compoundAlertsRouter.delete("/:id",asyncRoute(async(req,res)=>{const version=z.coerce.number().int().positive().safeParse(req.query.version);if(!version.success)return res.status(400).json({error:"Review the latest rule first."});try{await db.transaction(async()=>{const result=await db.prepare("DELETE FROM research_records WHERE kind='compound-rule' AND id=? AND version=?").run(req.params.id,version.data);if(!result.changes)throw new Error("Rule changed. Refresh before deleting.");await db.prepare("DELETE FROM research_records WHERE kind=?").run(`compound-observation:${Number(req.params.id)}`);})();res.status(204).end();}catch(e){res.status(409).json({error:(e as Error).message});}}));

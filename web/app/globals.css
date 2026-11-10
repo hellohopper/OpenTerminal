@@ -398,3 +398,17 @@ button.sidebar-group-label { cursor: pointer; }
 .option-chain .option-side-heading { text-align: center; color: var(--amber); }
 .option-chain td.option-itm { background: #142016; }
 .option-chain th, .option-chain tbody tr:hover { cursor: default; }
+
+/* Research workflow forms remain usable in narrow panels and on phones. */
+.workflow-panel { padding: .75rem; display: flex; flex-direction: column; gap: .75rem; overflow-wrap: anywhere; }
+.workflow-panel label { display: flex; flex-direction: column; gap: .25rem; margin-block: .5rem; }
+.workflow-panel input:not([type=checkbox]), .workflow-panel textarea, .workflow-panel select { width: 100%; min-width: 0; }
+.workflow-panel input[type=checkbox] { width: auto; align-self: flex-start; }
+.workflow-panel fieldset { display: flex; flex-direction: column; gap: .5rem; min-width: 0; }
+.workflow-panel summary { cursor: pointer; color: var(--amber); padding-block: .4rem; }
+.workflow-card { border: 1px solid var(--border); padding: .65rem; display: flex; flex-direction: column; gap: .4rem; }
+.workflow-actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.workflow-actions > input, .workflow-actions > select { flex: 1 1 8rem; }
+.workflow-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(15rem, 100%), 1fr)); gap: .75rem; }
+.workflow-panel pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; max-height: 20rem; overflow: auto; }
+.workflow-panel .data-table { display: block; overflow-x: auto; }

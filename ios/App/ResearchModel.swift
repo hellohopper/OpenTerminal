@@ -66,8 +66,14 @@ struct ResearchDraft: Equatable { var title = ""; var body = ""; var isEmpty: Bo
     init(terminal: TerminalModel, symbol: String) {
         self.terminal = terminal; self.symbol = symbol; session = terminal.sessionID
         draftKey = "\(terminal.server?.origin.absoluteString ?? "")|\(symbol)"
-        let state = terminal.signedIn ? (terminal.researchNoteStates[draftKey] ?? ResearchNoteState(terminal.researchDrafts[draftKey] ?? ResearchDraft())) : ResearchNoteState(ResearchDraft())
+        var restored: ResearchDraft?, restoreError: String?
+        if terminal.signedIn, let origin = terminal.server?.origin.absoluteString {
+            do { if let value = try terminal.researchFiles?.draft(origin: origin, symbol: symbol) { restored = ResearchDraft(title: value.title, body: value.body) } }
+            catch { restoreError = error.localizedDescription }
+        }
+        let state = terminal.signedIn ? (terminal.researchNoteStates[draftKey] ?? ResearchNoteState(terminal.researchDrafts[draftKey] ?? restored ?? ResearchDraft())) : ResearchNoteState(ResearchDraft())
         if terminal.signedIn { terminal.researchNoteStates[draftKey] = state }; noteState = state
+        if let restoreError { state.error = restoreError }
         selectedRange = terminal.signedIn ? terminal.preferredChartRange : "6M"
         noteUpdates = state.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
         noteDeletions = state.$deletedIDs.sink { [weak self] ids in self?.notes.removeAll { ids.contains($0.id) } }
@@ -81,8 +87,26 @@ struct ResearchDraft: Equatable { var title = ""; var body = ""; var isEmpty: Bo
         loading = []; loadingMoreNotes = false; errors = [:]; updated = [:]; notePageError = nil; noteSearchError = nil
         loadedRange = nil; selectedRange = "6M"
     }
-    private func keepDraft() { if current { terminal.researchDrafts[draftKey] = draft.isEmpty ? nil : draft } }
-    func discardDraft() { guard current, !saving else { return }; title = ""; bodyText = ""; message = nil; saveError = nil }
+    private func keepDraft() {
+        guard current else { return }
+        terminal.researchDrafts[draftKey] = draft.isEmpty ? nil : draft
+        if let origin = terminal.server?.origin.absoluteString {
+            do { try terminal.researchFiles?.saveDraft(StoredResearchDraft(title: title, body: bodyText), origin: origin, symbol: symbol) }
+            catch { saveError = error.localizedDescription }
+        }
+    }
+    func queueDraft() {
+        guard current, !saving else { return }
+        if terminal.researchInbox.collect(title: title, text: bodyText, url: "", symbol: symbol) { discardDraft(); message = nativeText("Saved in the offline research inbox.") }
+        else { saveError = terminal.researchInbox.error }
+    }
+    func discardDraft() {
+        guard current, !saving else { return }
+        do {
+            if let origin = terminal.server?.origin.absoluteString { try terminal.researchFiles?.saveDraft(StoredResearchDraft(), origin: origin, symbol: symbol) }
+            noteState.title = ""; noteState.body = ""; terminal.researchDrafts[draftKey] = nil; message = nil; saveError = nil
+        } catch { saveError = error.localizedDescription }
+    }
     func refreshOverview() async {
         async let quote: Void = load(.quote)
         async let news: Void = load(.news)

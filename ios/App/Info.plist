@@ -10,6 +10,7 @@
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleShortVersionString</key><string>$(MARKETING_VERSION)</string>
 <key>CFBundleVersion</key><string>$(CURRENT_PROJECT_VERSION)</string>
+<key>OpenTerminalAppGroup</key><string>$(RESEARCH_APP_GROUP)</string>
 <key>LSRequiresIPhoneOS</key><true/>
 <key>CFBundleURLTypes</key><array><dict><key>CFBundleURLName</key><string>OpenTerminal connection</string><key>CFBundleURLSchemes</key><array><string>openterminal</string></array></dict></array>
 <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>

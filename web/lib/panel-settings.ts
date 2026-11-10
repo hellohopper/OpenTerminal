@@ -11,6 +11,8 @@ export type PanelSettings = {
   comparisonDraft?: string;
   comparisonSymbols?: string[];
   comparisonRange?: string;
+  chartEvents?: boolean;
+  chartEventKinds?: string[];
   chartRange?: string;
   chartType?: string;
   chartIndicators?: string[];
@@ -32,6 +34,8 @@ const checks: Record<keyof PanelSettings, (value: unknown) => boolean> = {
   optionView: oneOf('auto', 'both', 'calls', 'puts'),
   optionColumns: v => list(v) && v.length > 0 && v.every(key => ['last', 'bid', 'ask', 'volume', 'oi', 'iv'].includes(key)),
   comparisonDraft: text, comparisonSymbols: list, comparisonRange: oneOf('6M', '1Y', '5Y'),
+  chartEvents: v => typeof v === "boolean",
+  chartEventKinds: v => list(v) && v.every(k=>["trade","journal","thesis","filing","earnings"].includes(k)),
   chartRange: oneOf('1D', '5D', '1M', '6M', 'YTD', '1Y', '5Y', 'MAX'), chartType: oneOf('candles', 'bars', 'line', 'area'),
   chartIndicators: v => list(v) && v.every(key => ['SMA20', 'SMA50', 'SMA200', 'EMA20', 'VWAP', 'BOLL', 'RSI', 'MACD'].includes(key)),
   chartOverlayDraft: text, chartOverlaySymbols: list, chartCompareMode: v => typeof v === 'boolean',

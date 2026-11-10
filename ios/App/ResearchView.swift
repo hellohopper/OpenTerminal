@@ -82,7 +82,8 @@ private struct ResearchContent: View {
                 Button(LocalizedStringKey(research.saving ? "Saving…" : "Save note")) { Task { await research.saveNote() } }.disabled(research.saving || research.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 if let error = research.saveError { Text(error).foregroundStyle(.orange) }
                 if let message = research.message { Text(message).foregroundStyle(.secondary) }
-                if research.hasDraft { Text("Draft kept in memory until sign-out or the app closes.").font(.caption).foregroundStyle(.secondary) }
+                if research.hasDraft { Button("Keep offline in inbox") { research.queueDraft() }.disabled(research.saving) }
+                if research.hasDraft { Text("Draft saved on this device until sign-out.").font(.caption).foregroundStyle(.secondary) }
             }
             if let server = terminal.server {
                 Section { Link("Full company research", destination: server.researchURL(symbol: research.symbol)); ShareLink("Share research link", item: server.researchURL(symbol: research.symbol)) }
@@ -102,7 +103,7 @@ private struct ResearchContent: View {
                 Button("Keep draft and leave") { dismiss() }
                 if !research.saving { Button("Discard draft and leave", role: .destructive) { research.discardDraft(); dismiss() } }
                 Button("Stay", role: .cancel) {}
-            } message: { Text(LocalizedStringKey(research.saving ? "Your note is still saving. Newer edits will remain in memory." : "Your draft will remain in memory. It is cleared on sign-out or when the app closes.")) }
+            } message: { Text(LocalizedStringKey(research.saving ? "Your note is still saving. Newer edits remain saved on this device." : "Your draft is saved on this device and cleared on sign-out.")) }
             .alert("Delete research note?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
                 Button("Delete note", role: .destructive) {
                     if let note = deleting { Task { await research.deleteNote(note) } }

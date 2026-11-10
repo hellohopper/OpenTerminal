@@ -1,5 +1,10 @@
 import type { WidgetType } from "./workspaces";
 export const WIDGET_CATALOG: Record<WidgetType, { title: string; label: string; group: string; key: string }> = {
+  researchChanges: { title: "Research Changes", label: "CHANGES", group: "Research", key: "" },
+  researchInbox: { title: "Research Inbox", label: "INBOX", group: "Research", key: "" },
+  forecasts: { title: "Forecast Scorecard", label: "SCORECARD", group: "Research", key: "" },
+  compoundAlerts: { title: "Compound Alerts", label: "COMPOUND ALERTS", group: "Portfolio", key: "" },
+  weeklyReports: { title: "Weekly Portfolio Reports", label: "WEEKLY REVIEW", group: "Portfolio", key: "" },
   thesis: { title: "Investment Theses", label: "THESES", group: "Research", key: "" },
   reviews: { title: "Trade Reviews", label: "REVIEWS", group: "Portfolio", key: "" },
   rebalance: { title: "Rebalance Simulator", label: "REBALANCE", group: "Portfolio", key: "" },

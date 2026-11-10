@@ -1,0 +1,10 @@
+import { Router } from "express";
+import { z } from "zod";
+import { asyncRoute } from "../async-route.js";
+import { db } from "../db.js";
+import { records, addRecord, updateRecord } from "../records.js";
+import { weeklySchema, generateWeekly, lastCompleteWeek, type WeeklySchedule } from "../weekly-reports.js";
+export const weeklyReportsRouter=Router();
+weeklyReportsRouter.get("/",asyncRoute(async(_req,res)=>res.json({reports:await records("weekly-report"),schedules:await records("weekly-schedule"),lastCompleteWeek:lastCompleteWeek()})));
+weeklyReportsRouter.post("/",asyncRoute(async(req,res)=>{const p=weeklySchema.safeParse(req.body);if(!p.success)return res.status(400).json({error:p.error.issues[0].message});try{res.status(201).json(await generateWeekly(p.data));}catch(e){res.status(409).json({error:(e as Error).message});}}));
+weeklyReportsRouter.post("/schedule",asyncRoute(async(req,res)=>{const p=z.object({portfolioId:z.number().int().positive(),enabled:z.boolean(),priceBasis:z.enum(["raw","split-adjusted","unverified"]),version:z.number().int().nonnegative()}).safeParse(req.body);if(!p.success)return res.status(400).json({error:p.error.issues[0].message});try{await db.transaction(async()=>{if(!await db.prepare("SELECT id FROM portfolios WHERE id=?").get(p.data.portfolioId))throw new Error("Portfolio no longer exists.");const rows=await records<WeeklySchedule>("weekly-schedule"),row=rows.find(r=>r.payload.portfolioId===p.data.portfolioId),{version,...payload}=p.data;if(row)await updateRecord("weekly-schedule",row.id,version,{...row.payload,...payload});else{if(version!==0||rows.length>=10)throw new Error("Schedule changed or maximum ten schedules reached.");await addRecord("weekly-schedule",payload,String(payload.portfolioId));}})();res.json({ok:true});}catch(e){res.status(409).json({error:(e as Error).message});}}));

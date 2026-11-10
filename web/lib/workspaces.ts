@@ -1,7 +1,7 @@
 import { readPanelSettings, type PanelSettings } from "./panel-settings";
 import { normalizeSymbol } from "./symbol";
 
-export const WIDGET_TYPES = ["quote", "chart", "watchlist", "news", "heatmap", "screener", "crypto", "macro", "options", "portfolio", "ai", "calendar", "insider", "tv", "recap", "comparison", "fundamentals", "journal", "performance", "strategy", "briefing", "alerts", "quality", "backup", "sync", "delivery", "events", "signals", "thesis", "reviews", "rebalance", "filings", "notifications", "tracking", "backtest", "today", "historyLibrary", "valuationLab", "portfolioRisk", "paper", "consolidated", "filingReader", "earningsReview", "researchSearch", "peers", "thesisMonitor", "accountImport", "portfolioGuards", "optionPositions", "walkforward"] as const;
+export const WIDGET_TYPES = ["quote", "chart", "watchlist", "news", "heatmap", "screener", "crypto", "macro", "options", "portfolio", "ai", "calendar", "insider", "tv", "recap", "comparison", "fundamentals", "journal", "performance", "strategy", "briefing", "alerts", "quality", "backup", "sync", "delivery", "events", "signals", "thesis", "reviews", "rebalance", "filings", "notifications", "tracking", "backtest", "today", "historyLibrary", "valuationLab", "portfolioRisk", "paper", "consolidated", "filingReader", "earningsReview", "researchSearch", "peers", "thesisMonitor", "accountImport", "portfolioGuards", "optionPositions", "walkforward", "researchChanges", "researchInbox", "forecasts", "compoundAlerts", "weeklyReports"] as const;
 export type WidgetType = typeof WIDGET_TYPES[number];
 export type WidgetInstance = { id: string; type: WidgetType; symbol?: string; linked: boolean; settings?: PanelSettings };
 export type LayoutItem = { i: string; x: number; y: number; w: number; h: number };
@@ -30,6 +30,12 @@ export const MAX_WORKSPACES = 20;
 export const PRESETS = { daily: "Daily market", research: "Company research", options: "Options analysis", blank: "Blank" };
 export type Preset = keyof typeof PRESETS;
 export const SIZE_BY_TYPE: Record<WidgetType, { w: number; h: number }> = {
+  researchChanges: { w: 6, h: 18 },
+  researchInbox: { w: 6, h: 18 },
+  forecasts: { w: 6, h: 18 },
+  compoundAlerts: { w: 6, h: 18 },
+  weeklyReports: { w: 6, h: 18 },
+
   thesis: { w: 12, h: 19 },
   reviews: { w: 12, h: 19 },
   rebalance: { w: 12, h: 19 },

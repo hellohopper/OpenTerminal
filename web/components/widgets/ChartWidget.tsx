@@ -9,6 +9,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { DEFAULT_FONT_SIZE, useDisplay } from "../../store/display";
 import {
   createChart,
+  createSeriesMarkers,
   CandlestickSeries,
   LineSeries,
   HistogramSeries,
@@ -32,6 +33,8 @@ import {
 } from "../../lib/indicators";
 import { useWidgetSymbol, type WidgetInstance } from "../../store/terminal";
 
+import { placeChartEvents, type ChartEvent } from "../../lib/chart-events";
+import { useTerminal } from "../../store/terminal";
 import ChartTools, { useDrawings, type DrawTool } from "../ChartTools";
 import {
   normalizedOverlay,
@@ -93,6 +96,11 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
   const [overlaySymbols, setOverlaySymbols] = useWidgetSetting(widget, "chartOverlaySymbols", []);
   const [overlayError, setOverlayError] = useState("");
   const [compareMode, setCompareMode] = useWidgetSetting(widget, "chartCompareMode", false);
+  const [showEvents, setShowEvents] = useWidgetSetting(widget, "chartEvents", false);
+  const [eventKinds, setEventKinds] = useWidgetSetting(widget, "chartEventKinds", ["trade", "journal", "thesis", "filing", "earnings"]);
+  const [selectedEvent, setSelectedEvent] = useState<ChartEvent | null>(null);
+  const eventQuery = useQuery({queryKey:["chart-events",symbol],queryFn:()=>apiGet<{events:ChartEvent[];coverage:string}>(`/api/workflow-research/events/${encodeURIComponent(symbol)}`),enabled:showEvents,staleTime:60000});
+  useEffect(()=>setSelectedEvent(null),[symbol]);
   const comparisonSymbols = overlaySymbols.filter((s) => s !== symbol);
   const comparing = compareMode && comparisonSymbols.length > 0;
   const { drawings, update, storageError } = useDrawings(
@@ -357,6 +365,11 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
       })).setData(candles.map((c) => ({ time: ts(c.time), value: c.close })));
     }
 
+    if (showEvents && !comparing && mainSeries!) {
+      const placed = placeChartEvents((eventQuery.data?.events ?? []).filter(e=>eventKinds.includes(e.kind)),candles.map(c=>c.time),range==="1D"||range==="5D");
+      createSeriesMarkers(mainSeries!,placed.map(({event,time})=>({time:ts(time),id:event.key,position:"aboveBar" as const,color:event.kind==="trade"?"#4fc3f7":"#ff9900",shape:event.kind==="trade"?"arrowDown" as const:"circle" as const,text:event.kind.toUpperCase()})));
+      chart.subscribeClick(param=>{if(drawRef.current.tool!=="navigate")return;const selected=placed.find(e=>e.event.key===param.hoveredObjectId);if(selected)setSelectedEvent(selected.event);});
+    }
     let removeDrawingListeners = () => {};
     if (!comparing) {
       for (const [i, drawing] of drawings.entries()) {
@@ -549,6 +562,7 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
     drawings,
     comparing,
     comparison,
+    showEvents, eventKinds, eventQuery.data,
   ]);
 
   useEffect(() => {
@@ -565,6 +579,11 @@ export default function ChartWidget({ widget }: { widget: WidgetInstance }) {
 
   return (
     <div ref={polling.ref} className="flex flex-col h-full">
+      <div className="p-2 border-b border-[var(--border)]">
+        <label><input type="checkbox" checked={showEvents} onChange={e=>setShowEvents(e.target.checked)}/> {ui("Research events on chart")}</label>
+        {showEvents&&<details><summary className="amber cursor-pointer">{ui("Event filters and records")}</summary><div className="workflow-actions">{["trade","journal","thesis","filing","earnings"].map(kind=><label key={kind}><input type="checkbox" checked={eventKinds.includes(kind)} onChange={()=>setEventKinds(kinds=>kinds.includes(kind)?kinds.filter(k=>k!==kind):[...kinds,kind])}/> {ui(kind)}</label>)}</div><p className="dim">{ui("Markers use recorded times and the next available bar. Date-only events are hidden on intraday charts. Daily bars do not imply evidence was available before the open.")}</p>{comparing&&<p>{ui("Turn off comparison to see event markers.")}</p>}{eventQuery.error&&<p role="alert">{eventQuery.error.message}</p>}<p className="dim">{eventQuery.data?.coverage}</p><div className="max-h-40 overflow-auto">{eventQuery.data?.events.filter(e=>eventKinds.includes(e.kind)).slice().reverse().map(e=><button key={e.key} className="block text-left amber" onClick={()=>setSelectedEvent(e)}>{e.at.slice(0,10)} · {e.title}</button>)}</div></details>}
+        {showEvents&&selectedEvent&&selectedEvent.symbol===symbol&&<article className="workflow-card" aria-label={ui("Chart event detail")}><p className="amber">{selectedEvent.title}</p><p>{selectedEvent.at} · {selectedEvent.dateOnly?ui("Date only"):ui("Recorded time")}</p><p className="whitespace-pre-wrap">{selectedEvent.body}</p><div className="workflow-actions">{selectedEvent.target&&<button className="term-btn" onClick={()=>useTerminal.getState().openResearch(symbol,selectedEvent.target)}>{ui("Open source record")}</button>}<button className="term-btn" onClick={()=>setSelectedEvent(null)}>{ui("Close")}</button></div></article>}
+      </div>
       <div className="chart-toolbar" aria-label={ui("Chart controls")}>
         {selectedHistory&&!["1D","5D","1M"].includes(range)&&<span className="amber">{ui("Library version #")}{selectedHistory}</span>}
         {RANGES.map((r) => (

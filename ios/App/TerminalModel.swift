@@ -149,6 +149,8 @@ struct WatchlistImportPlan {
     private(set) var server: ServerConnection?
     private var generation = UUID()
     var sessionID: UUID { generation }
+    let researchFiles: ResearchCaptureStore?
+    lazy var researchInbox = ResearchInboxModel(terminal: self)
     var researchDrafts: [String: ResearchDraft] = [:]
     var researchNoteStates: [String: ResearchNoteState] = [:]
     private var refreshID: UUID?
@@ -179,7 +181,9 @@ struct WatchlistImportPlan {
     init(defaults: UserDefaults = .standard, credentials: any CredentialStorage = KeychainCredentialStorage(),
          notifications: any NativeNotificationAccess = SystemNotificationAccess(),
          notificationInbox: ResearchNotificationInbox = .shared,
+         researchFiles: ResearchCaptureStore? = nil,
          makeClient: @escaping (ServerConnection, MobileCredential?) -> TerminalAPI = { TerminalAPI(server: $0, credential: $1) }) {
+        self.researchFiles = researchFiles ?? (defaults === UserDefaults.standard ? ResearchCaptureStore.applicationStore() : nil)
         self.defaults = defaults; self.credentials = credentials; self.notifications = notifications; self.makeClient = makeClient
         serverText = defaults.string(forKey: "server") ?? ""
         notificationInbox.attach(self)
@@ -286,6 +290,11 @@ struct WatchlistImportPlan {
     }
     func signOut() async {
         let old = api, pendingServer = authenticationServer
+        var researchCleanupError: String?
+        if let origin = server?.origin.absoluteString {
+            do { try researchFiles?.clear(origin: origin); try (try? ResearchCaptureStore.sharedStore())?.clear(origin: origin) }
+            catch { researchCleanupError = error.localizedDescription }
+        }
         invalidateAuthentication(); restoreAttempted = true
         if let server { credentials.remove(server.origin.absoluteString) }
         if let pendingServer { credentials.remove(pendingServer) }
@@ -313,6 +322,7 @@ struct WatchlistImportPlan {
         pushOperation = nil; registeringPush = false; pushMessage = nil
         refreshID = nil; sectionErrors = [:]; sectionUpdated = [:]; loadingSections = []
         health = [:]; healthReceivedAt = [:]; healthErrors = [:]; healthRequest = nil; checkingHealth = false
+        if let researchCleanupError { error = researchCleanupError }
         await old?.signOut()
     }
     func report(_ error: Error, section: DataSection? = nil) async {
