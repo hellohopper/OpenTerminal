@@ -7,6 +7,11 @@ import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 import { normalizeSymbol } from "../lib/symbol";
 import { useTerminal, type WidgetInstance } from "../store/terminal";
+import ResearchChangesWidget from "./widgets/ResearchChangesWidget";
+import ResearchInboxWidget from "./widgets/ResearchInboxWidget";
+import ForecastsWidget from "./widgets/ForecastsWidget";
+import CompoundAlertsWidget from "./widgets/CompoundAlertsWidget";
+import WeeklyReportsWidget from "./widgets/WeeklyReportsWidget";
 import ThesisWidget from "./widgets/ThesisWidget";
 import TradeReviewsWidget from "./widgets/TradeReviewsWidget";
 import RebalanceWidget from "./widgets/RebalanceWidget";
@@ -67,6 +72,12 @@ const Grid = WidthProvider(GridLayout);
 
 function WidgetBody({ widget }: { widget: WidgetInstance }) {
   switch (widget.type) {
+    case "researchChanges": return <ResearchChangesWidget widget={widget} />;
+    case "researchInbox": return <ResearchInboxWidget />;
+    case "forecasts": return <ForecastsWidget />;
+    case "compoundAlerts": return <CompoundAlertsWidget />;
+    case "weeklyReports": return <WeeklyReportsWidget />;
+
     case "thesis": return <ThesisWidget draftId={widget.id} />;
     case "reviews": return <TradeReviewsWidget />;
     case "rebalance": return <RebalanceWidget />;

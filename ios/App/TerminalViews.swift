@@ -19,18 +19,27 @@ struct TerminalTabs: View {
         }.task(id: phase) {
             guard phase == .active else { return }
             await model.registerExistingPush()
+        }.task(id: phase) {
+            guard phase == .active else { return }
+            while !Task.isCancelled {
+                await model.researchInbox.refreshAndUpload()
+                do { try await Task.sleep(for: .seconds(30)) } catch { break }
+            }
         }
     }
 }
 private struct TerminalPage<Content: View>: View {
     @EnvironmentObject private var model: TerminalModel
     @ViewState<Bool> private var settings = false
+    @ViewState<Bool> private var inbox = false
     let title: String
     let content: Content
     init(title: String, @ViewBuilder content: () -> Content) { self.title = title; self.content = content() }
     var body: some View {
         NavigationStack {
             content.navigationTitle(LocalizedStringKey(title))
+                .toolbar { ToolbarItem(placement: .primaryAction) { Button { inbox = true } label: { Label("Research inbox", systemImage: "tray") } } }
+                .sheet(isPresented: $inbox) { NavigationStack { ResearchInboxView().toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { inbox = false } } } }.environmentObject(model) }
                 .safeAreaInset(edge: .top) {
                     if let error = model.error ?? (model.sectionErrors.isEmpty ? nil : model.sectionErrors.keys.map { nativeText($0.rawValue) }.sorted().joined(separator: ", ") + ": " + nativeText("Data unavailable.")) {
                         HStack { VStack(alignment:.leading){Text(error).font(.callout);if model.reconnecting{Text("Reconnecting automatically…").font(.caption)}}; Spacer(); Button("Retry") { Task { await model.refresh() } } }

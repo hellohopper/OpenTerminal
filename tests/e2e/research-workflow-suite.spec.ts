@@ -1,0 +1,38 @@
+import { test,expect,type Page } from '@playwright/test';
+import { randomUUID } from 'node:crypto';
+import { signIn,blank } from './helpers';
+const headers={origin:'http://127.0.0.1:3100'};
+async function post(page:Page,path:string,data:unknown){const response=await page.request.post(path,{headers,data});expect(response.ok(),await response.text()).toBe(true);return response.json();}
+test('collect a link, turn it into a note, review a change snapshot and see its chart event',async({page})=>{
+ await signIn(page);await blank(page,'Research workflow');await page.getByRole('button',{name:'INBOX',exact:true}).click();
+ const inbox=page.getByRole('region',{name:'Research Inbox',exact:true});await inbox.getByLabel('Title',{exact:true}).fill('New margin evidence');await inbox.getByLabel('Source URL',{exact:true}).fill('https://example.com/margins');await inbox.getByLabel('Quick thought',{exact:true}).fill('Check this before the next review');await inbox.getByRole('button',{name:'Save to inbox',exact:true}).click();
+ const card=inbox.locator('article').filter({has:page.getByRole('heading',{name:'New margin evidence',exact:true})});await expect(card).toBeVisible();await card.getByText('Organize into research note',{exact:true}).click();await card.getByLabel('Symbol',{exact:true}).fill('AAPL');await card.getByRole('button',{name:'Create research note',exact:true}).click();
+ await inbox.getByLabel('Inbox filter').selectOption('converted');await expect(card.getByRole('button',{name:'Open saved note'})).toBeVisible();
+ await page.getByRole('button',{name:'CHANGES',exact:true}).click();const changes=page.getByRole('region',{name:'Research Changes',exact:true});await expect(changes.getByRole('button',{name:'New margin evidence',exact:true})).toBeVisible();await changes.getByRole('button',{name:'Mark reviewed',exact:true}).click();await expect(changes.getByText('No research changes since this baseline.',{exact:true})).toBeVisible();
+ const notes=await (await page.request.get('/api/journal?symbol=AAPL&q=New%20margin')).json(),note=notes.entries[0];expect(note.body).toContain('https://example.com/margins');
+ const result=await page.request.put(`/api/journal/${note.id}`,{headers,data:{symbol:'AAPL',title:note.title,body:'Revised margin evidence',kind:'research',version:note.version}});expect(result.ok()).toBe(true);
+ await changes.getByRole('button',{name:'Refresh',exact:true}).click();await changes.getByText('Compare saved content',{exact:true}).click();await expect(changes.getByText('Revised margin evidence',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:/^CHART/}).click();const chart=page.getByRole('region',{name:'Chart',exact:true});await chart.getByLabel('Research events on chart').check();await chart.getByText('Event filters and records',{exact:true}).click();await chart.getByRole('button',{name:/New margin evidence/}).click();await expect(chart.getByLabel('Chart event detail')).toContainText('Revised margin evidence');
+ await page.setViewportSize({width:390,height:844});await expect(chart.getByLabel('Research events on chart')).toBeVisible();
+});
+test('create a measurable forecast and compound rule through their forms',async({page})=>{
+ await signIn(page);await blank(page,'Predictions and rules');await page.getByRole('button',{name:'SCORECARD',exact:true}).click();const card=page.getByRole('region',{name:'Forecast Scorecard',exact:true});await card.getByText('New forecast',{exact:true}).click();await card.getByLabel('Prediction',{exact:true}).fill('Next reported revenue grows at least 10%');await card.getByLabel('Deadline (your local time)').fill('2099-01-01T12:00');await card.getByRole('button',{name:'Commit forecast',exact:true}).click();await expect(card.getByRole('heading',{name:/Next reported revenue/})).toBeVisible();await page.reload();await expect(page.getByRole('heading',{name:/Next reported revenue/})).toBeVisible();
+ await page.getByRole('button',{name:'COMPOUND ALERTS',exact:true}).click();const rules=page.getByRole('region',{name:'Compound Alerts',exact:true});await rules.getByText('New compound alert',{exact:true}).click();await rules.getByLabel('Rule name').fill('Completed bar breakout');await rules.getByRole('button',{name:'Create compound alert',exact:true}).click();await expect(rules.getByRole('heading',{name:'AAPL · Completed bar breakout'})).toBeVisible();await rules.getByRole('button',{name:'Check rules now'}).click();
+ await expect.poll(async()=>{const data=await(await page.request.get('/api/compound-alerts')).json();return data.rules.find((r:any)=>r.payload.name==='Completed bar breakout')?.payload.lastResult?.status;}).toBeTruthy();
+ await rules.getByRole('button',{name:'Pause',exact:true}).click();await expect(rules.getByRole('button',{name:'Enable',exact:true})).toBeVisible();
+});
+test('generate, export and schedule a completed portfolio week',async({page})=>{
+ await signIn(page);const account=await post(page,'/api/portfolios',{name:`Weekly ${randomUUID()}`});const listing=await(await page.request.get('/api/weekly-reports')).json();const monday=Date.parse(listing.lastCompleteWeek),prior=new Date(monday-3*86400000).toISOString();
+ await post(page,`/api/portfolios/${account.id}/events`,{kind:'DEPOSIT',amount:1000,executed_at:prior});await post(page,`/api/portfolios/${account.id}/transactions`,{symbol:'AAPL',side:'BUY',quantity:5,price:100,executed_at:prior});
+ await blank(page,'Weekly review');await page.getByRole('button',{name:'WEEKLY REVIEW',exact:true}).click();const panel=page.getByRole('region',{name:'Weekly Portfolio Reports',exact:true});await panel.getByRole('combobox',{name:'Portfolio',exact:true}).selectOption(String(account.id));await panel.getByRole('button',{name:'Generate and save week'}).click();const report=panel.getByRole('region',{name:'Weekly report',exact:true});await expect(report).toBeVisible();
+ const download=page.waitForEvent('download');await report.getByRole('button',{name:'Export JSON'}).click();expect((await download).suggestedFilename()).toContain(`portfolio-${account.id}`);
+ const saved=await(await page.request.get('/api/weekly-reports')).json(),week=saved.reports.find((r:any)=>r.payload.portfolioId===account.id).payload;expect(week.externalFlows).toBe(0);expect(week.pnl).not.toBeNull();expect(week.rows.reduce((sum:number,r:any)=>sum+r.contribution,0)).toBeCloseTo(week.pnl);
+ await panel.getByText('Automatic weekly report',{exact:true}).click();await panel.getByRole('button',{name:'Enable weekly reports',exact:true}).click();await expect(panel.getByRole('button',{name:'Disable weekly reports',exact:true})).toBeVisible();
+});
+test('new endpoints require authentication and reject stale or malformed writes',async({page,playwright})=>{
+ const guest=await playwright.request.newContext({baseURL:'http://127.0.0.1:3100'});for(const path of ['/api/research-inbox','/api/forecasts','/api/compound-alerts','/api/weekly-reports','/api/workflow-research/changes/AAPL'])expect((await guest.get(path)).status()).toBe(401);await guest.dispose();
+ await signIn(page);const input={clientId:randomUUID(),title:'Retry capture',text:'Evidence',url:''},one=await post(page,'/api/research-inbox',input),two=await post(page,'/api/research-inbox',input);expect(one.id).toBe(two.id);
+ const conflict=await page.request.post('/api/research-inbox',{headers,data:{...input,text:'Changed'}});expect(conflict.status()).toBe(409);
+ const stale=await page.request.post(`/api/research-inbox/${one.id}/convert`,{headers,data:{version:99,symbol:'AAPL',title:'Title',text:'Body'}});expect(stale.status()).toBe(409);
+ const unsafe=await page.request.post('/api/research-inbox',{headers,data:{...input,clientId:randomUUID(),url:'javascript:alert(1)'}});expect(unsafe.status()).toBe(400);
+});

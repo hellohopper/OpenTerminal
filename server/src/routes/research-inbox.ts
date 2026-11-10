@@ -1,0 +1,13 @@
+import { Router } from "express";
+import { z } from "zod";
+import { asyncRoute } from "../async-route.js";
+import { db } from "../db.js";
+import { records, updateRecord } from "../records.js";
+import { inboxSchema, captureInbox, convertInbox, type InboxItem } from "../research-inbox.js";
+import { symbolSchema } from "../validation.js";
+export const researchInboxRouter=Router();
+researchInboxRouter.get("/",asyncRoute(async(_req,res)=>res.json({items:await records<InboxItem>("research-inbox")})));
+researchInboxRouter.post("/",asyncRoute(async(req,res)=>{const p=inboxSchema.safeParse(req.body);if(!p.success)return res.status(400).json({error:p.error.issues[0].message});try{res.status(201).json(await captureInbox(p.data));}catch(e){res.status(409).json({error:(e as Error).message});}}));
+researchInboxRouter.post("/:id/convert",asyncRoute(async(req,res)=>{const p=z.object({version:z.number().int().positive(),symbol:symbolSchema,title:z.string().trim().min(1).max(120),text:z.string().max(17000)}).safeParse(req.body);if(!p.success)return res.status(400).json({error:p.error.issues[0].message});try{res.json(await convertInbox(Number(req.params.id),p.data.version,p.data.symbol,p.data.title,p.data.text));}catch(e){res.status(409).json({error:(e as Error).message});}}));
+researchInboxRouter.put("/:id",asyncRoute(async(req,res)=>{const p=z.object({version:z.number().int().positive(),status:z.enum(["pending","archived"])}).safeParse(req.body);if(!p.success)return res.status(400).json({error:"Invalid inbox update."});try{await db.transaction(async()=>{const row=(await records<InboxItem>("research-inbox")).find(r=>r.id===Number(req.params.id));if(!row||row.payload.status==="converted")throw new Error("Converted or missing item cannot be reopened.");await updateRecord("research-inbox",row.id,p.data.version,{...row.payload,status:p.data.status});})();res.json({ok:true});}catch(e){res.status(409).json({error:(e as Error).message});}}));
+researchInboxRouter.delete("/:id",asyncRoute(async(req,res)=>{const version=z.coerce.number().int().positive().safeParse(req.query.version);if(!version.success)return res.status(400).json({error:"Review the current item first."});const result=await db.prepare("DELETE FROM research_records WHERE kind='research-inbox' AND id=? AND version=?").run(req.params.id,version.data);if(!result.changes)return res.status(409).json({error:"Item changed or was deleted. Refresh the inbox."});res.status(204).end();}));

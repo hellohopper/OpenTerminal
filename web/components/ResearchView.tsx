@@ -1,6 +1,7 @@
 "use client";
 import { useI18n } from "../lib/use-i18n";
 
+import ResearchChangesWidget from "./widgets/ResearchChangesWidget";
 import ResearchRecords from "./ResearchRecords";
 import { useEffect, useState } from "react";
 import { useTerminal, type WidgetInstance } from "../store/terminal";
@@ -18,14 +19,14 @@ import { EarningsTab, EconomicTab } from "./widgets/CalendarWidget";
 import { PollingScope } from "../lib/use-adaptive-refresh";
 import { useInterface } from "../store/interface";
 import { useSharedWatchlist } from "../lib/use-shared-watchlist";
-const TABS = ["Overview", "Chart", "Financials", "News", "Events", "Thesis", "Filings", "Notes", "Alerts", "Timeline", "Valuations", "Reader", "Earnings Reviews", "Plans"] as const;
+const TABS = ["Overview", "Changes", "Chart", "Financials", "News", "Events", "Thesis", "Filings", "Notes", "Alerts", "Timeline", "Valuations", "Reader", "Earnings Reviews", "Plans"] as const;
 type Tab = typeof TABS[number];
 export default function ResearchView({ symbol }: { symbol: string }) {
   const { t: ui } = useI18n();
 
   const target=useTerminal(s=>s.researchTarget);
   const simple = useInterface(s => s.mode === "simple");
-  const primary: readonly Tab[] = simple ? ["Overview", "Chart", "Financials", "News", "Notes"] : TABS;
+  const primary: readonly Tab[] = simple ? ["Overview", "Changes", "Chart", "Financials", "News", "Notes"] : TABS;
   const close = useTerminal(s => s.closeResearch), shared = useSharedWatchlist(), add = shared.add;
   const watched = useTerminal(s => s.watchlist.includes(symbol));
   const [tab, setTab] = useState<Tab>("Overview"), [note, setNote] = useState(0);
@@ -57,6 +58,7 @@ export default function ResearchView({ symbol }: { symbol: string }) {
       <WidgetErrorBoundary key={`${symbol}-${tab}-${note}`} name={`${symbol} ${tab}`}>
         {(tab==="Timeline"||recordKinds[tab])&&<ResearchRecords symbol={symbol} target={target} kinds={recordKinds[tab]}/>}
         {tab === "Overview" && <div className="research-overview"><section><h2 className="amber p-2">{ui("Quote / source")}</h2><QuoteWidget widget={widget} /></section><section><h2 className="amber p-2">{ui("Latest news")}</h2><NewsWidget widget={widget} /></section></div>}
+        {tab === "Changes" && <ResearchChangesWidget widget={widget} />}
         {tab === "Filings" && <FilingsWidget initialSymbol={symbol} />}
         {tab === "News" && <NewsWidget widget={widget} />}
         {tab === "Thesis" && <ThesisWidget initialSymbol={symbol} />}

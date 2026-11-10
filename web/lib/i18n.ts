@@ -13,6 +13,12 @@ export function translate(text: string, language: Language, values?: Translation
 }
 
 export const WIDGET_NAMES_ZH: Record<WidgetType, string> = {
+  researchChanges: "研究变化",
+  researchInbox: "研究收件箱",
+  forecasts: "判断成绩单",
+  compoundAlerts: "组合条件提醒",
+  weeklyReports: "组合周报",
+
   chart: "行情图表", quote: "实时报价", watchlist: "自选列表", news: "新闻",
   screener: "股票筛选", heatmap: "市场热力图", crypto: "加密资产", macro: "宏观与指数",
   options: "期权链", portfolio: "投资组合", ai: "AI 研究助手", calendar: "财经日历",

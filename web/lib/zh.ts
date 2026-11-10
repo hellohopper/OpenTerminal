@@ -1,5 +1,7 @@
+import { workflowZh } from "./workflow-zh";
 /** UI-owned text only. Symbols, user records and provider content retain their original text. */
 export const zh: Record<string, string> = {
+  ...workflowZh,
   "Layouts":"布局",
   "Periodic refresh follows this preference and pauses while offline or in the background. Some feeds use a slower minimum interval. Manual refresh remains available.":"定时刷新遵守此设置，离线或切到后台时暂停。部分数据源会采用更慢的最低刷新间隔，仍可手动刷新。",
   "Hidden":"已隐藏",
